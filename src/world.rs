@@ -83,7 +83,7 @@ impl World {
         self.resources.entry()
     }
 
-    pub fn resource_exists<R: Resource>(&self) -> bool {
+    pub fn contains_resource<R: Resource>(&self) -> bool {
         self.resources.contains::<R>()
     }
 
