@@ -2,13 +2,13 @@ use std::any::type_name;
 
 use crate::{Resource, ResourceRef, ResourceRefMut, World};
 
-pub trait Fetch<'a>: Send + Sync {
+pub trait ResourceBundle<'a>: Send + Sync {
     type Refs;
 
     fn fetch(world: &'a World) -> Self::Refs;
 }
 
-impl<'a, R: Resource> Fetch<'a> for &'a R {
+impl<'a, R: Resource> ResourceBundle<'a> for &'a R {
     type Refs = ResourceRef<'a, R>;
 
     fn fetch(world: &'a World) -> Self::Refs {
@@ -18,7 +18,7 @@ impl<'a, R: Resource> Fetch<'a> for &'a R {
     }
 }
 
-impl<'a, R: Resource> Fetch<'a> for &'a mut R {
+impl<'a, R: Resource> ResourceBundle<'a> for &'a mut R {
     type Refs = ResourceRefMut<'a, R>;
 
     fn fetch(world: &'a World) -> Self::Refs {

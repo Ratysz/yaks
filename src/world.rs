@@ -2,9 +2,9 @@ use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
-    fetch::Fetch, Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut,
-    Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryIter,
-    Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    resource_bundle::ResourceBundle, Component, ComponentBundle, ComponentError, ComponentRef,
+    ComponentRefMut, Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource,
+    Query, QueryIter, Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
 
 #[derive(Default)]
@@ -95,7 +95,7 @@ impl World {
         self.resources.get_mut()
     }
 
-    pub fn fetch<'a, F: Fetch<'a>>(&'a self) -> F::Refs {
+    pub fn fetch<'a, F: ResourceBundle<'a>>(&'a self) -> F::Refs {
         F::fetch(&self)
     }
 }

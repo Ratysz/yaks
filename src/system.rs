@@ -1,21 +1,19 @@
 use std::marker::PhantomData;
 
 use crate::{
-    fetch::Fetch,
-    query_bundle::{QueryBundle, QueryEffector},
-    Component, Query, QueryIter, World,
+    query_bundle::QueryBundle, resource_bundle::ResourceBundle, Component, Query, QueryIter, World,
 };
 
 trait SystemFunction<'a, R, Q>
 where
-    R: Fetch<'a>,
+    R: ResourceBundle<'a>,
     Q: QueryBundle<'a>,
 {
 }
 
 pub struct System<'a, R, Q, F>
 where
-    R: Fetch<'a>,
+    R: ResourceBundle<'a>,
     Q: QueryBundle<'a>,
     F: FnMut(&World, R::Refs, Q::QueryEffectors),
 {
@@ -25,7 +23,7 @@ where
 
 impl<'a, R, Q, F> System<'a, R, Q, F>
 where
-    R: Fetch<'a>,
+    R: ResourceBundle<'a>,
     Q: QueryBundle<'a>,
     F: FnMut(&World, R::Refs, Q::QueryEffectors),
 {

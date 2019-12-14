@@ -1,12 +1,12 @@
 use crate::{
-    fetch::Fetch,
     query_bundle::{QueryBundle, QueryEffector},
+    resource_bundle::ResourceBundle,
     Query, World,
 };
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
-        impl<'a, $($letter: Fetch<'a>),*> Fetch<'a> for ($($letter,)*)
+        impl<'a, $($letter: ResourceBundle<'a>),*> ResourceBundle<'a> for ($($letter,)*)
         {
             type Refs = ($($letter::Refs,)*);
 
