@@ -1,44 +1,65 @@
 use crate::{
     query_bundle::{QueryBundle, QueryEffector},
-    resource_bundle::ResourceBundle,
+    resource_bundle::{Fetch, ResourceBundle},
+    system::TypeSet,
+    world::ArchetypeSet,
     Query, World,
 };
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
-        impl<'a, $($letter: ResourceBundle<'a>),*> ResourceBundle<'a> for ($($letter,)*)
+        impl<'a, $($letter: ResourceBundle),*> ResourceBundle for ($($letter,)*)
         {
             type Refs = ($($letter::Refs,)*);
-
-            fn fetch(world: &'a World) -> Self::Refs {
-                ($($letter::fetch(world),)*)
-             }
         }
 
-        impl<'a, $($letter: Query<'a> + Send + Sync),*> QueryBundle<'a> for ($($letter,)*)
+        impl<'a, $($letter: Fetch<'a>),*> Fetch<'a> for ($($letter,)*)
         {
-            type QueryEffectors = ($(QueryEffector<'a, $letter>,)*);
+            type Item = ($($letter::Item,)*);
 
-            fn query_effectors() -> Self::QueryEffectors {
-                ($(QueryEffector::<'a, $letter>::new(),)*)
-             }
+            fn fetch(world: &'a World) -> Self::Item {
+                ($($letter::fetch(world),)*)
+            }
+        }
+
+        impl<$($letter: Query + QueryBundle),*> QueryBundle for ($($letter,)*)
+        {
+            type Effectors = ($(QueryEffector<$letter>,)*);
+
+            fn effectors() -> Self::Effectors {
+                ($(QueryEffector::<$letter>::new(),)*)
+            }
+
+            fn borrowed_components() -> TypeSet {
+                let mut set = TypeSet::default();
+                $(set.extend($letter::borrowed_components().drain());)*
+                set
+            }
+
+            fn borrowed_mut_components() -> TypeSet {
+                let mut set = TypeSet::default();
+                $(set.extend($letter::borrowed_mut_components().drain());)*
+                set
+            }
+
+            fn touched_archetypes(world: &World) -> ArchetypeSet {
+                let mut set = ArchetypeSet::default();
+                $(set.extend($letter::touched_archetypes(world).drain());)*
+                set
+            }
         }
     };
 }
 
-impls_for_tuple!(A);
-impls_for_tuple!(A, B);
-impls_for_tuple!(A, B, C);
-impls_for_tuple!(A, B, C, D);
-impls_for_tuple!(A, B, C, D, E);
-impls_for_tuple!(A, B, C, D, E, F);
-impls_for_tuple!(A, B, C, D, E, F, G);
-impls_for_tuple!(A, B, C, D, E, F, G, H);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-impls_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
+macro_rules! expand {
+    ($m: ident, $ty: ident) => {
+        $m!{$ty}
+    };
+    ($m: ident, $ty: ident, $($tt: ident),*) => {
+        $m!{$ty, $($tt),*}
+        expand!{$m, $($tt),*}
+    };
+}
+
+#[rustfmt::skip]
+expand!(impls_for_tuple, P, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);

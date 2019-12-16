@@ -2,7 +2,7 @@
 
 pub use hecs::{
     Bundle as ComponentBundle, Component, ComponentError, DynamicBundle as DynamicComponentBundle,
-    Entity, EntityRef as Components, MissingComponent, NoSuchEntity, Query, QueryIter,
+    Entity, EntityRef as Components, MissingComponent, NoSuchEntity, Query, QueryBorrow,
     Ref as ComponentRef, RefMut as ComponentRefMut,
 };
 pub use resources::{
@@ -16,5 +16,5 @@ mod resource_bundle;
 mod system;
 mod world;
 
-pub use system::System;
+pub use system::{System, SystemBuilderDynamic, SystemBuilderStatic};
 pub use world::World;

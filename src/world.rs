@@ -1,11 +1,16 @@
+use fxhash::FxHasher64;
 use hecs::World as Entities;
 use resources::Resources;
+use std::{collections::HashSet, hash::BuildHasherDefault};
 
 use crate::{
-    resource_bundle::ResourceBundle, Component, ComponentBundle, ComponentError, ComponentRef,
-    ComponentRefMut, Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource,
-    Query, QueryIter, Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    resource_bundle::{Fetch, ResourceBundle},
+    Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
+    DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
+    ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
+
+pub(crate) type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
 
 #[derive(Default)]
 pub struct World {
@@ -67,7 +72,7 @@ impl World {
         self.entities.entity(entity)
     }
 
-    pub fn query<'a, Q: Query<'a>>(&'a self) -> QueryIter<'a, Q> {
+    pub fn query<Q: Query>(&self) -> QueryBorrow<Q> {
         self.entities.query()
     }
 
@@ -95,7 +100,13 @@ impl World {
         self.resources.get_mut()
     }
 
-    pub fn fetch<'a, F: ResourceBundle<'a>>(&'a self) -> F::Refs {
+    pub fn fetch<F: ResourceBundle>(&self) -> <F::Refs as Fetch>::Item {
         F::fetch(&self)
+    }
+
+    pub(crate) fn touched_archetypes<Q: Query>(&self) -> ArchetypeSet {
+        let mut set = ArchetypeSet::default();
+        set.extend(self.entities.query_scope::<Q>());
+        set
     }
 }

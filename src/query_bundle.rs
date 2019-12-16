@@ -1,17 +1,19 @@
-use std::marker::PhantomData;
+use std::{any::TypeId, marker::PhantomData};
 
-use crate::{Component, Query, QueryIter, World};
+use crate::{system::TypeSet, world::ArchetypeSet, Component, Query, QueryBorrow, World};
 
-pub struct QueryEffector<'a, Q>
+trait ElidedQuery {}
+
+pub struct QueryEffector<Q>
 where
-    Q: Query<'a> + Send + Sync,
+    Q: Query + Send + Sync,
 {
-    phantom_data: PhantomData<(&'a (), Q)>,
+    phantom_data: PhantomData<Q>,
 }
 
-impl<'a, Q> QueryEffector<'a, Q>
+impl<Q> QueryEffector<Q>
 where
-    Q: Query<'a> + Send + Sync,
+    Q: Query + Send + Sync,
 {
     pub(crate) fn new() -> Self {
         Self {
@@ -19,46 +21,92 @@ where
         }
     }
 
-    pub fn query(&self, world: &'a World) -> QueryIter<'a, Q> {
+    pub fn query<'a>(&self, world: &'a World) -> QueryBorrow<'a, Q> {
         world.query()
     }
 }
 
-pub trait QueryBundle<'a>: Send + Sync {
-    type QueryEffectors;
+pub trait QueryBundle: Send + Sync {
+    type Effectors;
 
-    fn query_effectors() -> Self::QueryEffectors;
+    fn effectors() -> Self::Effectors;
+
+    fn borrowed_components() -> TypeSet;
+
+    fn borrowed_mut_components() -> TypeSet;
+
+    fn touched_archetypes(world: &World) -> ArchetypeSet;
 }
 
-impl<'a, C> QueryBundle<'a> for &'a C
+impl<'a, C> QueryBundle for &'a C
 where
     C: Component,
 {
-    type QueryEffectors = QueryEffector<'a, Self>;
+    type Effectors = QueryEffector<Self>;
 
-    fn query_effectors() -> Self::QueryEffectors {
+    fn effectors() -> Self::Effectors {
         QueryEffector::new()
+    }
+
+    fn borrowed_components() -> TypeSet {
+        let mut set = TypeSet::default();
+        set.insert(TypeId::of::<C>());
+        set
+    }
+
+    fn borrowed_mut_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn touched_archetypes(world: &World) -> ArchetypeSet {
+        world.touched_archetypes::<Self>()
     }
 }
 
-impl<'a, C> QueryBundle<'a> for &'a mut C
+impl<'a, C> QueryBundle for &'a mut C
 where
     C: Component,
 {
-    type QueryEffectors = QueryEffector<'a, Self>;
+    type Effectors = QueryEffector<Self>;
 
-    fn query_effectors() -> Self::QueryEffectors {
+    fn effectors() -> Self::Effectors {
         QueryEffector::new()
+    }
+
+    fn borrowed_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn borrowed_mut_components() -> TypeSet {
+        let mut set = TypeSet::default();
+        set.insert(TypeId::of::<C>());
+        set
+    }
+
+    fn touched_archetypes(world: &World) -> ArchetypeSet {
+        world.touched_archetypes::<Self>()
     }
 }
 
-impl<'a, Q> QueryBundle<'a> for Option<Q>
+impl<Q> QueryBundle for Option<Q>
 where
-    Q: Query<'a> + Send + Sync,
+    Q: Query + QueryBundle,
 {
-    type QueryEffectors = QueryEffector<'a, Self>;
+    type Effectors = QueryEffector<Self>;
 
-    fn query_effectors() -> Self::QueryEffectors {
+    fn effectors() -> Self::Effectors {
         QueryEffector::new()
+    }
+
+    fn borrowed_components() -> TypeSet {
+        Q::borrowed_components()
+    }
+
+    fn borrowed_mut_components() -> TypeSet {
+        Q::borrowed_mut_components()
+    }
+
+    fn touched_archetypes(world: &World) -> ArchetypeSet {
+        Q::touched_archetypes(world)
     }
 }
