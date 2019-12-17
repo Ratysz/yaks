@@ -4,10 +4,9 @@ use resources::Resources;
 use std::{collections::HashSet, hash::BuildHasherDefault};
 
 use crate::{
-    resource_bundle::{Fetch, ResourceBundle},
-    Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
-    DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
-    ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    resource_bundle::ResourceBundle, Component, ComponentBundle, ComponentError, ComponentRef,
+    ComponentRefMut, Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource,
+    Query, QueryBorrow, Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
 
 pub(crate) type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
@@ -100,9 +99,9 @@ impl World {
         self.resources.get_mut()
     }
 
-    pub fn fetch<F: ResourceBundle>(&self) -> <F::Refs as Fetch>::Item {
+    /*pub fn fetch<F: ResourceBundle>(&self) -> <F::Refs as Fetch>::Item {
         F::fetch(&self)
-    }
+    }*/
 
     pub(crate) fn touched_archetypes<Q: Query>(&self) -> ArchetypeSet {
         let mut set = ArchetypeSet::default();

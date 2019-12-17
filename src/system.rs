@@ -37,10 +37,10 @@ impl<'a, R, Q, F> StaticSystem<'a, R, Q> for F
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&'a World, <R::Refs as Fetch<'a>>::Item, Q::Effectors),
+    F: FnMut(&'a World, R::Effectors, Q::Effectors),
 {
     fn run(&mut self, world: &'a World) {
-        self(world, R::fetch(world), Q::effectors())
+        self(world, R::effectors(), Q::effectors())
     }
 }
 
@@ -58,7 +58,7 @@ where
     Q: QueryBundle,
 {
     pub fn build(
-        system: impl FnMut(&'a World, <R::Refs as Fetch<'a>>::Item, Q::Effectors),
+        system: impl FnMut(&'a World, R::Effectors, Q::Effectors),
     ) -> impl StaticSystem<'a, R, Q> {
         system
     }
@@ -68,7 +68,7 @@ struct SystemBox<R, Q, F>
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&World, <R::Refs as Fetch>::Item, Q::Effectors),
+    F: FnMut(&World, R::Effectors, Q::Effectors),
 {
     phantom_data: PhantomData<(R, Q)>,
     system: F,
@@ -78,7 +78,7 @@ impl<R, Q, F> From<F> for SystemBox<R, Q, F>
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&World, <R::Refs as Fetch>::Item, Q::Effectors),
+    F: FnMut(&World, R::Effectors, Q::Effectors),
 {
     fn from(system: F) -> Self {
         Self {
@@ -102,10 +102,10 @@ impl<R, Q, F> DynamicSystem for SystemBox<R, Q, F>
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&World, <R::Refs as Fetch>::Item, Q::Effectors),
+    F: FnMut(&World, R::Effectors, Q::Effectors),
 {
     fn run(&mut self, world: &World) {
-        (self.system)(world, R::fetch(world), Q::effectors())
+        (self.system)(world, R::effectors(), Q::effectors())
     }
 
     fn borrowed_components(&self) -> TypeSet {
@@ -135,7 +135,7 @@ where
     Q: QueryBundle + 'static,
 {
     pub fn build(
-        system: impl FnMut(&World, <R::Refs as Fetch>::Item, Q::Effectors) + 'static,
+        system: impl FnMut(&World, R::Effectors, Q::Effectors) + 'static,
     ) -> Box<dyn DynamicSystem> {
         Box::new(SystemBox::<R, Q, _>::from(Box::new(system)))
     }
@@ -145,10 +145,17 @@ where
 fn test() {
     let mut world = World::new();
     world.add_resource::<usize>(1);
-    let mut system =
-        StaticSystemBuilder::<(), (&usize, Option<&usize>)>::build(|world, _, component| {});
+    world.add_resource::<f32>(1.0);
+    let mut system = StaticSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+        |world, fetch, query| {
+            let (res1, mut res2) = fetch.fetch(world);
+        },
+    );
     system.run(&world);
-    let mut system =
-        DynamicSystemBuilder::<(), (&usize, Option<&usize>)>::build(|world, _, component| {});
+    let mut system = DynamicSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+        |world, fetch, query| {
+            let (res1, mut res2) = fetch.fetch(world);
+        },
+    );
     system.run(&world);
 }

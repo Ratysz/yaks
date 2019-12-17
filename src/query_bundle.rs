@@ -38,7 +38,25 @@ pub trait QueryBundle: Send + Sync {
     fn touched_archetypes(world: &World) -> ArchetypeSet;
 }
 
-impl<'a, C> QueryBundle for &'a C
+impl QueryBundle for () {
+    type Effectors = ();
+
+    fn effectors() -> Self::Effectors {}
+
+    fn borrowed_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn borrowed_mut_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn touched_archetypes(_: &World) -> ArchetypeSet {
+        ArchetypeSet::default()
+    }
+}
+
+impl<C> QueryBundle for &'_ C
 where
     C: Component,
 {
@@ -63,7 +81,7 @@ where
     }
 }
 
-impl<'a, C> QueryBundle for &'a mut C
+impl<C> QueryBundle for &'_ mut C
 where
     C: Component,
 {
@@ -108,23 +126,5 @@ where
 
     fn touched_archetypes(world: &World) -> ArchetypeSet {
         Q::touched_archetypes(world)
-    }
-}
-
-impl QueryBundle for () {
-    type Effectors = ();
-
-    fn effectors() -> Self::Effectors {}
-
-    fn borrowed_components() -> TypeSet {
-        TypeSet::default()
-    }
-
-    fn borrowed_mut_components() -> TypeSet {
-        TypeSet::default()
-    }
-
-    fn touched_archetypes(_: &World) -> ArchetypeSet {
-        ArchetypeSet::default()
     }
 }

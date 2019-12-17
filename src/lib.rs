@@ -16,5 +16,6 @@ mod resource_bundle;
 mod system;
 mod world;
 
+pub use resource_bundle::Fetch;
 pub use system::{DynamicSystemBuilder, StaticSystem, StaticSystemBuilder};
 pub use world::World;

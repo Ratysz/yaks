@@ -1,14 +1,43 @@
 use crate::{
     query_bundle::{QueryBundle, QueryEffector},
-    resource_bundle::{Fetch, ResourceBundle},
+    resource_bundle::{FetchEffector, Mutability, ResourceBundle},
     system::TypeSet,
     world::ArchetypeSet,
-    Query, World,
+    Fetch, Query, Resource, World,
 };
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
-        impl<'a, $($letter: ResourceBundle),*> ResourceBundle for ($($letter,)*)
+        impl<$($letter),*> ResourceBundle for ($($letter,)*)
+        where
+            $($letter: Resource + ResourceBundle,)*
+        {
+            type Effectors = ($($letter::Effectors,)*);
+
+            fn effectors() -> Self::Effectors {
+                ($($letter::effectors(),)*)
+            }
+        }
+
+        paste::item! {
+            impl<'a, $([<M $letter>]),*, $([<R $letter>]),*> Fetch<'a>
+                for ($(FetchEffector<[<M $letter>], [<R $letter>]>,)*)
+            where
+                $([<M $letter>]: Mutability,)*
+                $([<R $letter>]: Resource,)*
+                $(FetchEffector<[<M $letter>], [<R $letter>]>: Fetch<'a>,)*
+            {
+                type Refs = ($(<FetchEffector<[<M $letter>], [<R $letter>]> as Fetch<'a>>::Refs,)*);
+
+                fn fetch(&self, world: &'a World) -> Self::Refs {
+                    ($(FetchEffector::<[<M $letter>], [<R $letter>]>::new().fetch(world),)*)
+                }
+            }
+        }
+
+        // FIXME this should be used instead of the above after
+        //  https://github.com/rust-lang/rust/issues/62529 is fixed
+        /*impl<'a, $($letter: ResourceBundle),*> ResourceBundle for ($($letter,)*)
         {
             type Refs = ($($letter::Refs,)*);
         }
@@ -20,14 +49,16 @@ macro_rules! impls_for_tuple {
             fn fetch(world: &'a World) -> Self::Item {
                 ($($letter::fetch(world),)*)
             }
-        }
+        }*/
 
-        impl<$($letter: Query + QueryBundle),*> QueryBundle for ($($letter,)*)
+        impl<$($letter),*> QueryBundle for ($($letter,)*)
+        where
+            $($letter: Query + QueryBundle,)*
         {
-            type Effectors = ($(QueryEffector<$letter>,)*);
+            type Effectors = ($($letter::Effectors,)*);
 
             fn effectors() -> Self::Effectors {
-                ($(QueryEffector::<$letter>::new(),)*)
+                ($($letter::effectors(),)*)
             }
 
             fn borrowed_components() -> TypeSet {
