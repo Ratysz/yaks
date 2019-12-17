@@ -1,16 +1,12 @@
-use fxhash::FxHasher64;
 use hecs::World as Entities;
 use resources::Resources;
-use std::{collections::HashSet, hash::BuildHasherDefault};
 
 use crate::{
-    resource_bundle::ResourceBundle, Component, ComponentBundle, ComponentError, ComponentRef,
-    ComponentRefMut, Components, DynamicComponentBundle, Entity, Fetch, NoSuchEntity,
-    NoSuchResource, Query, QueryBorrow, Resource, ResourceEntry, ResourceError, ResourceRef,
-    ResourceRefMut,
+    resource_bundle::{Fetch, ResourceBundle},
+    ArchetypeSet, Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut,
+    Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow,
+    Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
-
-pub(crate) type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
 
 #[derive(Default)]
 pub struct World {

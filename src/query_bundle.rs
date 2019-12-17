@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{system::TypeSet, world::ArchetypeSet, Component, Query, QueryBorrow, World};
+use crate::{ArchetypeSet, Component, Query, QueryBorrow, TypeSet, World};
 
 trait ElidedQuery {}
 

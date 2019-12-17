@@ -1,5 +1,8 @@
 // TODO uncomment #![warn(missing_docs)]
 
+use fxhash::FxHasher64;
+use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
+
 pub use hecs::{
     Bundle as ComponentBundle, Component, ComponentError, DynamicBundle as DynamicComponentBundle,
     Entity, EntityRef as Components, MissingComponent, NoSuchEntity, Query, QueryBorrow,
@@ -16,6 +19,8 @@ mod resource_bundle;
 mod system;
 mod world;
 
-pub use resource_bundle::Fetch;
-pub use system::{DynamicSystemBuilder, StaticSystem, StaticSystemBuilder};
+pub use system::SystemBuilder;
 pub use world::World;
+
+pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
+pub(crate) type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;

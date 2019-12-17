@@ -1,89 +1,10 @@
-use fxhash::FxHasher64;
-use std::{
-    any::TypeId, collections::HashSet, hash::BuildHasherDefault, iter::FromIterator,
-    marker::PhantomData,
-};
+use std::{iter::FromIterator, marker::PhantomData};
 
 use crate::{
-    query_bundle::QueryBundle, resource_bundle::ResourceBundle, world::ArchetypeSet, World,
+    query_bundle::QueryBundle,
+    resource_bundle::{Fetch, ResourceBundle},
+    ArchetypeSet, TypeSet, World,
 };
-
-pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
-
-pub trait StaticSystem<R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    fn run(&mut self, world: &World);
-
-    fn borrowed_components(&self) -> TypeSet {
-        TypeSet::from_iter(Q::borrowed_components())
-    }
-
-    fn borrowed_mut_components(&self) -> TypeSet {
-        TypeSet::from_iter(Q::borrowed_mut_components())
-    }
-
-    fn touched_archetypes(&self, world: &World) -> ArchetypeSet {
-        Q::touched_archetypes(world)
-    }
-}
-
-impl<R, Q, F> StaticSystem<R, Q> for F
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-    F: FnMut(&World, R::Effectors, Q::Effectors),
-{
-    fn run(&mut self, world: &World) {
-        self(world, R::effectors(), Q::effectors())
-    }
-}
-
-pub struct StaticSystemBuilder<R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    phantom_data: PhantomData<(R, Q)>,
-}
-
-impl<R, Q> StaticSystemBuilder<R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    pub fn build(
-        system: impl FnMut(&World, R::Effectors, Q::Effectors),
-    ) -> impl StaticSystem<R, Q> {
-        system
-    }
-}
-
-struct SystemBox<R, Q, F>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-    F: FnMut(&World, R::Effectors, Q::Effectors),
-{
-    phantom_data: PhantomData<(R, Q)>,
-    system: F,
-}
-
-impl<R, Q, F> From<F> for SystemBox<R, Q, F>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-    F: FnMut(&World, R::Effectors, Q::Effectors),
-{
-    fn from(system: F) -> Self {
-        Self {
-            phantom_data: PhantomData,
-            system,
-        }
-    }
-}
 
 pub trait DynamicSystem {
     fn run(&mut self, world: &World);
@@ -95,14 +16,17 @@ pub trait DynamicSystem {
     fn touched_archetypes(&self, world: &World) -> ArchetypeSet;
 }
 
-impl<R, Q, F> DynamicSystem for SystemBox<R, Q, F>
+impl<R, Q> DynamicSystem
+    for (
+        PhantomData<(R, Q)>,
+        Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>,
+    )
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&World, R::Effectors, Q::Effectors),
 {
     fn run(&mut self, world: &World) {
-        (self.system)(world, R::effectors(), Q::effectors())
+        (self.1)(world, R::effectors(), Q::effectors())
     }
 
     fn borrowed_components(&self) -> TypeSet {
@@ -118,7 +42,7 @@ where
     }
 }
 
-pub struct DynamicSystemBuilder<R, Q>
+pub struct SystemBuilder<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -126,38 +50,53 @@ where
     phantom_data: PhantomData<(R, Q)>,
 }
 
-impl<R, Q> DynamicSystemBuilder<R, Q>
+impl<R, Q> SystemBuilder<R, Q>
 where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
 {
-    pub fn build(
-        system: impl FnMut(&World, R::Effectors, Q::Effectors) + 'static,
-    ) -> Box<dyn DynamicSystem> {
-        Box::new(SystemBox::<R, Q, _>::from(Box::new(system)))
+    pub fn build<'a>(
+        closure: impl FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
+    ) -> Box<dyn DynamicSystem>
+    where
+        R::Effectors: Fetch<'a>,
+    {
+        Box::new((PhantomData::<(R, Q)>, Self::transmute_closure(closure)))
+    }
+
+    fn transmute_closure<'a, F>(
+        mut closure: F,
+    ) -> Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>
+    where
+        R::Effectors: Fetch<'a>,
+        F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
+    {
+        let closure = Box::new(move |world, resources: R::Effectors, queries| {
+            closure(world, resources.fetch(world), queries)
+        });
+        unsafe {
+            // FIXME this is a dirty hack for until
+            //  https://github.com/rust-lang/rust/issues/62529 is fixed
+            std::mem::transmute::<
+                Box<dyn FnMut(&'a World, R::Effectors, Q::Effectors)>,
+                Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>,
+            >(closure)
+        }
     }
 }
 
 #[test]
 fn test() {
-    use crate::Fetch;
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system1 = StaticSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
-        |world, fetch, query| {
-            let (res1, mut res2) = fetch.fetch(world);
+    let mut system = SystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+        |world, (res1, mut res2), query| {
             *res2 += 1.0;
         },
     );
-    let mut system2 = DynamicSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
-        |world, fetch, query| {
-            let (res1, mut res2) = fetch.fetch(world);
-            *res2 += 1.0;
-        },
-    );
-    system1.run(&world);
+    system.run(&world);
     assert_eq!(*world.fetch::<&f32>(), 2.0);
-    system2.run(&world);
+    system.run(&world);
     assert_eq!(*world.fetch::<&f32>(), 3.0);
 }

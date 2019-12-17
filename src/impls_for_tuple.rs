@@ -1,9 +1,7 @@
 use crate::{
     query_bundle::{QueryBundle, QueryEffector},
-    resource_bundle::{FetchEffector, Mutability, ResourceBundle},
-    system::TypeSet,
-    world::ArchetypeSet,
-    Fetch, Query, Resource, World,
+    resource_bundle::{Fetch, FetchEffector, Mutability, ResourceBundle},
+    ArchetypeSet, Query, Resource, TypeSet, World,
 };
 
 macro_rules! impls_for_tuple {
