@@ -1,6 +1,9 @@
-use std::{any::type_name, marker::PhantomData};
+use std::{
+    any::{type_name, TypeId},
+    marker::PhantomData,
+};
 
-use crate::{Resource, ResourceRef, ResourceRefMut, World};
+use crate::{Resource, ResourceRef, ResourceRefMut, TypeSet, World};
 
 pub struct Immutable;
 
@@ -36,6 +39,10 @@ pub trait ResourceBundle: Send + Sync {
     type Effectors;
 
     fn effectors() -> Self::Effectors;
+
+    fn borrowed_resources() -> TypeSet;
+
+    fn borrowed_mut_resources() -> TypeSet;
 }
 
 pub trait Fetch<'a> {
@@ -48,6 +55,14 @@ impl ResourceBundle for () {
     type Effectors = ();
 
     fn effectors() -> Self::Effectors {}
+
+    fn borrowed_resources() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn borrowed_mut_resources() -> TypeSet {
+        TypeSet::default()
+    }
 }
 
 impl<'a> Fetch<'a> for () {
@@ -61,6 +76,16 @@ impl<R: Resource> ResourceBundle for &'_ R {
 
     fn effectors() -> Self::Effectors {
         FetchEffector::new()
+    }
+
+    fn borrowed_resources() -> TypeSet {
+        let mut set = TypeSet::default();
+        set.insert(TypeId::of::<R>());
+        set
+    }
+
+    fn borrowed_mut_resources() -> TypeSet {
+        TypeSet::default()
     }
 }
 
@@ -79,6 +104,16 @@ impl<R: Resource> ResourceBundle for &'_ mut R {
 
     fn effectors() -> Self::Effectors {
         FetchEffector::new()
+    }
+
+    fn borrowed_resources() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn borrowed_mut_resources() -> TypeSet {
+        let mut set = TypeSet::default();
+        set.insert(TypeId::of::<R>());
+        set
     }
 }
 

@@ -1,4 +1,4 @@
-use secs::{SystemBuilder, World};
+use secs::{System, World};
 
 struct ResourceOne(usize);
 
@@ -7,6 +7,8 @@ struct ResourceTwo(&'static str);
 struct ComponentOne(usize);
 
 struct ComponentTwo(usize);
+
+struct ComponentThree(usize);
 
 fn main() {
     let mut world = World::new();
@@ -30,36 +32,53 @@ fn main() {
 
     let mut world = world;
     world.spawn((ComponentOne(1), ComponentTwo(0)));
+    world.spawn((ComponentOne(1),));
+    world.spawn((ComponentThree(1),));
     let world = world;
 
     let increment = 6;
 
-    let mut system = SystemBuilder::<
+    let mut system = System::<
         (&ResourceOne, &mut ResourceTwo),
         (
             (&mut ComponentOne, &ComponentTwo),
             Option<&ComponentOne>,
             &mut ComponentOne,
         ),
-    >::build(move |world, (r_one, mut r_two), (query1, query2, _)| {
-        r_two.0 = "Hello again!";
-        for (_, (mut one, two)) in query1.query(world).into_iter() {
-            one.0 += increment;
-        }
-        for (_, one) in query2.query(world).into_iter() {
-            if let Some(one) = one {
-                assert_eq!(one.0, 7);
+    >::new(
+        move |world, (resource_1, mut resource_2), (query_1, query_2, query_3)| {
+            resource_2.0 = "Hello again!";
+            for (_, (mut component_1, component_2)) in query_1.query(world).into_iter() {
+                component_1.0 += increment;
             }
-        }
-    });
+        },
+    );
     system.run(&world);
 
-    for type_id in system.borrowed_components() {
-        println!("read: {:?}", type_id);
-    }
+    let mut system = System::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::new(
+        move |world, resource_2, (q1, q2)| {},
+    );
 
+    for id in system.touched_archetypes(&world) {
+        println!("archetype: {:?}", id);
+    }
+    println!();
+
+    println!("resources");
+    for type_id in system.borrowed_resources() {
+        println!(" read: {:?}", type_id);
+    }
+    for type_id in system.borrowed_mut_resources() {
+        println!(" write: {:?}", type_id);
+    }
+    println!();
+
+    println!("components");
+    for type_id in system.borrowed_components() {
+        println!(" read: {:?}", type_id);
+    }
     for type_id in system.borrowed_mut_components() {
-        println!("write: {:?}", type_id);
+        println!(" write: {:?}", type_id);
     }
 
     assert_eq!(world.fetch::<&ResourceTwo>().0, "Hello again!");

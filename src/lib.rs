@@ -19,7 +19,7 @@ mod resource_bundle;
 mod system;
 mod world;
 
-pub use system::SystemBuilder;
+pub use system::System;
 pub use world::World;
 
 pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;

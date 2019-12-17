@@ -14,6 +14,10 @@ pub trait DynamicSystem {
     fn borrowed_mut_components(&self) -> TypeSet;
 
     fn touched_archetypes(&self, world: &World) -> ArchetypeSet;
+
+    fn borrowed_resources(&self) -> TypeSet;
+
+    fn borrowed_mut_resources(&self) -> TypeSet;
 }
 
 impl<R, Q> DynamicSystem
@@ -40,9 +44,17 @@ where
     fn touched_archetypes(&self, world: &World) -> ArchetypeSet {
         Q::touched_archetypes(world)
     }
+
+    fn borrowed_resources(&self) -> TypeSet {
+        TypeSet::from_iter(R::borrowed_resources())
+    }
+
+    fn borrowed_mut_resources(&self) -> TypeSet {
+        TypeSet::from_iter(R::borrowed_mut_resources())
+    }
 }
 
-pub struct SystemBuilder<R, Q>
+pub struct System<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -50,12 +62,12 @@ where
     phantom_data: PhantomData<(R, Q)>,
 }
 
-impl<R, Q> SystemBuilder<R, Q>
+impl<R, Q> System<R, Q>
 where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
 {
-    pub fn build<'a>(
+    pub fn new<'a>(
         closure: impl FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
     ) -> Box<dyn DynamicSystem>
     where
@@ -90,7 +102,7 @@ fn test() {
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system = SystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+    let mut system = System::<(&usize, &mut f32), (&usize, Option<&usize>)>::new(
         |world, (res1, mut res2), query| {
             *res2 += 1.0;
         },

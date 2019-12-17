@@ -15,6 +15,18 @@ macro_rules! impls_for_tuple {
             fn effectors() -> Self::Effectors {
                 ($($letter::effectors(),)*)
             }
+
+            fn borrowed_resources() -> TypeSet {
+                let mut set = TypeSet::default();
+                $(set.extend($letter::borrowed_resources().drain());)*
+                set
+            }
+
+            fn borrowed_mut_resources() -> TypeSet {
+                let mut set = TypeSet::default();
+                $(set.extend($letter::borrowed_mut_resources().drain());)*
+                set
+            }
         }
 
         paste::item! {
