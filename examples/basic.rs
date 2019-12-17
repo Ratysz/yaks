@@ -45,7 +45,7 @@ fn main() {
             Option<&ComponentOne>,
             &mut ComponentOne,
         ),
-    >::new(
+    >::build(
         move |world, (resource_1, mut resource_2), (query_1, query_2, query_3)| {
             resource_2.0 = "Hello again!";
             for (_, (mut component_1, component_2)) in query_1.query(world).into_iter() {
@@ -55,7 +55,7 @@ fn main() {
     );
     system.run(&world);
 
-    let mut system = System::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::new(
+    let mut system = System::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::build(
         move |world, resource_2, q1| {},
     );
 

@@ -16,16 +16,12 @@ macro_rules! impls_for_tuple {
                 ($($letter::effectors(),)*)
             }
 
-            fn borrowed_resources() -> TypeSet {
-                let mut set = TypeSet::default();
-                $(set.extend($letter::borrowed_resources().drain());)*
-                set
+            fn write_borrowed_resources(set: &mut TypeSet) {
+                $($letter::write_borrowed_resources(set);)*
             }
 
-            fn borrowed_mut_resources() -> TypeSet {
-                let mut set = TypeSet::default();
-                $(set.extend($letter::borrowed_mut_resources().drain());)*
-                set
+            fn write_borrowed_mut_resources(set: &mut TypeSet) {
+                $($letter::write_borrowed_mut_resources(set);)*
             }
         }
 
@@ -71,22 +67,16 @@ macro_rules! impls_for_tuple {
                 ($(QueryEffector::<$letter>::new(),)*)
             }
 
-            fn borrowed_components() -> TypeSet {
-                let mut set = TypeSet::default();
-                $(set.extend($letter::borrowed_components().drain());)*
-                set
+            fn write_borrowed_components(set: &mut TypeSet) {
+                $($letter::write_borrowed_components(set);)*
             }
 
-            fn borrowed_mut_components() -> TypeSet {
-                let mut set = TypeSet::default();
-                $(set.extend($letter::borrowed_mut_components().drain());)*
-                set
+            fn write_borrowed_mut_components(set: &mut TypeSet) {
+                $($letter::write_borrowed_mut_components(set);)*
             }
 
-            fn touched_archetypes(world: &World) -> ArchetypeSet {
-                let mut set = ArchetypeSet::default();
-                $(set.extend($letter::touched_archetypes(world).drain());)*
-                set
+            fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+                $(world.write_touched_archetypes_for_query::<$letter>(set);)*
             }
         }
     };

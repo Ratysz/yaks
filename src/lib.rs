@@ -13,12 +13,14 @@ pub use resources::{
     RefMut as ResourceRefMut, Resource,
 };
 
+mod executor;
 mod impls_for_tuple;
 mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
 
+pub use executor::Executor;
 pub use system::System;
 pub use world::World;
 

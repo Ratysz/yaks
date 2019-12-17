@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::{ArchetypeSet, Component, Query, QueryBorrow, TypeSet, World};
 
-trait ElidedQuery {}
+// TODO: decide if (&C1, &C2) is to be interpreted as Query<(&C1, &C2)> or (Query<&C1>, Query<&C2>).
 
 pub struct QueryEffector<Q>
 where
@@ -31,11 +31,11 @@ pub trait QueryBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn borrowed_components() -> TypeSet;
+    fn write_borrowed_components(set: &mut TypeSet);
 
-    fn borrowed_mut_components() -> TypeSet;
+    fn write_borrowed_mut_components(set: &mut TypeSet);
 
-    fn touched_archetypes(world: &World) -> ArchetypeSet;
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet);
 }
 
 impl QueryBundle for () {
@@ -43,17 +43,11 @@ impl QueryBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn borrowed_components() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_components(_: &mut TypeSet) {}
 
-    fn borrowed_mut_components() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_mut_components(_: &mut TypeSet) {}
 
-    fn touched_archetypes(_: &World) -> ArchetypeSet {
-        ArchetypeSet::default()
-    }
+    fn write_touched_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
 impl<C> QueryBundle for &'_ C
@@ -66,18 +60,14 @@ where
         QueryEffector::new()
     }
 
-    fn borrowed_components() -> TypeSet {
-        let mut set = TypeSet::default();
+    fn write_borrowed_components(set: &mut TypeSet) {
         set.insert(TypeId::of::<C>());
-        set
     }
 
-    fn borrowed_mut_components() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_mut_components(_: &mut TypeSet) {}
 
-    fn touched_archetypes(world: &World) -> ArchetypeSet {
-        world.touched_archetypes::<Self>()
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        world.write_touched_archetypes_for_query::<Self>(set);
     }
 }
 
@@ -91,18 +81,14 @@ where
         QueryEffector::new()
     }
 
-    fn borrowed_components() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_components(_: &mut TypeSet) {}
 
-    fn borrowed_mut_components() -> TypeSet {
-        let mut set = TypeSet::default();
+    fn write_borrowed_mut_components(set: &mut TypeSet) {
         set.insert(TypeId::of::<C>());
-        set
     }
 
-    fn touched_archetypes(world: &World) -> ArchetypeSet {
-        world.touched_archetypes::<Self>()
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        world.write_touched_archetypes_for_query::<Self>(set);
     }
 }
 
@@ -116,15 +102,15 @@ where
         QueryEffector::new()
     }
 
-    fn borrowed_components() -> TypeSet {
-        Q::borrowed_components()
+    fn write_borrowed_components(set: &mut TypeSet) {
+        Q::write_borrowed_components(set);
     }
 
-    fn borrowed_mut_components() -> TypeSet {
-        Q::borrowed_mut_components()
+    fn write_borrowed_mut_components(set: &mut TypeSet) {
+        Q::write_borrowed_mut_components(set);
     }
 
-    fn touched_archetypes(world: &World) -> ArchetypeSet {
-        Q::touched_archetypes(world)
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        world.write_touched_archetypes_for_query::<Q>(set);
     }
 }

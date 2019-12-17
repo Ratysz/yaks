@@ -40,9 +40,9 @@ pub trait ResourceBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn borrowed_resources() -> TypeSet;
+    fn write_borrowed_resources(set: &mut TypeSet);
 
-    fn borrowed_mut_resources() -> TypeSet;
+    fn write_borrowed_mut_resources(set: &mut TypeSet);
 }
 
 pub trait Fetch<'a> {
@@ -56,13 +56,9 @@ impl ResourceBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn borrowed_resources() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_resources(_: &mut TypeSet) {}
 
-    fn borrowed_mut_resources() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_mut_resources(_: &mut TypeSet) {}
 }
 
 impl<'a> Fetch<'a> for () {
@@ -78,15 +74,11 @@ impl<R: Resource> ResourceBundle for &'_ R {
         FetchEffector::new()
     }
 
-    fn borrowed_resources() -> TypeSet {
-        let mut set = TypeSet::default();
+    fn write_borrowed_resources(set: &mut TypeSet) {
         set.insert(TypeId::of::<R>());
-        set
     }
 
-    fn borrowed_mut_resources() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_mut_resources(_: &mut TypeSet) {}
 }
 
 impl<'a, R: Resource> Fetch<'a> for FetchEffector<Immutable, R> {
@@ -106,14 +98,10 @@ impl<R: Resource> ResourceBundle for &'_ mut R {
         FetchEffector::new()
     }
 
-    fn borrowed_resources() -> TypeSet {
-        TypeSet::default()
-    }
+    fn write_borrowed_resources(_: &mut TypeSet) {}
 
-    fn borrowed_mut_resources() -> TypeSet {
-        let mut set = TypeSet::default();
+    fn write_borrowed_mut_resources(set: &mut TypeSet) {
         set.insert(TypeId::of::<R>());
-        set
     }
 }
 

@@ -2,6 +2,7 @@ use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
+    query_bundle::QueryBundle,
     resource_bundle::{Fetch, ResourceBundle},
     ArchetypeSet, Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut,
     Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow,
@@ -12,6 +13,7 @@ use crate::{
 pub struct World {
     entities: Entities,
     resources: Resources,
+    archetypes_invalidated: bool,
 }
 
 impl World {
@@ -20,14 +22,18 @@ impl World {
     }
 
     pub fn spawn(&mut self, components: impl DynamicComponentBundle) -> Entity {
+        self.archetypes_invalidated = true;
         self.entities.spawn(components)
     }
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
-        self.entities.despawn(entity)
+        self.entities.despawn(entity).map(|_| {
+            self.archetypes_invalidated = true;
+        })
     }
 
     pub fn despawn_all(&mut self) {
+        self.archetypes_invalidated = true;
         self.entities.clear();
     }
 
@@ -40,14 +46,19 @@ impl World {
         entity: Entity,
         components: impl DynamicComponentBundle,
     ) -> Result<(), NoSuchEntity> {
-        self.entities.insert(entity, components)
+        self.entities.insert(entity, components).map(|_| {
+            self.archetypes_invalidated = true;
+        })
     }
 
     pub fn remove_components<T: ComponentBundle>(
         &mut self,
         entity: Entity,
     ) -> Result<T, ComponentError> {
-        self.entities.remove(entity)
+        self.entities.remove(entity).map(|result| {
+            self.archetypes_invalidated = true;
+            result
+        })
     }
 
     pub fn component<C: Component>(
@@ -104,9 +115,17 @@ impl World {
         F::effectors().fetch(self)
     }
 
-    pub(crate) fn touched_archetypes<Q: Query>(&self) -> ArchetypeSet {
-        let mut set = ArchetypeSet::default();
+    pub(crate) fn write_touched_archetypes_for_query<Q: Query>(&self, set: &mut ArchetypeSet) {
         set.extend(self.entities.query_scope::<Q>());
-        set
+    }
+
+    pub(crate) fn write_touched_archetypes_if_invalidated<Q: QueryBundle>(
+        &self,
+        set: &mut ArchetypeSet,
+    ) {
+        if self.archetypes_invalidated {
+            set.clear();
+            Q::write_touched_archetypes(self, set);
+        }
     }
 }
