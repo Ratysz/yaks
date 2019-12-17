@@ -1,4 +1,4 @@
-use secs::{DynamicSystemBuilder, StaticSystem, StaticSystemBuilder, World};
+use secs::{DynamicSystemBuilder, Fetch, StaticSystem, StaticSystemBuilder, World};
 
 struct ResourceOne(usize);
 
@@ -41,7 +41,8 @@ fn main() {
             Option<&ComponentOne>,
             &mut ComponentOne,
         ),
-    >::build(move |world, (r_one, mut r_two), (query1, query2, _)| {
+    >::build(move |world, resources, (query1, query2, _)| {
+        let (r_one, mut r_two) = resources.fetch(world);
         r_two.0 = "Hello again!";
         for (_, (mut one, two)) in query1.query(world).into_iter() {
             one.0 += increment;
@@ -61,7 +62,8 @@ fn main() {
             Option<&ComponentOne>,
             &mut ComponentOne,
         ),
-    >::build(move |world, (r_one, mut r_two), (query1, query2, _)| {
+    >::build(move |world, resources, (query1, query2, _)| {
+        let (r_one, mut r_two) = resources.fetch(world);
         r_two.0 = "Hello again!";
         for (_, (mut one, two)) in query1.query(world).into_iter() {
             one.0 += increment;

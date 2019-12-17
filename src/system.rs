@@ -10,12 +10,12 @@ use crate::{
 
 pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
 
-pub trait StaticSystem<'a, R, Q>
+pub trait StaticSystem<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
-    fn run(&mut self, world: &'a World);
+    fn run(&mut self, world: &World);
 
     fn borrowed_components(&self) -> TypeSet {
         TypeSet::from_iter(Q::borrowed_components())
@@ -30,33 +30,33 @@ where
     }
 }
 
-impl<'a, R, Q, F> StaticSystem<'a, R, Q> for F
+impl<R, Q, F> StaticSystem<R, Q> for F
 where
     R: ResourceBundle,
     Q: QueryBundle,
-    F: FnMut(&'a World, R::Effectors, Q::Effectors),
+    F: FnMut(&World, R::Effectors, Q::Effectors),
 {
-    fn run(&mut self, world: &'a World) {
+    fn run(&mut self, world: &World) {
         self(world, R::effectors(), Q::effectors())
     }
 }
 
-pub struct StaticSystemBuilder<'a, R, Q>
+pub struct StaticSystemBuilder<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
-    phantom_data: PhantomData<(&'a (), R, Q)>,
+    phantom_data: PhantomData<(R, Q)>,
 }
 
-impl<'a, R, Q> StaticSystemBuilder<'a, R, Q>
+impl<R, Q> StaticSystemBuilder<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
     pub fn build(
-        system: impl FnMut(&'a World, R::Effectors, Q::Effectors),
-    ) -> impl StaticSystem<'a, R, Q> {
+        system: impl FnMut(&World, R::Effectors, Q::Effectors),
+    ) -> impl StaticSystem<R, Q> {
         system
     }
 }

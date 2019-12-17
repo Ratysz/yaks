@@ -1,5 +1,5 @@
 use crate::{
-    query_bundle::QueryBundle,
+    query_bundle::{QueryBundle, QueryEffector},
     resource_bundle::{FetchEffector, Mutability, ResourceBundle},
     system::TypeSet,
     world::ArchetypeSet,
@@ -55,10 +55,10 @@ macro_rules! impls_for_tuple {
         where
             $($letter: Query + QueryBundle,)*
         {
-            type Effectors = ($($letter::Effectors,)*);
+            type Effectors = ($(QueryEffector<$letter>,)*);
 
             fn effectors() -> Self::Effectors {
-                ($($letter::effectors(),)*)
+                ($(QueryEffector::<$letter>::new(),)*)
             }
 
             fn borrowed_components() -> TypeSet {
