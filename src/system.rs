@@ -88,6 +88,11 @@ where
         unsafe {
             // FIXME this is a dirty hack for until
             //  https://github.com/rust-lang/rust/issues/62529 is fixed
+            // I'm all but certain that this, within the context it's used in, is safe.
+            // This transmutation forces the compiler to accept lifetime bounds it would've been
+            // able to verify itself, if they are written as a HRTB.
+            // Since HRTBs cause an ICE when used with closures in the way that's needed here
+            // (see link above), I've opted for this workaround.
             std::mem::transmute::<
                 Box<dyn FnMut(&'a World, R::Effectors, Q::Effectors)>,
                 Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>,
