@@ -5,10 +5,7 @@ use std::{
 };
 
 use crate::{
-    query_bundle::QueryBundle,
-    resource_bundle::{Fetch, ResourceBundle},
-    world::ArchetypeSet,
-    World,
+    query_bundle::QueryBundle, resource_bundle::ResourceBundle, world::ArchetypeSet, World,
 };
 
 pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
@@ -143,19 +140,24 @@ where
 
 #[test]
 fn test() {
+    use crate::Fetch;
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system = StaticSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+    let mut system1 = StaticSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
         |world, fetch, query| {
             let (res1, mut res2) = fetch.fetch(world);
+            *res2 += 1.0;
         },
     );
-    system.run(&world);
-    let mut system = DynamicSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+    let mut system2 = DynamicSystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
         |world, fetch, query| {
             let (res1, mut res2) = fetch.fetch(world);
+            *res2 += 1.0;
         },
     );
-    system.run(&world);
+    system1.run(&world);
+    assert_eq!(*world.fetch::<&f32>(), 2.0);
+    system2.run(&world);
+    assert_eq!(*world.fetch::<&f32>(), 3.0);
 }

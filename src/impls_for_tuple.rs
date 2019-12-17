@@ -1,5 +1,5 @@
 use crate::{
-    query_bundle::{QueryBundle, QueryEffector},
+    query_bundle::QueryBundle,
     resource_bundle::{FetchEffector, Mutability, ResourceBundle},
     system::TypeSet,
     world::ArchetypeSet,

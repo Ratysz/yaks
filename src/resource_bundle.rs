@@ -53,7 +53,7 @@ impl ResourceBundle for () {
 impl<'a> Fetch<'a> for () {
     type Refs = ();
 
-    fn fetch(&self, world: &'a World) -> Self::Refs {}
+    fn fetch(&self, _: &'a World) -> Self::Refs {}
 }
 
 impl<R: Resource> ResourceBundle for &'_ R {
