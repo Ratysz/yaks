@@ -56,7 +56,7 @@ fn main() {
     system.run(&world);
 
     let mut system = System::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::new(
-        move |world, resource_2, (q1, q2)| {},
+        move |world, resource_2, q1| {},
     );
 
     for id in system.touched_archetypes(&world) {

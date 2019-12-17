@@ -67,11 +67,10 @@ where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
 {
-    pub fn new<'a>(
-        closure: impl FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
-    ) -> Box<dyn DynamicSystem>
+    pub fn new<'a, F>(closure: F) -> Box<dyn DynamicSystem>
     where
         R::Effectors: Fetch<'a>,
+        F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
     {
         Box::new((PhantomData::<(R, Q)>, Self::transmute_closure(closure)))
     }
