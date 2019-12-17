@@ -13,7 +13,7 @@ use crate::{
 
 pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
 
-pub trait System<'a, R, Q>
+pub trait StaticSystem<'a, R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<'a, R, Q, F> System<'a, R, Q> for F
+impl<'a, R, Q, F> StaticSystem<'a, R, Q> for F
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -41,6 +41,26 @@ where
 {
     fn run(&mut self, world: &'a World) {
         self(world, R::fetch(world), Q::effectors())
+    }
+}
+
+pub struct StaticSystemBuilder<'a, R, Q>
+where
+    R: ResourceBundle,
+    Q: QueryBundle,
+{
+    phantom_data: PhantomData<(&'a (), R, Q)>,
+}
+
+impl<'a, R, Q> StaticSystemBuilder<'a, R, Q>
+where
+    R: ResourceBundle,
+    Q: QueryBundle,
+{
+    pub fn build(
+        system: impl FnMut(&'a World, <R::Refs as Fetch<'a>>::Item, Q::Effectors),
+    ) -> impl StaticSystem<'a, R, Q> {
+        system
     }
 }
 
@@ -85,7 +105,7 @@ where
     F: FnMut(&World, <R::Refs as Fetch>::Item, Q::Effectors),
 {
     fn run(&mut self, world: &World) {
-        //self.system.run(world)
+        (self.system)(world, R::fetch(world), Q::effectors())
     }
 
     fn borrowed_components(&self) -> TypeSet {
@@ -101,27 +121,7 @@ where
     }
 }
 
-pub struct SystemBuilderStatic<'a, R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    phantom_data: PhantomData<(&'a (), R, Q)>,
-}
-
-impl<'a, R, Q> SystemBuilderStatic<'a, R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    pub fn build(
-        system: impl FnMut(&'a World, <R::Refs as Fetch<'a>>::Item, Q::Effectors),
-    ) -> impl System<'a, R, Q> {
-        system
-    }
-}
-
-pub struct SystemBuilderDynamic<R, Q>
+pub struct DynamicSystemBuilder<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -129,7 +129,7 @@ where
     phantom_data: PhantomData<(R, Q)>,
 }
 
-impl<R, Q> SystemBuilderDynamic<R, Q>
+impl<R, Q> DynamicSystemBuilder<R, Q>
 where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
@@ -139,4 +139,16 @@ where
     ) -> Box<dyn DynamicSystem> {
         Box::new(SystemBox::<R, Q, _>::from(Box::new(system)))
     }
+}
+
+#[test]
+fn test() {
+    let mut world = World::new();
+    world.add_resource::<usize>(1);
+    let mut system =
+        StaticSystemBuilder::<(), (&usize, Option<&usize>)>::build(|world, _, component| {});
+    system.run(&world);
+    let mut system =
+        DynamicSystemBuilder::<(), (&usize, Option<&usize>)>::build(|world, _, component| {});
+    system.run(&world);
 }

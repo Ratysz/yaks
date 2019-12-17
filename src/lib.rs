@@ -16,5 +16,5 @@ mod resource_bundle;
 mod system;
 mod world;
 
-pub use system::{System, SystemBuilderDynamic, SystemBuilderStatic};
+pub use system::{DynamicSystemBuilder, StaticSystem, StaticSystemBuilder};
 pub use world::World;

@@ -60,3 +60,13 @@ where
             .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
     }
 }
+
+impl ResourceBundle for () {
+    type Refs = ();
+}
+
+impl<'a> Fetch<'a> for () {
+    type Item = ();
+
+    fn fetch(_: &'a World) -> Self::Item {}
+}

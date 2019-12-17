@@ -110,3 +110,21 @@ where
         Q::touched_archetypes(world)
     }
 }
+
+impl QueryBundle for () {
+    type Effectors = ();
+
+    fn effectors() -> Self::Effectors {}
+
+    fn borrowed_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn borrowed_mut_components() -> TypeSet {
+        TypeSet::default()
+    }
+
+    fn touched_archetypes(_: &World) -> ArchetypeSet {
+        ArchetypeSet::default()
+    }
+}
