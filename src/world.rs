@@ -1,19 +1,20 @@
+use fixedbitset::FixedBitSet;
 use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
-    query_bundle::QueryBundle,
+    executor::ExecutorId,
     resource_bundle::{Fetch, ResourceBundle},
     ArchetypeSet, Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut,
-    Components, DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow,
-    Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    Components, DynamicComponentBundle, Entity, Executor, NoSuchEntity, NoSuchResource, Query,
+    QueryBorrow, Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
 
 #[derive(Default)]
 pub struct World {
     entities: Entities,
     resources: Resources,
-    archetypes_invalidated: bool,
+    executor_rebuild_tracking: FixedBitSet,
 }
 
 impl World {
@@ -22,18 +23,18 @@ impl World {
     }
 
     pub fn spawn(&mut self, components: impl DynamicComponentBundle) -> Entity {
-        self.archetypes_invalidated = true;
+        self.executor_rebuild_tracking.clear();
         self.entities.spawn(components)
     }
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
         self.entities.despawn(entity).map(|_| {
-            self.archetypes_invalidated = true;
+            self.executor_rebuild_tracking.clear();
         })
     }
 
     pub fn despawn_all(&mut self) {
-        self.archetypes_invalidated = true;
+        self.executor_rebuild_tracking.clear();
         self.entities.clear();
     }
 
@@ -47,7 +48,7 @@ impl World {
         components: impl DynamicComponentBundle,
     ) -> Result<(), NoSuchEntity> {
         self.entities.insert(entity, components).map(|_| {
-            self.archetypes_invalidated = true;
+            self.executor_rebuild_tracking.clear();
         })
     }
 
@@ -56,7 +57,7 @@ impl World {
         entity: Entity,
     ) -> Result<T, ComponentError> {
         self.entities.remove(entity).map(|result| {
-            self.archetypes_invalidated = true;
+            self.executor_rebuild_tracking.clear();
             result
         })
     }
@@ -115,17 +116,21 @@ impl World {
         F::effectors().fetch(self)
     }
 
-    pub(crate) fn write_touched_archetypes_for_query<Q: Query>(&self, set: &mut ArchetypeSet) {
+    pub(crate) fn write_touched_archetypes<Q: Query>(&self, set: &mut ArchetypeSet) {
         set.extend(self.entities.query_scope::<Q>());
     }
 
-    pub(crate) fn write_touched_archetypes_if_invalidated<Q: QueryBundle>(
-        &self,
-        set: &mut ArchetypeSet,
-    ) {
-        if self.archetypes_invalidated {
-            set.clear();
-            Q::write_touched_archetypes(self, set);
-        }
+    pub(crate) fn new_executor_id(&mut self) -> ExecutorId {
+        let length = self.executor_rebuild_tracking.len();
+        self.executor_rebuild_tracking.grow(length + 1);
+        ExecutorId(length)
+    }
+
+    pub(crate) fn executor_needs_rebuilding(&self, id: ExecutorId) -> bool {
+        !self.executor_rebuild_tracking[id.0]
+    }
+
+    pub(crate) fn executor_rebuilt(&mut self, id: ExecutorId) {
+        self.executor_rebuild_tracking.set(id.0, true);
     }
 }

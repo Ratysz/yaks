@@ -1,4 +1,4 @@
-use secs::{System, World};
+use secs::{SystemBuilder, World};
 
 struct ResourceOne(usize);
 
@@ -38,7 +38,7 @@ fn main() {
 
     let increment = 6;
 
-    let mut system = System::<
+    let mut system = SystemBuilder::<
         (&ResourceOne, &mut ResourceTwo),
         (
             (&mut ComponentOne, &ComponentTwo),
@@ -55,31 +55,19 @@ fn main() {
     );
     system.run(&world);
 
-    let mut system = System::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::build(
-        move |world, resource_2, q1| {},
-    );
+    let mut system =
+        SystemBuilder::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::build(
+            move |world, resource_2, q1| {},
+        );
 
-    for id in system.touched_archetypes(&world) {
+    let mut archetypes = Default::default();
+    system.write_touched_archetypes(&world, &mut archetypes);
+    for id in &archetypes {
         println!("archetype: {:?}", id);
     }
     println!();
 
-    println!("resources");
-    for type_id in system.borrowed_resources() {
-        println!(" read: {:?}", type_id);
-    }
-    for type_id in system.borrowed_mut_resources() {
-        println!(" write: {:?}", type_id);
-    }
-    println!();
-
-    println!("components");
-    for type_id in system.borrowed_components() {
-        println!(" read: {:?}", type_id);
-    }
-    for type_id in system.borrowed_mut_components() {
-        println!(" write: {:?}", type_id);
-    }
+    println!("metadata: {:#?}", system.metadata());
 
     assert_eq!(world.fetch::<&ResourceTwo>().0, "Hello again!");
 }

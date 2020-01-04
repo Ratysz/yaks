@@ -1,7 +1,7 @@
 use crate::{
     query_bundle::{QueryBundle, QueryEffector},
     resource_bundle::{Fetch, FetchEffector, Mutability, ResourceBundle},
-    ArchetypeSet, Query, Resource, TypeSet, World,
+    ArchetypeSet, Query, Resource, SystemMetadata, World,
 };
 
 macro_rules! impls_for_tuple {
@@ -16,12 +16,8 @@ macro_rules! impls_for_tuple {
                 ($($letter::effectors(),)*)
             }
 
-            fn write_borrowed_resources(set: &mut TypeSet) {
-                $($letter::write_borrowed_resources(set);)*
-            }
-
-            fn write_borrowed_mut_resources(set: &mut TypeSet) {
-                $($letter::write_borrowed_mut_resources(set);)*
+            fn write_metadata(metadata: &mut SystemMetadata) {
+                $($letter::write_metadata(metadata);)*
             }
         }
 
@@ -67,16 +63,12 @@ macro_rules! impls_for_tuple {
                 ($(QueryEffector::<$letter>::new(),)*)
             }
 
-            fn write_borrowed_components(set: &mut TypeSet) {
-                $($letter::write_borrowed_components(set);)*
-            }
-
-            fn write_borrowed_mut_components(set: &mut TypeSet) {
-                $($letter::write_borrowed_mut_components(set);)*
+            fn write_metadata(metadata: &mut SystemMetadata) {
+                $($letter::write_metadata(metadata);)*
             }
 
             fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-                $(world.write_touched_archetypes_for_query::<$letter>(set);)*
+                $(world.write_touched_archetypes::<$letter>(set);)*
             }
         }
     };

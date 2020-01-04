@@ -21,7 +21,7 @@ mod system;
 mod world;
 
 pub use executor::Executor;
-pub use system::System;
+pub use system::{System, SystemBuilder, SystemMetadata};
 pub use world::World;
 
 pub(crate) type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;

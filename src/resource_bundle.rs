@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{Resource, ResourceRef, ResourceRefMut, TypeSet, World};
+use crate::{Resource, ResourceRef, ResourceRefMut, SystemMetadata, World};
 
 pub struct Immutable;
 
@@ -40,9 +40,7 @@ pub trait ResourceBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn write_borrowed_resources(set: &mut TypeSet);
-
-    fn write_borrowed_mut_resources(set: &mut TypeSet);
+    fn write_metadata(metadata: &mut SystemMetadata);
 }
 
 pub trait Fetch<'a> {
@@ -56,9 +54,7 @@ impl ResourceBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn write_borrowed_resources(_: &mut TypeSet) {}
-
-    fn write_borrowed_mut_resources(_: &mut TypeSet) {}
+    fn write_metadata(_: &mut SystemMetadata) {}
 }
 
 impl<'a> Fetch<'a> for () {
@@ -74,11 +70,9 @@ impl<R: Resource> ResourceBundle for &'_ R {
         FetchEffector::new()
     }
 
-    fn write_borrowed_resources(set: &mut TypeSet) {
-        set.insert(TypeId::of::<R>());
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.resources.insert(TypeId::of::<R>());
     }
-
-    fn write_borrowed_mut_resources(_: &mut TypeSet) {}
 }
 
 impl<'a, R: Resource> Fetch<'a> for FetchEffector<Immutable, R> {
@@ -98,10 +92,8 @@ impl<R: Resource> ResourceBundle for &'_ mut R {
         FetchEffector::new()
     }
 
-    fn write_borrowed_resources(_: &mut TypeSet) {}
-
-    fn write_borrowed_mut_resources(set: &mut TypeSet) {
-        set.insert(TypeId::of::<R>());
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.resources_mut.insert(TypeId::of::<R>());
     }
 }
 

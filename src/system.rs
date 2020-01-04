@@ -1,4 +1,4 @@
-use std::{iter::FromIterator, marker::PhantomData};
+use std::{borrow::Cow, marker::PhantomData};
 
 use crate::{
     query_bundle::QueryBundle,
@@ -6,74 +6,53 @@ use crate::{
     ArchetypeSet, TypeSet, World,
 };
 
-type SystemClosure<R, Q> =
+pub trait System {
+    fn run(&mut self, world: &World);
+
+    fn metadata(&self) -> Cow<SystemMetadata>;
+
+    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet);
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct SystemMetadata {
+    pub resources: TypeSet,
+    pub resources_mut: TypeSet,
+    pub components: TypeSet,
+    pub components_mut: TypeSet,
+}
+
+type DynamicSystemClosure<R, Q> =
     Box<dyn FnMut(&World, <R as ResourceBundle>::Effectors, <Q as QueryBundle>::Effectors)>;
 
-pub trait DynamicSystem {
-    fn run(&mut self, world: &World);
-
-    fn touched_archetypes(&mut self, world: &World) -> &ArchetypeSet;
-
-    fn borrowed_components(&self) -> &TypeSet;
-
-    fn borrowed_mut_components(&self) -> &TypeSet;
-
-    fn borrowed_resources(&self) -> &TypeSet;
-
-    fn borrowed_mut_resources(&self) -> &TypeSet;
-}
-
-pub trait SystemTrait {
-    fn run(&mut self, world: &World);
-}
-
-impl<S: DynamicSystem> SystemTrait for S {
-    fn run(&mut self, world: &World) {
-        self.run(world)
-    }
-}
-
-struct SystemBox<R, Q>
+struct DynamicSystem<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
     phantom_data: PhantomData<(R, Q)>,
-    closure: SystemClosure<R, Q>,
-    archetypes: ArchetypeSet,
-    components: TypeSet,
-    components_mut: TypeSet,
-    resources: TypeSet,
-    resources_mut: TypeSet,
+    metadata: SystemMetadata,
+    closure: DynamicSystemClosure<R, Q>,
 }
 
-impl<R, Q> SystemBox<R, Q>
+impl<R, Q> DynamicSystem<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
-    fn new(closure: SystemClosure<R, Q>) -> Self {
-        let mut components = TypeSet::default();
-        let mut components_mut = TypeSet::default();
-        let mut resources = TypeSet::default();
-        let mut resources_mut = TypeSet::default();
-        Q::write_borrowed_components(&mut components);
-        Q::write_borrowed_mut_components(&mut components_mut);
-        R::write_borrowed_resources(&mut resources);
-        R::write_borrowed_mut_resources(&mut resources_mut);
+    fn new(closure: DynamicSystemClosure<R, Q>) -> Self {
+        let mut metadata = SystemMetadata::default();
+        R::write_metadata(&mut metadata);
+        Q::write_metadata(&mut metadata);
         Self {
             phantom_data: PhantomData,
+            metadata,
             closure,
-            archetypes: ArchetypeSet::default(),
-            components,
-            components_mut,
-            resources,
-            resources_mut,
         }
     }
 }
 
-impl<R, Q> DynamicSystem for SystemBox<R, Q>
+impl<R, Q> System for DynamicSystem<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -82,29 +61,16 @@ where
         (self.closure)(world, R::effectors(), Q::effectors())
     }
 
-    fn touched_archetypes(&mut self, world: &World) -> &ArchetypeSet {
-        world.write_touched_archetypes_if_invalidated::<Q>(&mut self.archetypes);
-        &self.archetypes
+    fn metadata(&self) -> Cow<SystemMetadata> {
+        Cow::Borrowed(&self.metadata)
     }
 
-    fn borrowed_components(&self) -> &TypeSet {
-        &self.components
-    }
-
-    fn borrowed_mut_components(&self) -> &TypeSet {
-        &self.components_mut
-    }
-
-    fn borrowed_resources(&self) -> &TypeSet {
-        &self.resources
-    }
-
-    fn borrowed_mut_resources(&self) -> &TypeSet {
-        &self.resources_mut
+    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet) {
+        Q::write_touched_archetypes(world, set);
     }
 }
 
-pub struct System<R, Q>
+pub struct SystemBuilder<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -112,20 +78,20 @@ where
     phantom_data: PhantomData<(R, Q)>,
 }
 
-impl<R, Q> System<R, Q>
+impl<R, Q> SystemBuilder<R, Q>
 where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
 {
-    pub fn build<'a, F>(closure: F) -> Box<dyn DynamicSystem>
+    pub fn build<'a, F>(closure: F) -> Box<dyn System>
     where
         R::Effectors: Fetch<'a>,
         F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
     {
-        Box::new(SystemBox::<R, Q>::new(Self::transmute_closure(closure)))
+        Box::new(DynamicSystem::<R, Q>::new(Self::transmute_closure(closure)))
     }
 
-    fn transmute_closure<'a, F>(mut closure: F) -> SystemClosure<R, Q>
+    fn transmute_closure<'a, F>(mut closure: F) -> DynamicSystemClosure<R, Q>
     where
         R::Effectors: Fetch<'a>,
         F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
@@ -154,7 +120,7 @@ fn test() {
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system = System::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
+    let mut system = SystemBuilder::<(&usize, &mut f32), (&usize, Option<&usize>)>::build(
         |world, (res1, mut res2), query| {
             *res2 += 1.0;
         },

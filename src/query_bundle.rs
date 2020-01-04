@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{ArchetypeSet, Component, Query, QueryBorrow, TypeSet, World};
+use crate::{ArchetypeSet, Component, Query, QueryBorrow, SystemMetadata, World};
 
 // TODO: decide if (&C1, &C2) is to be interpreted as Query<(&C1, &C2)> or (Query<&C1>, Query<&C2>).
 
@@ -31,9 +31,7 @@ pub trait QueryBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn write_borrowed_components(set: &mut TypeSet);
-
-    fn write_borrowed_mut_components(set: &mut TypeSet);
+    fn write_metadata(metadata: &mut SystemMetadata);
 
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet);
 }
@@ -43,9 +41,7 @@ impl QueryBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn write_borrowed_components(_: &mut TypeSet) {}
-
-    fn write_borrowed_mut_components(_: &mut TypeSet) {}
+    fn write_metadata(_: &mut SystemMetadata) {}
 
     fn write_touched_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
@@ -60,14 +56,12 @@ where
         QueryEffector::new()
     }
 
-    fn write_borrowed_components(set: &mut TypeSet) {
-        set.insert(TypeId::of::<C>());
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.components.insert(TypeId::of::<C>());
     }
 
-    fn write_borrowed_mut_components(_: &mut TypeSet) {}
-
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes_for_query::<Self>(set);
+        world.write_touched_archetypes::<Self>(set);
     }
 }
 
@@ -81,14 +75,12 @@ where
         QueryEffector::new()
     }
 
-    fn write_borrowed_components(_: &mut TypeSet) {}
-
-    fn write_borrowed_mut_components(set: &mut TypeSet) {
-        set.insert(TypeId::of::<C>());
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.components_mut.insert(TypeId::of::<C>());
     }
 
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes_for_query::<Self>(set);
+        world.write_touched_archetypes::<Self>(set);
     }
 }
 
@@ -102,15 +94,11 @@ where
         QueryEffector::new()
     }
 
-    fn write_borrowed_components(set: &mut TypeSet) {
-        Q::write_borrowed_components(set);
-    }
-
-    fn write_borrowed_mut_components(set: &mut TypeSet) {
-        Q::write_borrowed_mut_components(set);
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        Q::write_metadata(metadata);
     }
 
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes_for_query::<Q>(set);
+        world.write_touched_archetypes::<Q>(set);
     }
 }
