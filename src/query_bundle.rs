@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{metadata::ArchetypeSet, Component, Query, QueryBorrow, SystemMetadata, World};
+use crate::{borrows::ArchetypeSet, Component, Query, QueryBorrow, SystemBorrows, World};
 
 pub struct QueryEffector<Q>
 where
@@ -29,9 +29,9 @@ pub trait QuerySingle: Send + Sync {
 
     fn effector() -> Self::Effector;
 
-    fn write_metadata(metadata: &mut SystemMetadata);
+    fn write_borrows(borrows: &mut SystemBorrows);
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
 }
 
 impl<C> QuerySingle for &'_ C
@@ -44,12 +44,12 @@ where
         QueryEffector::new()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.components_immutable.insert(TypeId::of::<C>());
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.components_immutable.insert(TypeId::of::<C>());
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes::<Self>(set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -63,12 +63,12 @@ where
         QueryEffector::new()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.components_mutable.insert(TypeId::of::<C>());
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.components_mutable.insert(TypeId::of::<C>());
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes::<Self>(set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -83,12 +83,12 @@ where
         QueryEffector::new()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        Q::write_metadata(metadata);
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        Q::write_borrows(borrows);
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        world.write_touched_archetypes::<Self>(set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -97,9 +97,9 @@ pub trait QueryBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn write_metadata(metadata: &mut SystemMetadata);
+    fn write_borrows(borrows: &mut SystemBorrows);
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet);
+    fn write_archetypes(world: &World, set: &mut ArchetypeSet);
 }
 
 impl<C> QueryBundle for &'_ C
@@ -113,12 +113,12 @@ where
         <Self as QuerySingle>::effector()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        <Self as QuerySingle>::write_metadata(metadata);
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        <Self as QuerySingle>::write_borrows(borrows);
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_archetypes(world, archetypes);
     }
 }
 
@@ -133,12 +133,12 @@ where
         <Self as QuerySingle>::effector()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        <Self as QuerySingle>::write_metadata(metadata);
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        <Self as QuerySingle>::write_borrows(borrows);
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_archetypes(world, archetypes);
     }
 }
 
@@ -153,12 +153,12 @@ where
         <Self as QuerySingle>::effector()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        <Self as QuerySingle>::write_metadata(metadata);
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        <Self as QuerySingle>::write_borrows(borrows);
     }
 
-    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_archetypes(world, archetypes);
     }
 }
 
@@ -167,7 +167,7 @@ impl QueryBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn write_metadata(_: &mut SystemMetadata) {}
+    fn write_borrows(_: &mut SystemBorrows) {}
 
-    fn write_touched_archetypes(_: &World, _: &mut ArchetypeSet) {}
+    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }

@@ -1,7 +1,7 @@
 use std::vec::Drain;
 
 use crate::{
-    metadata::{ArchetypeSet, SystemWithMetadata, TypeSet},
+    borrows::{ArchetypeSet, SystemWithBorrows, TypeSet},
     System, World,
 };
 
@@ -16,13 +16,13 @@ impl Executor {
     }
 
     pub fn add(&mut self, system: Box<dyn System>) {
-        let swm = SystemWithMetadata::new(system);
+        let swb = SystemWithBorrows::new(system);
         if let Some(stage) = self
             .stages
             .iter_mut()
-            .find(|stage| stage.is_compatible(&swm))
+            .find(|stage| stage.is_compatible(&swb))
         {
-            stage.add(swm)
+            stage.add(swb)
         }
     }
 
@@ -47,23 +47,23 @@ struct Stage1 {
     resources_immutable: TypeSet,
     resources_mutable: TypeSet,
 
-    unassigned: Vec<SystemWithMetadata>,
-    unassigned_tail: Vec<SystemWithMetadata>,
+    unassigned: Vec<SystemWithBorrows>,
+    unassigned_tail: Vec<SystemWithBorrows>,
     archetypes: ArchetypeSet,
 }
 
 impl Stage1 {
-    fn is_compatible(&self, swm: &SystemWithMetadata) -> bool {
-        swm.metadata
+    fn is_compatible(&self, swb: &SystemWithBorrows) -> bool {
+        swb.borrows
             .are_resource_borrows_compatible(&self.resources_immutable, &self.resources_mutable)
     }
 
-    fn add(&mut self, swm: SystemWithMetadata) {
+    fn add(&mut self, swb: SystemWithBorrows) {
         self.resources_immutable
-            .extend(&swm.metadata.resources_immutable);
+            .extend(&swb.borrows.resources_immutable);
         self.resources_mutable
-            .extend(&swm.metadata.resources_mutable);
-        self.unassigned_tail.push(swm);
+            .extend(&swb.borrows.resources_mutable);
+        self.unassigned_tail.push(swb);
     }
 
     fn rebuild(&mut self, world: &World) {
@@ -72,14 +72,13 @@ impl Stage1 {
         }
         self.unassigned.extend(self.unassigned_tail.drain(..));
 
-        for swm in self.unassigned.drain(..) {
-            swm.system
-                .write_touched_archetypes(world, &mut self.archetypes);
+        for swb in self.unassigned.drain(..) {
+            swb.system.write_archetypes(world, &mut self.archetypes);
             let archetypes = &self.archetypes;
             let stage = match self
                 .stages
                 .iter_mut()
-                .find(|stage| stage.is_compatible(&swm, archetypes))
+                .find(|stage| stage.is_compatible(&swb, archetypes))
             {
                 Some(stage) => stage,
                 None => {
@@ -87,7 +86,7 @@ impl Stage1 {
                     self.stages.last_mut().unwrap()
                 }
             };
-            stage.add(swm, &mut self.archetypes);
+            stage.add(swb, &mut self.archetypes);
         }
     }
 
@@ -104,31 +103,31 @@ impl Stage1 {
 
 #[derive(Default)]
 struct Stage2 {
-    systems: Vec<SystemWithMetadata>,
+    systems: Vec<SystemWithBorrows>,
     components_immutable: TypeSet,
     components_mutable: TypeSet,
     archetypes: ArchetypeSet,
 }
 
 impl Stage2 {
-    fn is_compatible(&self, swm: &SystemWithMetadata, archetypes: &ArchetypeSet) -> bool {
+    fn is_compatible(&self, swb: &SystemWithBorrows, archetypes: &ArchetypeSet) -> bool {
         self.archetypes.is_disjoint(archetypes)
-            || (swm.metadata.are_component_borrows_compatible(
+            || (swb.borrows.are_component_borrows_compatible(
                 &self.components_immutable,
                 &self.components_mutable,
             ))
     }
 
-    fn add(&mut self, swm: SystemWithMetadata, archetypes: &mut ArchetypeSet) {
+    fn add(&mut self, swb: SystemWithBorrows, archetypes: &mut ArchetypeSet) {
         self.archetypes.extend(archetypes.drain());
         self.components_immutable
-            .extend(&swm.metadata.components_immutable);
+            .extend(&swb.borrows.components_immutable);
         self.components_mutable
-            .extend(&swm.metadata.components_mutable);
-        self.systems.push(swm);
+            .extend(&swb.borrows.components_mutable);
+        self.systems.push(swb);
     }
 
-    fn drain(&mut self) -> Drain<'_, SystemWithMetadata> {
+    fn drain(&mut self) -> Drain<'_, SystemWithBorrows> {
         self.archetypes.clear();
         self.components_immutable.clear();
         self.components_mutable.clear();
@@ -138,7 +137,7 @@ impl Stage2 {
     fn run(&mut self, world: &World) {
         self.systems
             .iter_mut()
-            .for_each(|swm| swm.system.run(world));
+            .for_each(|swb| swb.system.run(world));
     }
 
     #[allow(dead_code, unused_variables)]

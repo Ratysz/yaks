@@ -1,8 +1,8 @@
 use crate::{
-    metadata::ArchetypeSet,
+    borrows::ArchetypeSet,
     query_bundle::{QueryBundle, QueryEffector, QuerySingle},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
-    Query, Resource, SystemMetadata, World,
+    Query, Resource, SystemBorrows, World,
 };
 
 macro_rules! impls_for_tuple {
@@ -17,8 +17,8 @@ macro_rules! impls_for_tuple {
                 ($($letter::effector(),)*)
             }
 
-            fn write_metadata(metadata: &mut SystemMetadata) {
-                $($letter::write_metadata(metadata);)*
+            fn write_borrows(borrows: &mut SystemBorrows) {
+                $($letter::write_borrows(borrows);)*
             }
         }
 
@@ -51,12 +51,12 @@ macro_rules! impls_for_tuple {
                 QueryEffector::new()
             }
 
-            fn write_metadata(metadata: &mut SystemMetadata) {
-                $($letter::write_metadata(metadata);)*
+            fn write_borrows(borrows: &mut SystemBorrows) {
+                $($letter::write_borrows(borrows);)*
             }
 
-            fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-                world.write_touched_archetypes::<Self>(set);
+            fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+                world.write_archetypes::<Self>(archetypes);
             }
         }
 
@@ -70,12 +70,12 @@ macro_rules! impls_for_tuple {
                 ($($letter::effector(),)*)
             }
 
-            fn write_metadata(metadata: &mut SystemMetadata) {
-                $($letter::write_metadata(metadata);)*
+            fn write_borrows(borrows: &mut SystemBorrows) {
+                $($letter::write_borrows(borrows);)*
             }
 
-            fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-                $($letter::write_touched_archetypes(world, set);)*
+            fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+                $($letter::write_archetypes(world, archetypes);)*
             }
         }
     };

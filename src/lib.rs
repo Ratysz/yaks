@@ -10,16 +10,17 @@ pub use resources::{
     RefMut as ResourceRefMut, Resource,
 };
 
+mod borrows;
 mod executor;
+#[allow(dead_code)]
 mod executor_arch_disjoint;
 mod impls_for_tuple;
-mod metadata;
 mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
 
+pub use borrows::SystemBorrows;
 pub use executor::Executor;
-pub use metadata::SystemMetadata;
 pub use system::{System, SystemBuilder};
 pub use world::World;

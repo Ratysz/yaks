@@ -1,18 +1,18 @@
 use std::marker::PhantomData;
 
 use crate::{
-    metadata::ArchetypeSet,
+    borrows::ArchetypeSet,
     query_bundle::QueryBundle,
     resource_bundle::{Fetch, ResourceBundle},
-    SystemMetadata, World,
+    SystemBorrows, World,
 };
 
 pub trait System {
     fn run(&mut self, world: &World);
 
-    fn write_metadata(&self, metadata: &mut SystemMetadata);
+    fn write_borrows(&self, borrows: &mut SystemBorrows);
 
-    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet);
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
 }
 
 struct SystemBox<R, Q>
@@ -34,13 +34,13 @@ where
         (self.closure)(world, R::effectors(), Q::effectors())
     }
 
-    fn write_metadata(&self, metadata: &mut SystemMetadata) {
-        R::write_metadata(metadata);
-        Q::write_metadata(metadata);
+    fn write_borrows(&self, borrows: &mut SystemBorrows) {
+        R::write_borrows(borrows);
+        Q::write_borrows(borrows);
     }
 
-    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet) {
-        Q::write_touched_archetypes(world, set);
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
+        Q::write_archetypes(world, archetypes);
     }
 }
 

@@ -2,7 +2,7 @@ use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
-    metadata::ArchetypeSet,
+    borrows::ArchetypeSet,
     resource_bundle::{Fetch, ResourceBundle},
     Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
     DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
@@ -105,7 +105,7 @@ impl World {
         F::effectors().fetch(self)
     }
 
-    pub(crate) fn write_touched_archetypes<Q: Query>(&self, set: &mut ArchetypeSet) {
-        set.extend(self.entities.query_scope::<Q>());
+    pub(crate) fn write_archetypes<Q: Query>(&self, archetypes: &mut ArchetypeSet) {
+        archetypes.extend(self.entities.query_scope::<Q>());
     }
 }

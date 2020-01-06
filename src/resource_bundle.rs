@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{Resource, ResourceRef, ResourceRefMut, SystemMetadata, World};
+use crate::{Resource, ResourceRef, ResourceRefMut, SystemBorrows, World};
 
 pub struct Immutable;
 
@@ -40,7 +40,7 @@ pub trait ResourceSingle: Send + Sync {
 
     fn effector() -> Self::Effector;
 
-    fn write_metadata(metadata: &mut SystemMetadata);
+    fn write_borrows(borrows: &mut SystemBorrows);
 }
 
 impl<R> ResourceSingle for &'_ R
@@ -53,8 +53,8 @@ where
         ResourceEffector::new()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources_immutable.insert(TypeId::of::<R>());
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.resources_immutable.insert(TypeId::of::<R>());
     }
 }
 
@@ -68,8 +68,8 @@ where
         ResourceEffector::new()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources_mutable.insert(TypeId::of::<R>());
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.resources_mutable.insert(TypeId::of::<R>());
     }
 }
 
@@ -78,7 +78,7 @@ pub trait ResourceBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
-    fn write_metadata(metadata: &mut SystemMetadata);
+    fn write_borrows(borrows: &mut SystemBorrows);
 }
 
 impl ResourceBundle for () {
@@ -86,7 +86,7 @@ impl ResourceBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
-    fn write_metadata(_: &mut SystemMetadata) {}
+    fn write_borrows(_: &mut SystemBorrows) {}
 }
 
 impl<R> ResourceBundle for R
@@ -99,8 +99,8 @@ where
         R::effector()
     }
 
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        R::write_metadata(metadata)
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        R::write_borrows(borrows)
     }
 }
 

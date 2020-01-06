@@ -57,15 +57,15 @@ fn main() {
     system.run(&world);
 
     let mut archetypes = Default::default();
-    system.write_touched_archetypes(&world, &mut archetypes);
+    system.write_archetypes(&world, &mut archetypes);
     for id in &archetypes {
         println!("archetype: {:?}", id);
     }
     println!();
 
-    let mut metadata = Default::default();
-    system.write_metadata(&mut metadata);
-    println!("metadata: {:#?}", metadata);
+    let mut borrows = Default::default();
+    system.write_borrows(&mut borrows);
+    println!("borrows: {:#?}", borrows);
     println!();
 
     let mut system =
@@ -76,15 +76,15 @@ fn main() {
         );
 
     let mut archetypes = Default::default();
-    system.write_touched_archetypes(&world, &mut archetypes);
+    system.write_archetypes(&world, &mut archetypes);
     for id in &archetypes {
         println!("archetype: {:?}", id);
     }
     println!();
 
-    let mut metadata = Default::default();
-    system.write_metadata(&mut metadata);
-    println!("metadata: {:#?}", metadata);
+    let mut borrows = Default::default();
+    system.write_borrows(&mut borrows);
+    println!("borrows: {:#?}", borrows);
 
     SystemBuilder::<&ResourceTwo, ((&ComponentThree, &ComponentTwo),)>::build(
         move |world, resource_2, (q1,)| {
