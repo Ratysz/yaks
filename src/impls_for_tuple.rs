@@ -1,19 +1,20 @@
 use crate::{
-    query_bundle::{QueryBundle, QueryEffector},
-    resource_bundle::{Fetch, FetchEffector, Mutability, ResourceBundle},
-    ArchetypeSet, Query, Resource, SystemMetadata, World,
+    query_bundle::{QueryBundle, QueryEffector, QuerySingle},
+    resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
+    system::ArchetypeSet,
+    Query, Resource, SystemMetadata, World,
 };
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
         impl<$($letter),*> ResourceBundle for ($($letter,)*)
         where
-            $($letter: Resource + ResourceBundle,)*
+            $($letter: ResourceSingle,)*
         {
-            type Effectors = ($($letter::Effectors,)*);
+            type Effectors = ($($letter::Effector,)*);
 
             fn effectors() -> Self::Effectors {
-                ($($letter::effectors(),)*)
+                ($($letter::effector(),)*)
             }
 
             fn write_metadata(metadata: &mut SystemMetadata) {
@@ -23,44 +24,31 @@ macro_rules! impls_for_tuple {
 
         paste::item! {
             impl<'a, $([<M $letter>]),*, $([<R $letter>]),*> Fetch<'a>
-                for ($(FetchEffector<[<M $letter>], [<R $letter>]>,)*)
+                for ($(ResourceEffector<[<M $letter>], [<R $letter>]>,)*)
             where
                 $([<M $letter>]: Mutability,)*
                 $([<R $letter>]: Resource,)*
-                $(FetchEffector<[<M $letter>], [<R $letter>]>: Fetch<'a>,)*
+                $(ResourceEffector<[<M $letter>], [<R $letter>]>: Fetch<'a>,)*
             {
-                type Refs = ($(<FetchEffector<[<M $letter>], [<R $letter>]> as Fetch<'a>>::Refs,)*);
+                type Refs = (
+                    $(<ResourceEffector<[<M $letter>], [<R $letter>]> as Fetch<'a>>::Refs,)*
+                );
 
                 fn fetch(&self, world: &'a World) -> Self::Refs {
-                    ($(FetchEffector::<[<M $letter>], [<R $letter>]>::new().fetch(world),)*)
+                    ($(ResourceEffector::<[<M $letter>], [<R $letter>]>::new().fetch(world),)*)
                 }
             }
         }
 
-        // FIXME this should be used instead of the above after
-        //  https://github.com/rust-lang/rust/issues/62529 is fixed
-        /*impl<'a, $($letter: ResourceBundle),*> ResourceBundle for ($($letter,)*)
-        {
-            type Refs = ($($letter::Refs,)*);
-        }
-
-        impl<'a, $($letter: Fetch<'a>),*> Fetch<'a> for ($($letter,)*)
-        {
-            type Item = ($($letter::Item,)*);
-
-            fn fetch(world: &'a World) -> Self::Item {
-                ($($letter::fetch(world),)*)
-            }
-        }*/
-
-        impl<$($letter),*> QueryBundle for ($($letter,)*)
+        impl<$($letter),*> QuerySingle for ($($letter,)*)
         where
-            $($letter: Query + QueryBundle,)*
+            $($letter: QuerySingle,)*
+            Self: Query,
         {
-            type Effectors = ($(QueryEffector<$letter>,)*);
+            type Effector = QueryEffector<Self>;
 
-            fn effectors() -> Self::Effectors {
-                ($(QueryEffector::<$letter>::new(),)*)
+            fn effector() -> Self::Effector {
+                QueryEffector::new()
             }
 
             fn write_metadata(metadata: &mut SystemMetadata) {
@@ -68,21 +56,40 @@ macro_rules! impls_for_tuple {
             }
 
             fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
-                $(world.write_touched_archetypes::<$letter>(set);)*
+                world.write_touched_archetypes::<Self>(set);
+            }
+        }
+
+        impl<$($letter),*> QueryBundle for ($($letter,)*)
+        where
+            $($letter: QuerySingle + Send + Sync,)*
+        {
+            type Effectors = ($($letter::Effector,)*);
+
+            fn effectors() -> Self::Effectors {
+                ($($letter::effector(),)*)
+            }
+
+            fn write_metadata(metadata: &mut SystemMetadata) {
+                $($letter::write_metadata(metadata);)*
+            }
+
+            fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+                $($letter::write_touched_archetypes(world, set);)*
             }
         }
     };
 }
 
 macro_rules! expand {
-    ($m: ident, $ty: ident) => {
-        $m!{$ty}
+    ($macro:ident, $letter:ident) => {
+        $macro!($letter);
     };
-    ($m: ident, $ty: ident, $($tt: ident),*) => {
-        $m!{$ty, $($tt),*}
-        expand!{$m, $($tt),*}
+    ($macro:ident, $letter:ident, $($tail:ident),*) => {
+        $macro!($letter, $($tail),*);
+        expand!($macro, $($tail),*);
     };
 }
 
 #[rustfmt::skip]
-expand!(impls_for_tuple, P, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);
+expand!(impls_for_tuple, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);

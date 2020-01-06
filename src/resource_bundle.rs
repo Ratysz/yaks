@@ -15,7 +15,7 @@ impl Mutability for Immutable {}
 
 impl Mutability for Mutable {}
 
-pub struct FetchEffector<M, R>
+pub struct ResourceEffector<M, R>
 where
     M: Mutability,
     R: Resource + Send + Sync,
@@ -23,7 +23,7 @@ where
     phantom_data: PhantomData<(M, R)>,
 }
 
-impl<M, R> FetchEffector<M, R>
+impl<M, R> ResourceEffector<M, R>
 where
     M: Mutability,
     R: Resource + Send + Sync,
@@ -35,18 +35,50 @@ where
     }
 }
 
+pub trait ResourceSingle: Send + Sync {
+    type Effector;
+
+    fn effector() -> Self::Effector;
+
+    fn write_metadata(metadata: &mut SystemMetadata);
+}
+
+impl<R> ResourceSingle for &'_ R
+where
+    R: Resource,
+{
+    type Effector = ResourceEffector<Immutable, R>;
+
+    fn effector() -> Self::Effector {
+        ResourceEffector::new()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.resources.insert(TypeId::of::<R>());
+    }
+}
+
+impl<R> ResourceSingle for &'_ mut R
+where
+    R: Resource,
+{
+    type Effector = ResourceEffector<Mutable, R>;
+
+    fn effector() -> Self::Effector {
+        ResourceEffector::new()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        metadata.resources_mut.insert(TypeId::of::<R>());
+    }
+}
+
 pub trait ResourceBundle: Send + Sync {
     type Effectors;
 
     fn effectors() -> Self::Effectors;
 
     fn write_metadata(metadata: &mut SystemMetadata);
-}
-
-pub trait Fetch<'a> {
-    type Refs;
-
-    fn fetch(&self, world: &'a World) -> Self::Refs;
 }
 
 impl ResourceBundle for () {
@@ -57,25 +89,37 @@ impl ResourceBundle for () {
     fn write_metadata(_: &mut SystemMetadata) {}
 }
 
+impl<R> ResourceBundle for R
+where
+    R: ResourceSingle,
+{
+    type Effectors = R::Effector;
+
+    fn effectors() -> Self::Effectors {
+        R::effector()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        R::write_metadata(metadata)
+    }
+}
+
+pub trait Fetch<'a> {
+    type Refs;
+
+    fn fetch(&self, world: &'a World) -> Self::Refs;
+}
+
 impl<'a> Fetch<'a> for () {
     type Refs = ();
 
     fn fetch(&self, _: &'a World) -> Self::Refs {}
 }
 
-impl<R: Resource> ResourceBundle for &'_ R {
-    type Effectors = FetchEffector<Immutable, R>;
-
-    fn effectors() -> Self::Effectors {
-        FetchEffector::new()
-    }
-
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources.insert(TypeId::of::<R>());
-    }
-}
-
-impl<'a, R: Resource> Fetch<'a> for FetchEffector<Immutable, R> {
+impl<'a, R> Fetch<'a> for ResourceEffector<Immutable, R>
+where
+    R: Resource,
+{
     type Refs = ResourceRef<'a, R>;
 
     fn fetch(&self, world: &'a World) -> Self::Refs {
@@ -85,19 +129,10 @@ impl<'a, R: Resource> Fetch<'a> for FetchEffector<Immutable, R> {
     }
 }
 
-impl<R: Resource> ResourceBundle for &'_ mut R {
-    type Effectors = FetchEffector<Mutable, R>;
-
-    fn effectors() -> Self::Effectors {
-        FetchEffector::new()
-    }
-
-    fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources_mut.insert(TypeId::of::<R>());
-    }
-}
-
-impl<'a, R: Resource> Fetch<'a> for FetchEffector<Mutable, R> {
+impl<'a, R> Fetch<'a> for ResourceEffector<Mutable, R>
+where
+    R: Resource,
+{
     type Refs = ResourceRefMut<'a, R>;
 
     fn fetch(&self, world: &'a World) -> Self::Refs {
@@ -106,76 +141,3 @@ impl<'a, R: Resource> Fetch<'a> for FetchEffector<Mutable, R> {
             .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
     }
 }
-
-// FIXME this should be used instead of the above after
-//  https://github.com/rust-lang/rust/issues/62529 is fixed
-/*
-pub struct ElidedRef<R: Resource> {
-    phantom_data: PhantomData<R>,
-}
-
-pub struct ElidedRefMut<R: Resource> {
-    phantom_data: PhantomData<R>,
-}
-
-pub trait ResourceBundle: Send + Sync {
-    type Refs: for<'a> Fetch<'a>;
-
-    fn fetch(world: &World) -> <Self::Refs as Fetch>::Item {
-        Self::Refs::fetch(world)
-    }
-}
-
-pub trait Fetch<'a> {
-    type Item;
-
-    fn fetch(world: &'a World) -> Self::Item;
-}
-
-impl ResourceBundle for () {
-    type Refs = ();
-}
-
-impl<'a> Fetch<'a> for () {
-    type Item = ();
-
-    fn fetch(_: &'a World) -> Self::Item {}
-}
-
-impl<R> ResourceBundle for &'_ R
-where
-    R: Resource,
-{
-    type Refs = ElidedRef<R>;
-}
-
-impl<'a, R> Fetch<'a> for ElidedRef<R>
-where
-    R: Resource,
-{
-    type Item = ResourceRef<'a, R>;
-
-    fn fetch(world: &'a World) -> Self::Item {
-        world
-            .resource()
-            .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
-    }
-}
-
-impl<R: Resource> ResourceBundle for &'_ mut R {
-    type Refs = ElidedRefMut<R>;
-}
-
-impl<'a, R> Fetch<'a> for ElidedRefMut<R>
-where
-    R: Resource,
-{
-    type Item = ResourceRefMut<'a, R>;
-
-    fn fetch(world: &'a World) -> Self::Item {
-        world
-            .resource_mut()
-            .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
-    }
-}
-*/

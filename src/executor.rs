@@ -1,20 +1,26 @@
-/*use std::{hash::BuildHasherDefault, collections::HashSet, any::TypeId};
-use fxhash::FxHasher64;*/
+use std::vec::Drain;
 
-use crate::{ArchetypeSet, System, SystemMetadata, TypeSet, World};
+use crate::{
+    system::{ArchetypeSet, TypeSet},
+    System, World,
+};
 
-/*type Systems = HashMap<SystemId, Box<dyn System>, BuildHasherDefault<FxHasher64>>;
+struct SystemWithMetadata {
+    system: Box<dyn System>,
+    metadata: crate::SystemMetadata,
+}
 
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct SystemId(usize);*/
-
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub(crate) struct ExecutorId(pub usize);
+impl SystemWithMetadata {
+    fn new(system: Box<dyn System>) -> Self {
+        let mut metadata = Default::default();
+        system.write_metadata(&mut metadata);
+        Self { system, metadata }
+    }
+}
 
 #[derive(Default)]
 pub struct Executor {
     stages: Vec<Stage1>,
-    id: Option<ExecutorId>,
 }
 
 impl Executor {
@@ -23,39 +29,18 @@ impl Executor {
     }
 
     pub fn add_system(&mut self, system: Box<dyn System>) {
-        let metadata = system.metadata();
-        for stage in &mut self.stages {
-            if stage.is_compatible(&metadata) {
-                stage.resources.extend(&metadata.resources);
-                stage.resources_mut.extend(&metadata.resources_mut);
-                stage.unassigned_tail.push(system);
-                break;
-            }
+        let swm = SystemWithMetadata::new(system);
+        if let Some(stage) = self
+            .stages
+            .iter_mut()
+            .find(|stage| stage.is_compatible(&swm))
+        {
+            stage.add_system(swm)
         }
     }
 
     pub fn run(&mut self, world: &mut World) {
-        let id = match self.id {
-            Some(id) => id,
-            None => {
-                let id = world.new_executor_id();
-                self.id = Some(id);
-                id
-            }
-        };
-        if world.executor_needs_rebuilding(id) {
-            for stage in &mut self.stages {
-                stage.rebuild(world);
-                stage.run(world);
-            }
-        } else {
-            for stage in &mut self.stages {
-                if !stage.unassigned_tail.is_empty() {
-                    stage.rebuild(world);
-                }
-                stage.run(world);
-            }
-        }
+        self.stages.iter_mut().for_each(|stage| stage.run(world));
     }
 
     #[allow(dead_code, unused_variables)]
@@ -66,50 +51,42 @@ impl Executor {
 
 #[derive(Default)]
 struct Stage1 {
+    stages: Vec<Stage2>,
     resources: TypeSet,
     resources_mut: TypeSet,
-    stages: Vec<Stage2>,
 
-    unassigned: Vec<Box<dyn System>>,
-    unassigned_tail: Vec<Box<dyn System>>,
+    unassigned: Vec<SystemWithMetadata>,
+    unassigned_tail: Vec<SystemWithMetadata>,
     archetypes: ArchetypeSet,
 }
 
 impl Stage1 {
-    fn run(&mut self, world: &World) {
-        for stage in &mut self.stages {
-            stage.run(world);
-        }
+    fn is_compatible(&self, swm: &SystemWithMetadata) -> bool {
+        self.resources_mut.is_disjoint(&swm.metadata.resources_mut)
+            && self.resources.is_disjoint(&swm.metadata.resources_mut)
+            && self.resources_mut.is_disjoint(&swm.metadata.resources)
     }
 
-    #[allow(dead_code, unused_variables)]
-    fn run_parallel(&mut self, world: &World) {
-        unimplemented!()
-    }
-
-    fn is_compatible(&self, metadata: &SystemMetadata) -> bool {
-        self.resources_mut.is_disjoint(&metadata.resources_mut)
-            && self.resources.is_disjoint(&metadata.resources_mut)
-            && self.resources_mut.is_disjoint(&metadata.resources)
+    fn add_system(&mut self, swm: SystemWithMetadata) {
+        self.resources.extend(&swm.metadata.resources);
+        self.resources_mut.extend(&swm.metadata.resources_mut);
+        self.unassigned_tail.push(swm);
     }
 
     fn rebuild(&mut self, world: &World) {
         for stage in &mut self.stages {
-            self.unassigned.extend(stage.systems.drain(..));
-            stage.archetypes.clear();
-            stage.components.clear();
-            stage.components_mut.clear();
+            self.unassigned.extend(stage.drain());
         }
         self.unassigned.extend(self.unassigned_tail.drain(..));
 
-        for system in self.unassigned.drain(..) {
-            let metadata = system.metadata();
-            system.write_touched_archetypes(world, &mut self.archetypes);
+        for swm in self.unassigned.drain(..) {
+            swm.system
+                .write_touched_archetypes(world, &mut self.archetypes);
             let archetypes = &self.archetypes;
             let stage = match self
                 .stages
                 .iter_mut()
-                .find(|stage| stage.is_compatible(&metadata, archetypes))
+                .find(|stage| stage.is_compatible(&swm, archetypes))
             {
                 Some(stage) => stage,
                 None => {
@@ -117,39 +94,62 @@ impl Stage1 {
                     self.stages.last_mut().unwrap()
                 }
             };
-            stage.archetypes.extend(self.archetypes.drain());
-            stage.components.extend(&metadata.components);
-            stage.components_mut.extend(&metadata.components_mut);
-            stage.systems.push(system);
+            stage.add_system(swm, &mut self.archetypes);
         }
     }
-}
 
-#[derive(Default)]
-struct Stage2 {
-    archetypes: ArchetypeSet,
-    components: TypeSet,
-    components_mut: TypeSet,
-    systems: Vec<Box<dyn System>>,
-}
-
-impl Stage2 {
     fn run(&mut self, world: &World) {
-        for system in &mut self.systems {
-            system.run(world);
-        }
+        self.rebuild(world);
+        self.stages.iter_mut().for_each(|stage| stage.run(world));
     }
 
     #[allow(dead_code, unused_variables)]
     fn run_parallel(&mut self, world: &World) {
         unimplemented!()
     }
+}
 
-    fn is_compatible(&self, metadata: &SystemMetadata, archetypes: &ArchetypeSet) -> bool {
+#[derive(Default)]
+struct Stage2 {
+    systems: Vec<SystemWithMetadata>,
+    components: TypeSet,
+    components_mut: TypeSet,
+    archetypes: ArchetypeSet,
+}
+
+impl Stage2 {
+    fn is_compatible(&self, swm: &SystemWithMetadata, archetypes: &ArchetypeSet) -> bool {
         self.archetypes.is_disjoint(archetypes)
-            || (self.components_mut.is_disjoint(&metadata.components_mut)
-                && self.components.is_disjoint(&metadata.components_mut)
-                && self.components_mut.is_disjoint(&metadata.components))
+            || (self
+                .components_mut
+                .is_disjoint(&swm.metadata.components_mut)
+                && self.components.is_disjoint(&swm.metadata.components_mut)
+                && self.components_mut.is_disjoint(&swm.metadata.components))
+    }
+
+    fn add_system(&mut self, swm: SystemWithMetadata, archetypes: &mut ArchetypeSet) {
+        self.archetypes.extend(archetypes.drain());
+        self.components.extend(&swm.metadata.components);
+        self.components_mut.extend(&swm.metadata.components_mut);
+        self.systems.push(swm);
+    }
+
+    fn drain(&mut self) -> Drain<'_, SystemWithMetadata> {
+        self.archetypes.clear();
+        self.components.clear();
+        self.components_mut.clear();
+        self.systems.drain(..)
+    }
+
+    fn run(&mut self, world: &World) {
+        self.systems
+            .iter_mut()
+            .for_each(|swm| swm.system.run(world));
+    }
+
+    #[allow(dead_code, unused_variables)]
+    fn run_parallel(&mut self, world: &World) {
+        unimplemented!()
     }
 }
 

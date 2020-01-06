@@ -1,20 +1,18 @@
-use fixedbitset::FixedBitSet;
 use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
-    executor::ExecutorId,
     resource_bundle::{Fetch, ResourceBundle},
-    ArchetypeSet, Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut,
-    Components, DynamicComponentBundle, Entity, Executor, NoSuchEntity, NoSuchResource, Query,
-    QueryBorrow, Resource, ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    system::ArchetypeSet,
+    Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
+    DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
+    ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
 };
 
 #[derive(Default)]
 pub struct World {
     entities: Entities,
     resources: Resources,
-    executor_rebuild_tracking: FixedBitSet,
 }
 
 impl World {
@@ -23,18 +21,14 @@ impl World {
     }
 
     pub fn spawn(&mut self, components: impl DynamicComponentBundle) -> Entity {
-        self.executor_rebuild_tracking.clear();
         self.entities.spawn(components)
     }
 
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
-        self.entities.despawn(entity).map(|_| {
-            self.executor_rebuild_tracking.clear();
-        })
+        self.entities.despawn(entity)
     }
 
     pub fn despawn_all(&mut self) {
-        self.executor_rebuild_tracking.clear();
         self.entities.clear();
     }
 
@@ -47,19 +41,14 @@ impl World {
         entity: Entity,
         components: impl DynamicComponentBundle,
     ) -> Result<(), NoSuchEntity> {
-        self.entities.insert(entity, components).map(|_| {
-            self.executor_rebuild_tracking.clear();
-        })
+        self.entities.insert(entity, components)
     }
 
     pub fn remove_components<T: ComponentBundle>(
         &mut self,
         entity: Entity,
     ) -> Result<T, ComponentError> {
-        self.entities.remove(entity).map(|result| {
-            self.executor_rebuild_tracking.clear();
-            result
-        })
+        self.entities.remove(entity)
     }
 
     pub fn component<C: Component>(
@@ -118,19 +107,5 @@ impl World {
 
     pub(crate) fn write_touched_archetypes<Q: Query>(&self, set: &mut ArchetypeSet) {
         set.extend(self.entities.query_scope::<Q>());
-    }
-
-    pub(crate) fn new_executor_id(&mut self) -> ExecutorId {
-        let length = self.executor_rebuild_tracking.len();
-        self.executor_rebuild_tracking.grow(length + 1);
-        ExecutorId(length)
-    }
-
-    pub(crate) fn executor_needs_rebuilding(&self, id: ExecutorId) -> bool {
-        !self.executor_rebuild_tracking[id.0]
-    }
-
-    pub(crate) fn executor_rebuilt(&mut self, id: ExecutorId) {
-        self.executor_rebuild_tracking.set(id.0, true);
     }
 }

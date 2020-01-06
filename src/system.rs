@@ -1,18 +1,15 @@
-use std::{borrow::Cow, marker::PhantomData};
+use fxhash::FxHasher64;
+use std::marker::PhantomData;
+use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
 use crate::{
     query_bundle::QueryBundle,
     resource_bundle::{Fetch, ResourceBundle},
-    ArchetypeSet, TypeSet, World,
+    World,
 };
 
-pub trait System {
-    fn run(&mut self, world: &World);
-
-    fn metadata(&self) -> Cow<SystemMetadata>;
-
-    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet);
-}
+pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
+pub type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
 
 #[derive(Default, Debug, Clone)]
 pub struct SystemMetadata {
@@ -22,37 +19,25 @@ pub struct SystemMetadata {
     pub components_mut: TypeSet,
 }
 
-type DynamicSystemClosure<R, Q> =
-    Box<dyn FnMut(&World, <R as ResourceBundle>::Effectors, <Q as QueryBundle>::Effectors)>;
+pub trait System {
+    fn run(&mut self, world: &World);
 
-struct DynamicSystem<R, Q>
+    fn write_metadata(&self, metadata: &mut SystemMetadata);
+
+    fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet);
+}
+
+struct SystemBox<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
 {
     phantom_data: PhantomData<(R, Q)>,
-    metadata: SystemMetadata,
-    closure: DynamicSystemClosure<R, Q>,
+    #[allow(clippy::type_complexity)]
+    closure: Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>,
 }
 
-impl<R, Q> DynamicSystem<R, Q>
-where
-    R: ResourceBundle,
-    Q: QueryBundle,
-{
-    fn new(closure: DynamicSystemClosure<R, Q>) -> Self {
-        let mut metadata = SystemMetadata::default();
-        R::write_metadata(&mut metadata);
-        Q::write_metadata(&mut metadata);
-        Self {
-            phantom_data: PhantomData,
-            metadata,
-            closure,
-        }
-    }
-}
-
-impl<R, Q> System for DynamicSystem<R, Q>
+impl<R, Q> System for SystemBox<R, Q>
 where
     R: ResourceBundle,
     Q: QueryBundle,
@@ -61,8 +46,9 @@ where
         (self.closure)(world, R::effectors(), Q::effectors())
     }
 
-    fn metadata(&self) -> Cow<SystemMetadata> {
-        Cow::Borrowed(&self.metadata)
+    fn write_metadata(&self, metadata: &mut SystemMetadata) {
+        R::write_metadata(metadata);
+        Q::write_metadata(metadata);
     }
 
     fn write_touched_archetypes(&self, world: &World, set: &mut ArchetypeSet) {
@@ -83,15 +69,7 @@ where
     R: ResourceBundle + 'static,
     Q: QueryBundle + 'static,
 {
-    pub fn build<'a, F>(closure: F) -> Box<dyn System>
-    where
-        R::Effectors: Fetch<'a>,
-        F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
-    {
-        Box::new(DynamicSystem::<R, Q>::new(Self::transmute_closure(closure)))
-    }
-
-    fn transmute_closure<'a, F>(mut closure: F) -> DynamicSystemClosure<R, Q>
+    pub fn build<'a, F>(mut closure: F) -> Box<dyn System>
     where
         R::Effectors: Fetch<'a>,
         F: FnMut(&'a World, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
@@ -99,7 +77,7 @@ where
         let closure = Box::new(move |world, resources: R::Effectors, queries| {
             closure(world, resources.fetch(world), queries)
         });
-        unsafe {
+        let closure = unsafe {
             // FIXME this is a dirty hack for until
             //  https://github.com/rust-lang/rust/issues/62529 is fixed
             // I'm all but certain that this, within the context it's used in, is safe.
@@ -111,7 +89,11 @@ where
                 Box<dyn FnMut(&'a World, R::Effectors, Q::Effectors)>,
                 Box<dyn FnMut(&World, R::Effectors, Q::Effectors)>,
             >(closure)
-        }
+        };
+        Box::new(SystemBox::<R, Q> {
+            phantom_data: PhantomData,
+            closure,
+        })
     }
 }
 

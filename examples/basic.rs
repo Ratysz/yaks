@@ -34,6 +34,7 @@ fn main() {
     world.spawn((ComponentOne(1), ComponentTwo(0)));
     world.spawn((ComponentOne(1),));
     world.spawn((ComponentThree(1),));
+    world.spawn((ComponentOne(1), ComponentTwo(0), ComponentThree(0)));
     let world = world;
 
     let increment = 6;
@@ -42,8 +43,8 @@ fn main() {
         (&ResourceOne, &mut ResourceTwo),
         (
             (&mut ComponentOne, &ComponentTwo),
-            Option<&ComponentOne>,
-            &mut ComponentOne,
+            &ComponentOne,
+            (&mut ComponentOne, Option<&ComponentTwo>),
         ),
     >::build(
         move |world, (resource_1, mut resource_2), (query_1, query_2, query_3)| {
@@ -55,9 +56,23 @@ fn main() {
     );
     system.run(&world);
 
+    let mut archetypes = Default::default();
+    system.write_touched_archetypes(&world, &mut archetypes);
+    for id in &archetypes {
+        println!("archetype: {:?}", id);
+    }
+    println!();
+
+    let mut metadata = Default::default();
+    system.write_metadata(&mut metadata);
+    println!("metadata: {:#?}", metadata);
+    println!();
+
     let mut system =
         SystemBuilder::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::build(
-            move |world, resource_2, q1| {},
+            move |world, resource_2, (q1,)| {
+                q1.query(world);
+            },
         );
 
     let mut archetypes = Default::default();
@@ -67,7 +82,19 @@ fn main() {
     }
     println!();
 
-    println!("metadata: {:#?}", system.metadata());
+    let mut metadata = Default::default();
+    system.write_metadata(&mut metadata);
+    println!("metadata: {:#?}", metadata);
+
+    SystemBuilder::<&ResourceTwo, ((&ComponentThree, &ComponentTwo),)>::build(
+        move |world, resource_2, (q1,)| {
+            q1.query(world);
+        },
+    );
+
+    SystemBuilder::<&ResourceTwo, (&ComponentThree,)>::build(move |world, resource_2, (q1,)| {
+        q1.query(world);
+    });
 
     assert_eq!(world.fetch::<&ResourceTwo>().0, "Hello again!");
 }
