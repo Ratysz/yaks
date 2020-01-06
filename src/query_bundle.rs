@@ -102,6 +102,66 @@ pub trait QueryBundle: Send + Sync {
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet);
 }
 
+impl<C> QueryBundle for &'_ C
+where
+    C: Component,
+    Self: QuerySingle,
+{
+    type Effectors = <Self as QuerySingle>::Effector;
+
+    fn effectors() -> Self::Effectors {
+        <Self as QuerySingle>::effector()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        <Self as QuerySingle>::write_metadata(metadata);
+    }
+
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    }
+}
+
+impl<C> QueryBundle for &'_ mut C
+where
+    C: Component,
+    Self: QuerySingle,
+{
+    type Effectors = <Self as QuerySingle>::Effector;
+
+    fn effectors() -> Self::Effectors {
+        <Self as QuerySingle>::effector()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        <Self as QuerySingle>::write_metadata(metadata);
+    }
+
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    }
+}
+
+impl<Q> QueryBundle for Option<Q>
+where
+    Q: QuerySingle,
+    Self: QuerySingle,
+{
+    type Effectors = <Self as QuerySingle>::Effector;
+
+    fn effectors() -> Self::Effectors {
+        <Self as QuerySingle>::effector()
+    }
+
+    fn write_metadata(metadata: &mut SystemMetadata) {
+        <Self as QuerySingle>::write_metadata(metadata);
+    }
+
+    fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
+        <Self as QuerySingle>::write_touched_archetypes(world, set);
+    }
+}
+
 impl QueryBundle for () {
     type Effectors = ();
 

@@ -96,5 +96,9 @@ fn main() {
         q1.query(world);
     });
 
+    SystemBuilder::<&ResourceTwo, &ComponentThree>::build(move |world, resource_2, q1| {
+        q1.query(world);
+    });
+
     assert_eq!(world.fetch::<&ResourceTwo>().0, "Hello again!");
 }

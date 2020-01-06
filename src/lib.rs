@@ -11,7 +11,7 @@ pub use resources::{
 };
 
 mod executor;
-mod executor2;
+mod executor_arch_disjoint;
 mod impls_for_tuple;
 mod metadata;
 mod query_bundle;
