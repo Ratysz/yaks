@@ -54,7 +54,7 @@ where
     }
 
     fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources.insert(TypeId::of::<R>());
+        metadata.resources_immutable.insert(TypeId::of::<R>());
     }
 }
 
@@ -69,7 +69,7 @@ where
     }
 
     fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.resources_mut.insert(TypeId::of::<R>());
+        metadata.resources_mutable.insert(TypeId::of::<R>());
     }
 }
 

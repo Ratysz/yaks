@@ -1,7 +1,7 @@
 use crate::{
+    metadata::ArchetypeSet,
     query_bundle::{QueryBundle, QueryEffector, QuerySingle},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
-    system::ArchetypeSet,
     Query, Resource, SystemMetadata, World,
 };
 

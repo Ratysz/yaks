@@ -11,12 +11,15 @@ pub use resources::{
 };
 
 mod executor;
+mod executor2;
 mod impls_for_tuple;
+mod metadata;
 mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
 
 pub use executor::Executor;
-pub use system::{System, SystemBuilder, SystemMetadata};
+pub use metadata::SystemMetadata;
+pub use system::{System, SystemBuilder};
 pub use world::World;

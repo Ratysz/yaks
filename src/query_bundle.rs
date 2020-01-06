@@ -1,6 +1,6 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{system::ArchetypeSet, Component, Query, QueryBorrow, SystemMetadata, World};
+use crate::{metadata::ArchetypeSet, Component, Query, QueryBorrow, SystemMetadata, World};
 
 pub struct QueryEffector<Q>
 where
@@ -45,7 +45,7 @@ where
     }
 
     fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.components.insert(TypeId::of::<C>());
+        metadata.components_immutable.insert(TypeId::of::<C>());
     }
 
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {
@@ -64,7 +64,7 @@ where
     }
 
     fn write_metadata(metadata: &mut SystemMetadata) {
-        metadata.components_mut.insert(TypeId::of::<C>());
+        metadata.components_mutable.insert(TypeId::of::<C>());
     }
 
     fn write_touched_archetypes(world: &World, set: &mut ArchetypeSet) {

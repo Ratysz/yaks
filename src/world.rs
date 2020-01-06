@@ -2,8 +2,8 @@ use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
+    metadata::ArchetypeSet,
     resource_bundle::{Fetch, ResourceBundle},
-    system::ArchetypeSet,
     Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
     DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
     ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,

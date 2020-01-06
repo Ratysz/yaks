@@ -1,22 +1,9 @@
 use std::vec::Drain;
 
 use crate::{
-    system::{ArchetypeSet, TypeSet},
+    metadata::{ArchetypeSet, SystemWithMetadata, TypeSet},
     System, World,
 };
-
-struct SystemWithMetadata {
-    system: Box<dyn System>,
-    metadata: crate::SystemMetadata,
-}
-
-impl SystemWithMetadata {
-    fn new(system: Box<dyn System>) -> Self {
-        let mut metadata = Default::default();
-        system.write_metadata(&mut metadata);
-        Self { system, metadata }
-    }
-}
 
 #[derive(Default)]
 pub struct Executor {
@@ -28,15 +15,20 @@ impl Executor {
         Default::default()
     }
 
-    pub fn add_system(&mut self, system: Box<dyn System>) {
+    pub fn add(&mut self, system: Box<dyn System>) {
         let swm = SystemWithMetadata::new(system);
         if let Some(stage) = self
             .stages
             .iter_mut()
             .find(|stage| stage.is_compatible(&swm))
         {
-            stage.add_system(swm)
+            stage.add(swm)
         }
+    }
+
+    pub fn with(mut self, system: Box<dyn System>) -> Self {
+        self.add(system);
+        self
     }
 
     pub fn run(&mut self, world: &mut World) {
@@ -52,8 +44,8 @@ impl Executor {
 #[derive(Default)]
 struct Stage1 {
     stages: Vec<Stage2>,
-    resources: TypeSet,
-    resources_mut: TypeSet,
+    resources_immutable: TypeSet,
+    resources_mutable: TypeSet,
 
     unassigned: Vec<SystemWithMetadata>,
     unassigned_tail: Vec<SystemWithMetadata>,
@@ -62,14 +54,15 @@ struct Stage1 {
 
 impl Stage1 {
     fn is_compatible(&self, swm: &SystemWithMetadata) -> bool {
-        self.resources_mut.is_disjoint(&swm.metadata.resources_mut)
-            && self.resources.is_disjoint(&swm.metadata.resources_mut)
-            && self.resources_mut.is_disjoint(&swm.metadata.resources)
+        swm.metadata
+            .are_resource_borrows_compatible(&self.resources_immutable, &self.resources_mutable)
     }
 
-    fn add_system(&mut self, swm: SystemWithMetadata) {
-        self.resources.extend(&swm.metadata.resources);
-        self.resources_mut.extend(&swm.metadata.resources_mut);
+    fn add(&mut self, swm: SystemWithMetadata) {
+        self.resources_immutable
+            .extend(&swm.metadata.resources_immutable);
+        self.resources_mutable
+            .extend(&swm.metadata.resources_mutable);
         self.unassigned_tail.push(swm);
     }
 
@@ -94,7 +87,7 @@ impl Stage1 {
                     self.stages.last_mut().unwrap()
                 }
             };
-            stage.add_system(swm, &mut self.archetypes);
+            stage.add(swm, &mut self.archetypes);
         }
     }
 
@@ -112,32 +105,33 @@ impl Stage1 {
 #[derive(Default)]
 struct Stage2 {
     systems: Vec<SystemWithMetadata>,
-    components: TypeSet,
-    components_mut: TypeSet,
+    components_immutable: TypeSet,
+    components_mutable: TypeSet,
     archetypes: ArchetypeSet,
 }
 
 impl Stage2 {
     fn is_compatible(&self, swm: &SystemWithMetadata, archetypes: &ArchetypeSet) -> bool {
         self.archetypes.is_disjoint(archetypes)
-            || (self
-                .components_mut
-                .is_disjoint(&swm.metadata.components_mut)
-                && self.components.is_disjoint(&swm.metadata.components_mut)
-                && self.components_mut.is_disjoint(&swm.metadata.components))
+            || (swm.metadata.are_component_borrows_compatible(
+                &self.components_immutable,
+                &self.components_mutable,
+            ))
     }
 
-    fn add_system(&mut self, swm: SystemWithMetadata, archetypes: &mut ArchetypeSet) {
+    fn add(&mut self, swm: SystemWithMetadata, archetypes: &mut ArchetypeSet) {
         self.archetypes.extend(archetypes.drain());
-        self.components.extend(&swm.metadata.components);
-        self.components_mut.extend(&swm.metadata.components_mut);
+        self.components_immutable
+            .extend(&swm.metadata.components_immutable);
+        self.components_mutable
+            .extend(&swm.metadata.components_mutable);
         self.systems.push(swm);
     }
 
     fn drain(&mut self) -> Drain<'_, SystemWithMetadata> {
         self.archetypes.clear();
-        self.components.clear();
-        self.components_mut.clear();
+        self.components_immutable.clear();
+        self.components_mutable.clear();
         self.systems.drain(..)
     }
 
@@ -174,6 +168,6 @@ mod tests {
     #[test]
     fn basic() {
         let mut executor = Executor::new();
-        executor.add_system(SystemBuilder::<(), ()>::build(|_, _, _| ()));
+        executor.add(SystemBuilder::<(), ()>::build(|_, _, _| ()));
     }
 }

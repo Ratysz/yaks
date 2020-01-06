@@ -1,23 +1,11 @@
-use fxhash::FxHasher64;
 use std::marker::PhantomData;
-use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
 use crate::{
+    metadata::ArchetypeSet,
     query_bundle::QueryBundle,
     resource_bundle::{Fetch, ResourceBundle},
-    World,
+    SystemMetadata, World,
 };
-
-pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
-pub type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
-
-#[derive(Default, Debug, Clone)]
-pub struct SystemMetadata {
-    pub resources: TypeSet,
-    pub resources_mut: TypeSet,
-    pub components: TypeSet,
-    pub components_mut: TypeSet,
-}
 
 pub trait System {
     fn run(&mut self, world: &World);
