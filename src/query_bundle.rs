@@ -34,6 +34,16 @@ pub trait QuerySingle: Send + Sync {
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
 }
 
+pub trait QueryBundle: Send + Sync {
+    type Effectors;
+
+    fn effectors() -> Self::Effectors;
+
+    fn write_borrows(borrows: &mut SystemBorrows);
+
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
+}
+
 impl<C> QuerySingle for &'_ C
 where
     C: Component,
@@ -92,14 +102,14 @@ where
     }
 }
 
-pub trait QueryBundle: Send + Sync {
-    type Effectors;
+impl QueryBundle for () {
+    type Effectors = ();
 
-    fn effectors() -> Self::Effectors;
+    fn effectors() -> Self::Effectors {}
 
-    fn write_borrows(borrows: &mut SystemBorrows);
+    fn write_borrows(_: &mut SystemBorrows) {}
 
-    fn write_archetypes(world: &World, set: &mut ArchetypeSet);
+    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
 impl<C> QueryBundle for &'_ C
@@ -160,14 +170,4 @@ where
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
         <Self as QuerySingle>::write_archetypes(world, archetypes);
     }
-}
-
-impl QueryBundle for () {
-    type Effectors = ();
-
-    fn effectors() -> Self::Effectors {}
-
-    fn write_borrows(_: &mut SystemBorrows) {}
-
-    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }

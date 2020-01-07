@@ -40,10 +40,3 @@ impl SystemWithBorrows {
         Self { system, borrows }
     }
 }
-
-#[test]
-fn test() {
-    let mut resources_immutable = TypeSet::default();
-    let mut resources_mutable = TypeSet::default();
-    let mut borrows = SystemBorrows::default();
-}

@@ -43,6 +43,20 @@ pub trait ResourceSingle: Send + Sync {
     fn write_borrows(borrows: &mut SystemBorrows);
 }
 
+pub trait ResourceBundle: Send + Sync {
+    type Effectors;
+
+    fn effectors() -> Self::Effectors;
+
+    fn write_borrows(borrows: &mut SystemBorrows);
+}
+
+pub trait Fetch<'a> {
+    type Refs;
+
+    fn fetch(&self, world: &'a World) -> Self::Refs;
+}
+
 impl<R> ResourceSingle for &'_ R
 where
     R: Resource,
@@ -73,14 +87,6 @@ where
     }
 }
 
-pub trait ResourceBundle: Send + Sync {
-    type Effectors;
-
-    fn effectors() -> Self::Effectors;
-
-    fn write_borrows(borrows: &mut SystemBorrows);
-}
-
 impl ResourceBundle for () {
     type Effectors = ();
 
@@ -102,12 +108,6 @@ where
     fn write_borrows(borrows: &mut SystemBorrows) {
         R::write_borrows(borrows)
     }
-}
-
-pub trait Fetch<'a> {
-    type Refs;
-
-    fn fetch(&self, world: &'a World) -> Self::Refs;
 }
 
 impl<'a> Fetch<'a> for () {

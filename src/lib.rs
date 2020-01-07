@@ -12,15 +12,17 @@ pub use resources::{
 
 mod borrows;
 mod executor;
-#[allow(dead_code)]
-mod executor_arch_disjoint;
+//mod executor_arch_disjoint;
+mod error;
 mod impls_for_tuple;
 mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
+mod world_window;
 
 pub use borrows::SystemBorrows;
-pub use executor::Executor;
+pub use error::{NoSuchSystem, NonUniqueSystemHandle};
+pub use executor::{Executor, SystemHandle};
 pub use system::{System, SystemBuilder};
 pub use world::World;

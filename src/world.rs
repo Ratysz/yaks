@@ -105,7 +105,7 @@ impl World {
         F::effectors().fetch(self)
     }
 
-    pub(crate) fn write_archetypes<Q: Query>(&self, archetypes: &mut ArchetypeSet) {
-        archetypes.extend(self.entities.query_scope::<Q>());
+    pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {
+        //archetypes.extend(self.entities.query_scope::<Q>());
     }
 }
