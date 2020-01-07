@@ -19,10 +19,10 @@ mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
-mod world_window;
+mod world_proxy;
 
-pub use borrows::SystemBorrows;
 pub use error::{NoSuchSystem, NonUniqueSystemHandle};
 pub use executor::{Executor, SystemHandle};
-pub use system::{System, SystemBuilder};
+pub use system::System;
 pub use world::World;
+pub use world_proxy::WorldProxy;

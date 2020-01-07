@@ -106,6 +106,7 @@ impl World {
     }
 
     pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {
+        unimplemented!()
         //archetypes.extend(self.entities.query_scope::<Q>());
     }
 }

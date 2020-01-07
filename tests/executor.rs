@@ -1,4 +1,4 @@
-use secs::{Executor, SystemBuilder, SystemHandle, World};
+use secs::{Executor, System, SystemHandle, World};
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 struct Handle(usize);
@@ -23,7 +23,7 @@ struct Comp4(usize);
 fn single_no_handle() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<()>::new().with(SystemBuilder::<&mut Res1, ()>::build(
+    let mut executor = Executor::<()>::new().with(System::builder::<&mut Res1, ()>().build(
         move |_, mut resource, _| {
             resource.0 += 1;
         },
@@ -35,9 +35,11 @@ fn single_no_handle() {
 #[test]
 fn non_unique_system_handle() {
     let mut executor = Executor::<Handle>::new();
-    let result = executor.add(Handle(0), SystemBuilder::<(), ()>::build(|_, _, _| {}));
+    let result =
+        executor.add_with_handle(Handle(0), System::builder::<(), ()>().build(|_, _, _| {}));
     assert!(result.is_ok());
-    let result = executor.add(Handle(0), SystemBuilder::<(), ()>::build(|_, _, _| {}));
+    let result =
+        executor.add_with_handle(Handle(0), System::builder::<(), ()>().build(|_, _, _| {}));
     assert!(result.is_err());
 }
 
@@ -45,9 +47,9 @@ fn non_unique_system_handle() {
 fn single() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<Handle>::new().with(
+    let mut executor = Executor::<Handle>::new().with_handle(
         Handle(0),
-        SystemBuilder::<&mut Res1, ()>::build(move |_, mut resource, _| {
+        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
             resource.0 += 1;
         }),
     );
@@ -59,9 +61,9 @@ fn single() {
 fn single_inactive() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<Handle>::new().with_inactive(
+    let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
-        SystemBuilder::<&mut Res1, ()>::build(move |_, mut resource, _| {
+        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
             resource.0 += 1;
         }),
     );
@@ -73,9 +75,9 @@ fn single_inactive() {
 fn single_late_activation() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<Handle>::new().with_inactive(
+    let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
-        SystemBuilder::<&mut Res1, ()>::build(move |_, mut resource, _| {
+        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
             resource.0 += 1;
         }),
     );
@@ -89,5 +91,5 @@ fn single_late_activation() {
 #[test]
 fn multiple() {
     let mut world = World::new();
-    let mut executor = Executor::<()>::new().with(SystemBuilder::<(), ()>::build(|_, _, _| {}));
+    let mut executor = Executor::<()>::new().with(System::builder::<(), ()>().build(|_, _, _| {}));
 }

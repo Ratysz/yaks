@@ -1,4 +1,4 @@
-use secs::{SystemBuilder, World};
+use secs::{System, World};
 
 struct ResourceOne(usize);
 
@@ -39,14 +39,15 @@ fn main() {
 
     let increment = 6;
 
-    let mut system = SystemBuilder::<
+    let mut system = System::builder::<
         (&ResourceOne, &mut ResourceTwo),
         (
             (&mut ComponentOne, &ComponentTwo),
             &ComponentOne,
             (&mut ComponentOne, Option<&ComponentTwo>),
         ),
-    >::build(
+    >()
+    .build(
         move |world, (resource_1, mut resource_2), (query_1, query_2, query_3)| {
             resource_2.0 = "Hello again!";
             for (_, (mut component_1, component_2)) in query_1.query(world).into_iter() {
@@ -56,47 +57,17 @@ fn main() {
     );
     system.run(&world);
 
-    let mut archetypes = Default::default();
-    system.write_archetypes(&world, &mut archetypes);
-    for id in &archetypes {
-        println!("archetype: {:?}", id);
-    }
-    println!();
-
-    let mut borrows = Default::default();
-    system.write_borrows(&mut borrows);
-    println!("borrows: {:#?}", borrows);
-    println!();
-
-    let mut system =
-        SystemBuilder::<&ResourceTwo, ((&mut ComponentThree, &ComponentThree),)>::build(
-            move |world, resource_2, (q1,)| {
-                q1.query(world);
-            },
-        );
-
-    let mut archetypes = Default::default();
-    system.write_archetypes(&world, &mut archetypes);
-    for id in &archetypes {
-        println!("archetype: {:?}", id);
-    }
-    println!();
-
-    let mut borrows = Default::default();
-    system.write_borrows(&mut borrows);
-    println!("borrows: {:#?}", borrows);
-
-    SystemBuilder::<&ResourceTwo, ((&ComponentThree, &ComponentTwo),)>::build(
+    System::builder::<&ResourceTwo, ((&ComponentThree, &ComponentTwo),)>().build(
         move |world, resource_2, (q1,)| {
             q1.query(world);
         },
     );
 
-    SystemBuilder::<&ResourceTwo, (&ComponentThree,)>::build(move |world, resource_2, (q1,)| {
+    System::builder::<&ResourceTwo, (&ComponentThree,)>().build(move |world, resource_2, (q1,)| {
         q1.query(world);
     });
 
-    SystemBuilder::<&ResourceTwo, &ComponentThree>::build(move |world, resource_2, q1| {
+    System::builder::<&ResourceTwo, &ComponentThree>().build(move |world, resource_2, q1| {
         q1.query(world);
     });
 

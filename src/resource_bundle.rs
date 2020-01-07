@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{Resource, ResourceRef, ResourceRefMut, SystemBorrows, World};
+use crate::{borrows::SystemBorrows, Resource, ResourceRef, ResourceRefMut, World};
 
 pub struct Immutable;
 

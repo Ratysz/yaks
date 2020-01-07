@@ -1,6 +1,9 @@
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{borrows::ArchetypeSet, Component, Query, QueryBorrow, SystemBorrows, World};
+use crate::{
+    borrows::{ArchetypeSet, SystemBorrows},
+    Component, Query, QueryBorrow, World, WorldProxy,
+};
 
 pub struct QueryEffector<Q>
 where
@@ -19,8 +22,8 @@ where
         }
     }
 
-    pub fn query<'a>(&self, world: &'a World) -> QueryBorrow<'a, Q> {
-        world.query()
+    pub fn query<'a>(&self, proxy: WorldProxy<'a>) -> QueryBorrow<'a, Q> {
+        proxy.world.query()
     }
 }
 
@@ -42,6 +45,16 @@ pub trait QueryBundle: Send + Sync {
     fn write_borrows(borrows: &mut SystemBorrows);
 
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
+}
+
+impl QuerySingle for () {
+    type Effector = ();
+
+    fn effector() -> Self::Effector {}
+
+    fn write_borrows(_: &mut SystemBorrows) {}
+
+    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
 impl<C> QuerySingle for &'_ C

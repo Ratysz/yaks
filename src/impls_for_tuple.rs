@@ -1,8 +1,8 @@
 use crate::{
-    borrows::ArchetypeSet,
+    borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QueryEffector, QuerySingle},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
-    Query, Resource, SystemBorrows, World,
+    Query, Resource, World,
 };
 
 macro_rules! impls_for_tuple {

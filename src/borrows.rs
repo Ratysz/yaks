@@ -1,8 +1,6 @@
 use fxhash::FxHasher64;
 use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
-use crate::System;
-
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
 pub type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
 
@@ -25,18 +23,5 @@ impl SystemBorrows {
         self.components_mutable.is_disjoint(mutable)
             && self.components_immutable.is_disjoint(mutable)
             && self.components_mutable.is_disjoint(immutable)
-    }
-}
-
-pub struct SystemWithBorrows {
-    pub system: Box<dyn System>,
-    pub borrows: SystemBorrows,
-}
-
-impl SystemWithBorrows {
-    pub fn new(system: Box<dyn System>) -> Self {
-        let mut borrows = Default::default();
-        system.write_borrows(&mut borrows);
-        Self { system, borrows }
     }
 }

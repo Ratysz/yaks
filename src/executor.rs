@@ -1,7 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    borrows::{SystemWithBorrows, TypeSet},
+    borrows::{SystemBorrows, TypeSet},
+    system::SystemTrait,
     NoSuchSystem, NonUniqueSystemHandle, System, World,
 };
 
@@ -14,7 +15,26 @@ struct SystemIndex {
     index: usize,
 }
 
-pub struct Executor<H>
+struct SystemContainer {
+    system: Box<dyn SystemTrait>,
+    active: bool,
+    borrows: SystemBorrows,
+}
+
+impl SystemContainer {
+    fn new(system: System, active: bool) -> Self {
+        let system = system.inner;
+        let mut borrows = Default::default();
+        system.write_borrows(&mut borrows);
+        Self {
+            system,
+            active,
+            borrows,
+        }
+    }
+}
+
+pub struct Executor<H = ()>
 where
     H: Hash + Eq + PartialEq,
 {
@@ -42,13 +62,13 @@ where
         Default::default()
     }
 
-    fn add_common(&mut self, system: Box<dyn System>, active: bool) -> SystemIndex {
-        let swb = SystemWithBorrows::new(system);
+    fn add_inner(&mut self, system: System, active: bool) -> SystemIndex {
+        let container = SystemContainer::new(system, active);
         let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&swb))
+            .find(|(_, stage)| stage.is_compatible(&container.borrows))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -61,9 +81,18 @@ where
                 )
             }
         };
-        let mut system_index = stage.add(swb, active);
+        let mut system_index = stage.add(container);
         system_index.stage1 = index;
         system_index
+    }
+
+    pub fn add(&mut self, system: System) {
+        self.add_inner(system, true);
+    }
+
+    pub fn with(mut self, system: System) -> Self {
+        self.add(system);
+        self
     }
 
     pub fn run(&mut self, world: &mut World) {
@@ -76,58 +105,51 @@ where
     }
 }
 
-impl Executor<()> {
-    pub fn add(&mut self, system: Box<dyn System>) {
-        self.add_common(system, true);
-    }
-
-    pub fn with(mut self, system: Box<dyn System>) -> Self {
-        self.add(system);
-        self
-    }
-}
-
 impl<H> Executor<H>
 where
     H: SystemHandle,
 {
     #[allow(clippy::map_entry)]
-    fn add_with_handle(
+    fn add_with_handle_inner(
         &mut self,
         handle: H,
-        system: Box<dyn System>,
+        system: System,
         active: bool,
     ) -> Result<(), NonUniqueSystemHandle> {
         if self.system_map.contains_key(&handle) {
             Err(NonUniqueSystemHandle)
         } else {
-            let index = self.add_common(system, active);
+            let index = self.add_inner(system, active);
             self.system_map.insert(handle, index);
             Ok(())
         }
     }
 
-    pub fn add(&mut self, handle: H, system: Box<dyn System>) -> Result<(), NonUniqueSystemHandle> {
-        self.add_with_handle(handle, system, true)
-    }
-
-    pub fn add_inactive(
+    pub fn add_with_handle(
         &mut self,
         handle: H,
-        system: Box<dyn System>,
+        system: System,
     ) -> Result<(), NonUniqueSystemHandle> {
-        self.add_with_handle(handle, system, false)
+        self.add_with_handle_inner(handle, system, true)
     }
 
-    pub fn with(mut self, handle: H, system: Box<dyn System>) -> Self {
-        if let Err(error) = self.add(handle, system) {
+    pub fn add_with_handle_deactivated(
+        &mut self,
+        handle: H,
+        system: System,
+    ) -> Result<(), NonUniqueSystemHandle> {
+        self.add_with_handle_inner(handle, system, false)
+    }
+
+    pub fn with_handle(mut self, handle: H, system: System) -> Self {
+        if let Err(error) = self.add_with_handle(handle, system) {
             panic!("{}", error);
         }
         self
     }
 
-    pub fn with_inactive(mut self, handle: H, system: Box<dyn System>) -> Self {
-        if let Err(error) = self.add_inactive(handle, system) {
+    pub fn with_handle_deactivated(mut self, handle: H, system: System) -> Self {
+        if let Err(error) = self.add_with_handle_deactivated(handle, system) {
             panic!("{}", error);
         }
         self
@@ -159,21 +181,20 @@ struct Stage1 {
 }
 
 impl Stage1 {
-    fn is_compatible(&self, swb: &SystemWithBorrows) -> bool {
-        swb.borrows
-            .are_resource_borrows_compatible(&self.resources_immutable, &self.resources_mutable)
+    fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
+        borrows.are_resource_borrows_compatible(&self.resources_immutable, &self.resources_mutable)
     }
 
-    fn add(&mut self, swb: SystemWithBorrows, active: bool) -> SystemIndex {
+    fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.resources_immutable
-            .extend(&swb.borrows.resources_immutable);
+            .extend(&container.borrows.resources_immutable);
         self.resources_mutable
-            .extend(&swb.borrows.resources_mutable);
+            .extend(&container.borrows.resources_mutable);
         let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&swb))
+            .find(|(_, stage)| stage.is_compatible(&container.borrows))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -186,7 +207,7 @@ impl Stage1 {
                 )
             }
         };
-        let mut system_index = stage.add(swb, active);
+        let mut system_index = stage.add(container);
         system_index.stage2 = index;
         system_index
     }
@@ -211,23 +232,23 @@ impl Stage1 {
 
 #[derive(Default)]
 struct Stage2 {
-    systems: Vec<(bool, Box<dyn System>)>,
+    systems: Vec<SystemContainer>,
     components_immutable: TypeSet,
     components_mutable: TypeSet,
 }
 
 impl Stage2 {
-    fn is_compatible(&self, swb: &SystemWithBorrows) -> bool {
-        swb.borrows
+    fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
+        borrows
             .are_component_borrows_compatible(&self.components_immutable, &self.components_mutable)
     }
 
-    fn add(&mut self, swb: SystemWithBorrows, active: bool) -> SystemIndex {
+    fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.components_immutable
-            .extend(&swb.borrows.components_immutable);
+            .extend(&container.borrows.components_immutable);
         self.components_mutable
-            .extend(&swb.borrows.components_mutable);
-        self.systems.push((active, swb.system));
+            .extend(&container.borrows.components_mutable);
+        self.systems.push(container);
         SystemIndex {
             stage1: 0,
             stage2: 0,
@@ -236,18 +257,19 @@ impl Stage2 {
     }
 
     fn is_active(&self, index: usize) -> bool {
-        self.systems[index].0
+        self.systems[index].active
     }
 
     fn set_active(&mut self, index: usize, active: bool) {
-        self.systems[index].0 = active;
+        self.systems[index].active = active;
     }
 
     fn run(&mut self, world: &World) {
-        self.systems
-            .iter_mut()
-            .filter(|(active, _)| *active)
-            .for_each(|(_, system)| system.run(world));
+        self.systems.iter_mut().for_each(|container| {
+            if container.active {
+                container.system.run(world);
+            }
+        });
     }
 
     #[allow(dead_code, unused_variables)]
