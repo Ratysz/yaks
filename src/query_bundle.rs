@@ -27,6 +27,10 @@ where
     }
 }
 
+pub trait QueryUnit: Send + Sync {
+    fn write_borrows(borrows: &mut SystemBorrows);
+}
+
 pub trait QuerySingle: Send + Sync {
     type Effector;
 
@@ -47,6 +51,33 @@ pub trait QueryBundle: Send + Sync {
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
 }
 
+impl<C> QueryUnit for &'_ C
+where
+    C: Component,
+{
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.components_immutable.insert(TypeId::of::<C>());
+    }
+}
+
+impl<C> QueryUnit for &'_ mut C
+where
+    C: Component,
+{
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        borrows.components_mutable.insert(TypeId::of::<C>());
+    }
+}
+
+impl<Q> QueryUnit for Option<Q>
+where
+    Q: QueryUnit,
+{
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        Q::write_borrows(borrows);
+    }
+}
+
 impl QuerySingle for () {
     type Effector = ();
 
@@ -60,6 +91,7 @@ impl QuerySingle for () {
 impl<C> QuerySingle for &'_ C
 where
     C: Component,
+    Self: Query + QueryUnit,
 {
     type Effector = QueryEffector<Self>;
 
@@ -68,7 +100,7 @@ where
     }
 
     fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_immutable.insert(TypeId::of::<C>());
+        <Self as QueryUnit>::write_borrows(borrows);
     }
 
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
@@ -79,6 +111,7 @@ where
 impl<C> QuerySingle for &'_ mut C
 where
     C: Component,
+    Self: Query + QueryUnit,
 {
     type Effector = QueryEffector<Self>;
 
@@ -87,7 +120,7 @@ where
     }
 
     fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_mutable.insert(TypeId::of::<C>());
+        <Self as QueryUnit>::write_borrows(borrows);
     }
 
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
@@ -97,8 +130,8 @@ where
 
 impl<Q> QuerySingle for Option<Q>
 where
-    Q: QuerySingle,
-    Self: Query,
+    Q: QueryUnit,
+    Self: Query + QueryUnit,
 {
     type Effector = QueryEffector<Self>;
 
@@ -107,7 +140,7 @@ where
     }
 
     fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
+        <Self as QueryUnit>::write_borrows(borrows);
     }
 
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
@@ -125,62 +158,21 @@ impl QueryBundle for () {
     fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
-impl<C> QueryBundle for &'_ C
-where
-    C: Component,
-    Self: QuerySingle,
-{
-    type Effectors = <Self as QuerySingle>::Effector;
-
-    fn effectors() -> Self::Effectors {
-        <Self as QuerySingle>::effector()
-    }
-
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QuerySingle>::write_borrows(borrows);
-    }
-
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_archetypes(world, archetypes);
-    }
-}
-
-impl<C> QueryBundle for &'_ mut C
-where
-    C: Component,
-    Self: QuerySingle,
-{
-    type Effectors = <Self as QuerySingle>::Effector;
-
-    fn effectors() -> Self::Effectors {
-        <Self as QuerySingle>::effector()
-    }
-
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QuerySingle>::write_borrows(borrows);
-    }
-
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_archetypes(world, archetypes);
-    }
-}
-
-impl<Q> QueryBundle for Option<Q>
+impl<Q> QueryBundle for (Q,)
 where
     Q: QuerySingle,
-    Self: QuerySingle,
 {
-    type Effectors = <Self as QuerySingle>::Effector;
+    type Effectors = Q::Effector;
 
     fn effectors() -> Self::Effectors {
-        <Self as QuerySingle>::effector()
+        Q::effector()
     }
 
     fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QuerySingle>::write_borrows(borrows);
+        Q::write_borrows(borrows);
     }
 
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        <Self as QuerySingle>::write_archetypes(world, archetypes);
+        Q::write_archetypes(world, archetypes);
     }
 }

@@ -23,7 +23,7 @@ struct Comp4(usize);
 fn single_no_handle() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<()>::new().with(System::builder::<&mut Res1, ()>().build(
+    let mut executor = Executor::<()>::new().with(System::builder().resource::<&mut Res1>().build(
         move |_, mut resource, _| {
             resource.0 += 1;
         },
@@ -35,11 +35,9 @@ fn single_no_handle() {
 #[test]
 fn non_unique_system_handle() {
     let mut executor = Executor::<Handle>::new();
-    let result =
-        executor.add_with_handle(Handle(0), System::builder::<(), ()>().build(|_, _, _| {}));
+    let result = executor.add_with_handle(Handle(0), System::builder().build(|_, _, _| {}));
     assert!(result.is_ok());
-    let result =
-        executor.add_with_handle(Handle(0), System::builder::<(), ()>().build(|_, _, _| {}));
+    let result = executor.add_with_handle(Handle(0), System::builder().build(|_, _, _| {}));
     assert!(result.is_err());
 }
 
@@ -49,9 +47,11 @@ fn single() {
     world.add_resource(Res1(0));
     let mut executor = Executor::<Handle>::new().with_handle(
         Handle(0),
-        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
-            resource.0 += 1;
-        }),
+        System::builder()
+            .resource::<&mut Res1>()
+            .build(move |_, mut resource, _| {
+                resource.0 += 1;
+            }),
     );
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
@@ -63,9 +63,11 @@ fn single_inactive() {
     world.add_resource(Res1(0));
     let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
-        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
-            resource.0 += 1;
-        }),
+        System::builder()
+            .resource::<&mut Res1>()
+            .build(move |_, mut resource, _| {
+                resource.0 += 1;
+            }),
     );
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 0);
@@ -77,9 +79,11 @@ fn single_late_activation() {
     world.add_resource(Res1(0));
     let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
-        System::builder::<&mut Res1, ()>().build(move |_, mut resource, _| {
-            resource.0 += 1;
-        }),
+        System::builder()
+            .resource::<&mut Res1>()
+            .build(move |_, mut resource, _| {
+                resource.0 += 1;
+            }),
     );
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 0);
@@ -91,5 +95,5 @@ fn single_late_activation() {
 #[test]
 fn multiple() {
     let mut world = World::new();
-    let mut executor = Executor::<()>::new().with(System::builder::<(), ()>().build(|_, _, _| {}));
+    let mut executor = Executor::<()>::new().with(System::builder().build(|_, _, _| {}));
 }

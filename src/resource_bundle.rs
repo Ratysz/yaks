@@ -110,6 +110,21 @@ where
     }
 }
 
+impl<R> ResourceBundle for (R,)
+where
+    R: ResourceSingle,
+{
+    type Effectors = R::Effector;
+
+    fn effectors() -> Self::Effectors {
+        R::effector()
+    }
+
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        R::write_borrows(borrows)
+    }
+}
+
 impl<'a> Fetch<'a> for () {
     type Refs = ();
 

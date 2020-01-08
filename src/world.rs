@@ -97,12 +97,12 @@ impl World {
         self.resources.get_mut()
     }
 
-    pub fn fetch<'a, F>(&'a self) -> <F::Effectors as Fetch<'a>>::Refs
+    pub fn fetch<'a, RB>(&'a self) -> <RB::Effectors as Fetch<'a>>::Refs
     where
-        F: ResourceBundle,
-        F::Effectors: Fetch<'a>,
+        RB: ResourceBundle,
+        RB::Effectors: Fetch<'a>,
     {
-        F::effectors().fetch(self)
+        RB::effectors().fetch(self)
     }
 
     pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {

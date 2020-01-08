@@ -2,8 +2,9 @@ use std::marker::PhantomData;
 
 use crate::{
     borrows::{ArchetypeSet, SystemBorrows},
-    query_bundle::QueryBundle,
-    resource_bundle::{Fetch, ResourceBundle},
+    impls_for_tuple::TupleAppend,
+    query_bundle::{QueryBundle, QuerySingle, QueryUnit},
+    resource_bundle::{Fetch, ResourceBundle, ResourceSingle},
     World, WorldProxy,
 };
 
@@ -15,32 +16,36 @@ pub trait SystemTrait {
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
 }
 
-struct SystemBox<R, Q>
+struct SystemBox<RB, QB, CB>
 where
-    R: ResourceBundle,
-    Q: QueryBundle,
+    RB: ResourceBundle,
+    QB: QueryBundle,
+    CB: QueryBundle,
 {
-    phantom_data: PhantomData<(R, Q)>,
+    phantom_data: PhantomData<(RB, QB, CB)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(WorldProxy, R::Effectors, Q::Effectors)>,
+    closure: Box<dyn FnMut(WorldProxy, RB::Effectors, QB::Effectors)>,
 }
 
-impl<R, Q> SystemTrait for SystemBox<R, Q>
+impl<RB, QB, CB> SystemTrait for SystemBox<RB, QB, CB>
 where
-    R: ResourceBundle,
-    Q: QueryBundle,
+    RB: ResourceBundle,
+    QB: QueryBundle,
+    CB: QueryBundle,
 {
     fn run(&mut self, world: &World) {
-        (self.closure)(WorldProxy::new(world), R::effectors(), Q::effectors())
+        (self.closure)(WorldProxy::new(world), RB::effectors(), QB::effectors())
     }
 
     fn write_borrows(&self, borrows: &mut SystemBorrows) {
-        R::write_borrows(borrows);
-        Q::write_borrows(borrows);
+        RB::write_borrows(borrows);
+        QB::write_borrows(borrows);
+        CB::write_borrows(borrows);
     }
 
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
-        Q::write_archetypes(world, archetypes);
+        QB::write_archetypes(world, archetypes);
+        CB::write_archetypes(world, archetypes);
     }
 }
 
@@ -49,11 +54,7 @@ pub struct System {
 }
 
 impl System {
-    pub fn builder<'a, R, Q>() -> SystemBuilder<R, Q>
-    where
-        R: ResourceBundle + 'static,
-        Q: QueryBundle + 'static,
-    {
+    pub fn builder() -> SystemBuilder<(), (), ()> {
         SystemBuilder {
             phantom_data: PhantomData,
         }
@@ -64,25 +65,60 @@ impl System {
     }
 }
 
-pub struct SystemBuilder<R, Q>
+pub struct SystemBuilder<RB, QB, CB>
 where
-    R: ResourceBundle + 'static,
-    Q: QueryBundle + 'static,
+    RB: ResourceBundle + 'static,
+    QB: QueryBundle + 'static,
+    CB: QueryBundle + 'static,
 {
-    phantom_data: PhantomData<(R, Q)>,
+    phantom_data: PhantomData<(RB, QB, CB)>,
 }
 
-impl<R, Q> SystemBuilder<R, Q>
+impl<RB, QB, CB> SystemBuilder<RB, QB, CB>
 where
-    R: ResourceBundle + 'static,
-    Q: QueryBundle + 'static,
+    RB: ResourceBundle + 'static,
+    QB: QueryBundle + 'static,
+    CB: QueryBundle + 'static,
 {
+    pub fn resource<R>(self) -> SystemBuilder<RB::Output, QB, CB>
+    where
+        R: ResourceSingle,
+        RB: TupleAppend<R>,
+        <RB as TupleAppend<R>>::Output: ResourceBundle,
+    {
+        SystemBuilder {
+            phantom_data: PhantomData,
+        }
+    }
+
+    pub fn query<Q>(self) -> SystemBuilder<RB, QB::Output, CB>
+    where
+        Q: QuerySingle,
+        QB: TupleAppend<Q>,
+        <QB as TupleAppend<Q>>::Output: QueryBundle,
+    {
+        SystemBuilder {
+            phantom_data: PhantomData,
+        }
+    }
+
+    pub fn component<C>(self) -> SystemBuilder<RB, QB, CB::Output>
+    where
+        C: QueryUnit,
+        CB: TupleAppend<C>,
+        <CB as TupleAppend<C>>::Output: QueryBundle,
+    {
+        SystemBuilder {
+            phantom_data: PhantomData,
+        }
+    }
+
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
-        R::Effectors: Fetch<'a>,
-        F: FnMut(WorldProxy<'a>, <R::Effectors as Fetch<'a>>::Refs, Q::Effectors) + 'static,
+        RB::Effectors: Fetch<'a>,
+        F: FnMut(WorldProxy<'a>, <RB::Effectors as Fetch<'a>>::Refs, QB::Effectors) + 'static,
     {
-        let closure = Box::new(move |proxy, resources: R::Effectors, queries| {
+        let closure = Box::new(move |proxy, resources: RB::Effectors, queries| {
             closure(proxy, resources.fetch(proxy.world), queries)
         });
         let closure = unsafe {
@@ -94,12 +130,12 @@ where
             // Since HRTBs cause an ICE when used with closures in the way that's needed here
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
-                Box<dyn FnMut(WorldProxy<'a>, R::Effectors, Q::Effectors)>,
-                Box<dyn FnMut(WorldProxy, R::Effectors, Q::Effectors)>,
+                Box<dyn FnMut(WorldProxy<'a>, RB::Effectors, QB::Effectors)>,
+                Box<dyn FnMut(WorldProxy, RB::Effectors, QB::Effectors)>,
             >(closure)
         };
         System {
-            inner: Box::new(SystemBox::<R, Q> {
+            inner: Box::new(SystemBox::<RB, QB, CB> {
                 phantom_data: PhantomData,
                 closure,
             }),
@@ -112,11 +148,13 @@ fn test() {
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system = System::builder::<(&usize, &mut f32), (&usize, Option<&usize>)>().build(
-        |world, (res1, mut res2), query| {
+    let mut system = System::builder()
+        .resource::<&usize>()
+        .resource::<&mut f32>()
+        .query::<(&usize, Option<&usize>)>()
+        .build(|world, (res1, mut res2), query| {
             *res2 += 1.0;
-        },
-    );
+        });
     system.run(&world);
     assert_eq!(*world.fetch::<&f32>(), 2.0);
     system.run(&world);
