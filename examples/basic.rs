@@ -35,30 +35,28 @@ fn main() {
     world.spawn((Comp1(1),));
     world.spawn((Comp3(1),));
     world.spawn((Comp1(1), Comp2(0), Comp3(0)));
-    let world = world;
 
     let increment = 6;
 
     let mut system = System::builder()
-        .resource::<&ResUsize>()
-        .resource::<&mut ResStr>()
+        .resources::<(&ResUsize, &mut ResStr)>()
         .query::<(&mut Comp1, &Comp2)>()
         .query::<&Comp1>()
         .query::<(&mut Comp1, Option<&Comp2>)>()
         .build(
             move |world, (res_usize, mut res_str), (query1, query2, query3)| {
-                res_str.0 = "Hello again!";
-                for (_, (mut comp1, comp2)) in query1.query(world).into_iter() {
+                res_str.0 = "Hello, system!";
+                for (entity, (mut comp1, comp2)) in query1.query(world).into_iter() {
                     comp1.0 += increment;
                 }
             },
         );
-    system.run(&world);
+    system.run(&mut world);
 
-    assert_eq!(world.fetch::<&ResStr>().0, "Hello again!");
+    assert_eq!(world.fetch::<&ResStr>().0, "Hello, system!");
 
     System::builder()
-        .resource::<&ResUsize>()
+        .resources::<&ResUsize>()
         .query::<&Comp3>()
         .build(move |world, res_usize, q| {
             q.query(world);
@@ -79,4 +77,8 @@ fn main() {
                 for (_, (_, _)) in q.query(world).into_iter() {}
             },
         );
+
+    system
+        .run_with_deferred_modification(&world)
+        .apply_all(&mut world);
 }

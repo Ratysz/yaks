@@ -1,20 +1,15 @@
 use crate::{
-    borrows::{ArchetypeSet, SystemBorrows},
+    modification_queue::ModificationQueueBundle,
     query_bundle::{QueryBundle, QueryEffector, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
-    Query, Resource, World,
+    system::{ArchetypeSet, SystemBorrows, TupleAppend},
+    ModificationQueue, Query, Resource, World,
 };
 
-pub trait TupleAppend<T> {
-    type Output;
-}
-
-impl<T> TupleAppend<T> for () {
-    type Output = (T,);
-}
-
-impl<T0, T1> TupleAppend<T1> for (T0,) {
-    type Output = (T0, T1);
+macro_rules! mod_queue_noop {
+    ($letter:ident) => {
+        ModificationQueue
+    };
 }
 
 macro_rules! impls_for_tuple {
@@ -23,6 +18,8 @@ macro_rules! impls_for_tuple {
         {
             type Output = ($($letter,)* Input);
         }
+
+        impl ModificationQueueBundle for ($(mod_queue_noop!($letter),)*) {}
 
         impl<$($letter),*> ResourceBundle for ($($letter,)*)
         where

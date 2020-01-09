@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
-    borrows::{ArchetypeSet, SystemBorrows},
+    system::{ArchetypeSet, SystemBorrows},
     Component, Query, QueryBorrow, World, WorldProxy,
 };
 
@@ -22,8 +22,32 @@ where
         }
     }
 
-    pub fn query<'a>(&self, proxy: WorldProxy<'a>) -> QueryBorrow<'a, Q> {
-        proxy.world.query()
+    pub fn query<'a>(&self, world: &'a impl CanBeQueried) -> QueryBorrow<'a, Q> {
+        world.query()
+    }
+}
+
+pub trait CanBeQueried {
+    fn query<Q>(&self) -> QueryBorrow<Q>
+    where
+        Q: Query;
+}
+
+impl CanBeQueried for World {
+    fn query<Q>(&self) -> QueryBorrow<Q>
+    where
+        Q: Query,
+    {
+        self.query()
+    }
+}
+
+impl CanBeQueried for WorldProxy<'_> {
+    fn query<Q>(&self) -> QueryBorrow<Q>
+    where
+        Q: Query,
+    {
+        self.world.query()
     }
 }
 

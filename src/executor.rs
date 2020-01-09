@@ -1,9 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    borrows::{SystemBorrows, TypeSet},
-    system::SystemTrait,
-    NoSuchSystem, NonUniqueSystemHandle, System, World,
+    system::{ArchetypeSet, SystemBorrows, TypeSet},
+    ModificationQueue, NoSuchSystem, NonUniqueSystemHandle, System, World,
 };
 
 pub trait SystemHandle: Hash + Eq + PartialEq {}
@@ -16,22 +15,8 @@ struct SystemIndex {
 }
 
 struct SystemContainer {
-    system: Box<dyn SystemTrait>,
+    system: System,
     active: bool,
-    borrows: SystemBorrows,
-}
-
-impl SystemContainer {
-    fn new(system: System, active: bool) -> Self {
-        let system = system.inner;
-        let mut borrows = Default::default();
-        system.write_borrows(&mut borrows);
-        Self {
-            system,
-            active,
-            borrows,
-        }
-    }
 }
 
 pub struct Executor<H = ()>
@@ -63,12 +48,12 @@ where
     }
 
     fn add_inner(&mut self, system: System, active: bool) -> SystemIndex {
-        let container = SystemContainer::new(system, active);
+        let container = SystemContainer { system, active };
         let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.borrows))
+            .find(|(_, stage)| stage.is_compatible(&container.system.borrows))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -96,7 +81,20 @@ where
     }
 
     pub fn run(&mut self, world: &mut World) {
-        self.stages.iter_mut().for_each(|stage| stage.run(world));
+        let mut queues = self
+            .stages
+            .iter_mut()
+            .map(|stage| stage.run(world))
+            .filter_map(|option| option);
+        let queue = queues.next().map(|queue| {
+            queues.fold(queue, |mut first, current| {
+                first.merge(current);
+                first
+            })
+        });
+        if let Some(queue) = queue {
+            queue.apply_all(world);
+        }
     }
 
     #[allow(dead_code, unused_variables)]
@@ -182,19 +180,27 @@ struct Stage1 {
 
 impl Stage1 {
     fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
-        borrows.are_resource_borrows_compatible(&self.resources_immutable, &self.resources_mutable)
+        borrows
+            .resources_mutable
+            .is_disjoint(&self.resources_mutable)
+            && borrows
+                .resources_immutable
+                .is_disjoint(&self.resources_mutable)
+            && borrows
+                .resources_mutable
+                .is_disjoint(&self.resources_immutable)
     }
 
     fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.resources_immutable
-            .extend(&container.borrows.resources_immutable);
+            .extend(&container.system.borrows.resources_immutable);
         self.resources_mutable
-            .extend(&container.borrows.resources_mutable);
+            .extend(&container.system.borrows.resources_mutable);
         let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.borrows))
+            .find(|(_, stage)| stage.is_compatible(&container.system.borrows))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -220,8 +226,18 @@ impl Stage1 {
         self.stages[system_index.stage2].set_active(system_index.index, active);
     }
 
-    fn run(&mut self, world: &World) {
-        self.stages.iter_mut().for_each(|stage| stage.run(world));
+    fn run(&mut self, world: &World) -> Option<ModificationQueue> {
+        let mut queues = self
+            .stages
+            .iter_mut()
+            .map(|stage| stage.run(world))
+            .filter_map(|option| option);
+        queues.next().map(|queue| {
+            queues.fold(queue, |mut first, current| {
+                first.merge(current);
+                first
+            })
+        })
     }
 
     #[allow(dead_code, unused_variables)]
@@ -240,14 +256,21 @@ struct Stage2 {
 impl Stage2 {
     fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
         borrows
-            .are_component_borrows_compatible(&self.components_immutable, &self.components_mutable)
+            .components_mutable
+            .is_disjoint(&self.components_mutable)
+            && borrows
+                .components_immutable
+                .is_disjoint(&self.components_mutable)
+            && borrows
+                .components_mutable
+                .is_disjoint(&self.components_immutable)
     }
 
     fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.components_immutable
-            .extend(&container.borrows.components_immutable);
+            .extend(&container.system.borrows.components_immutable);
         self.components_mutable
-            .extend(&container.borrows.components_mutable);
+            .extend(&container.system.borrows.components_mutable);
         self.systems.push(container);
         SystemIndex {
             stage1: 0,
@@ -264,12 +287,18 @@ impl Stage2 {
         self.systems[index].active = active;
     }
 
-    fn run(&mut self, world: &World) {
-        self.systems.iter_mut().for_each(|container| {
-            if container.active {
-                container.system.run(world);
-            }
-        });
+    fn run(&mut self, world: &World) -> Option<ModificationQueue> {
+        let mut queues = self
+            .systems
+            .iter_mut()
+            .filter(|container| container.active)
+            .map(|container| container.system.run_without_updating_archetypes(world));
+        queues.next().map(|queue| {
+            queues.fold(queue, |mut first, current| {
+                first.merge(current);
+                first
+            })
+        })
     }
 
     #[allow(dead_code, unused_variables)]

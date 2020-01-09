@@ -23,11 +23,12 @@ struct Comp4(usize);
 fn single_no_handle() {
     let mut world = World::new();
     world.add_resource(Res1(0));
-    let mut executor = Executor::<()>::new().with(System::builder().resource::<&mut Res1>().build(
-        move |_, mut resource, _| {
-            resource.0 += 1;
-        },
-    ));
+    let mut executor =
+        Executor::<()>::new().with(System::builder().resources::<&mut Res1>().build(
+            move |_, mut resource, _| {
+                resource.0 += 1;
+            },
+        ));
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
 }
@@ -48,7 +49,7 @@ fn single() {
     let mut executor = Executor::<Handle>::new().with_handle(
         Handle(0),
         System::builder()
-            .resource::<&mut Res1>()
+            .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
@@ -64,7 +65,7 @@ fn single_inactive() {
     let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
         System::builder()
-            .resource::<&mut Res1>()
+            .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
@@ -80,7 +81,7 @@ fn single_late_activation() {
     let mut executor = Executor::<Handle>::new().with_handle_deactivated(
         Handle(0),
         System::builder()
-            .resource::<&mut Res1>()
+            .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),

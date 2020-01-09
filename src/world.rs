@@ -1,9 +1,12 @@
 use hecs::World as Entities;
+use l8r::ContainsHecsWorld;
 use resources::Resources;
+use std::ops::RangeBounds;
 
 use crate::{
-    borrows::ArchetypeSet,
+    modification_queue::{ModificationQueue, ModificationQueuePool},
     resource_bundle::{Fetch, ResourceBundle},
+    system::ArchetypeSet,
     Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
     DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
     ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
@@ -13,6 +16,7 @@ use crate::{
 pub struct World {
     entities: Entities,
     resources: Resources,
+    modification_queues: ModificationQueuePool,
 }
 
 impl World {
@@ -105,8 +109,33 @@ impl World {
         RB::effectors().fetch(self)
     }
 
+    pub fn modification_queue(&self) -> ModificationQueue {
+        self.modification_queues.get()
+    }
+
+    pub fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
+    where
+        R: RangeBounds<usize>,
+    {
+        queue.apply_range(self, range);
+    }
+
+    pub fn apply_all(&mut self, queue: ModificationQueue) {
+        queue.apply_all(self);
+    }
+
     pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {
-        unimplemented!()
+        println!("archetype handling is not implemented yet");
         //archetypes.extend(self.entities.query_scope::<Q>());
+    }
+}
+
+impl ContainsHecsWorld for World {
+    fn ecs(&self) -> &hecs::World {
+        &self.entities
+    }
+
+    fn ecs_mut(&mut self) -> &mut hecs::World {
+        &mut self.entities
     }
 }

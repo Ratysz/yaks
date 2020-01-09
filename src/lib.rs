@@ -10,11 +10,11 @@ pub use resources::{
     RefMut as ResourceRefMut, Resource,
 };
 
-mod borrows;
 mod executor;
 //mod executor_arch_disjoint;
 mod error;
 mod impls_for_tuple;
+mod modification_queue;
 mod query_bundle;
 mod resource_bundle;
 mod system;
@@ -23,6 +23,7 @@ mod world_proxy;
 
 pub use error::{NoSuchSystem, NonUniqueSystemHandle};
 pub use executor::{Executor, SystemHandle};
+pub use modification_queue::ModificationQueue;
 pub use system::System;
 pub use world::World;
 pub use world_proxy::WorldProxy;
