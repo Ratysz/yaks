@@ -1,9 +1,10 @@
 use std::ops::RangeBounds;
 
 use crate::{
-    query_bundle::QueryEffector, Component, ComponentBundle, ComponentError, ComponentRef,
-    ComponentRefMut, DynamicComponentBundle, Entity, ModificationQueue, NoSuchEntity,
-    NoSuchResource, Query, QueryBorrow, Resource, World,
+    error::{ComponentError, NoSuchEntity, NoSuchResource},
+    query_bundle::QueryEffector,
+    Component, ComponentBundle, ComponentRef, ComponentRefMut, DynamicComponentBundle, Entity,
+    ModificationQueue, Query, QueryBorrow, Resource, World,
 };
 
 pub struct WorldProxy<'a> {
@@ -86,7 +87,7 @@ impl<'a> WorldProxy<'a> {
         self.entities.entity(entity)
     }*/
 
-    pub fn query<Q>(&self, effector: QueryEffector<Q>) -> QueryBorrow<Q>
+    pub fn query<Q>(&self, _: QueryEffector<Q>) -> QueryBorrow<Q>
     where
         Q: Query + Send + Sync,
     {

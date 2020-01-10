@@ -1,8 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
+    error::{NoSuchSystem, NonUniqueSystemHandle},
     system::{ArchetypeSet, SystemBorrows, TypeSet},
-    ModificationQueue, NoSuchSystem, NonUniqueSystemHandle, System, World,
+    ModificationQueue, System, World,
 };
 
 pub trait SystemHandle: Hash + Eq + PartialEq {}
@@ -93,7 +94,7 @@ where
             })
         });
         if let Some(queue) = queue {
-            queue.apply_all(world);
+            world.apply_all(queue);
         }
     }
 

@@ -3,12 +3,12 @@ use resources::Resources;
 use std::ops::RangeBounds;
 
 use crate::{
+    error::{ComponentError, NoSuchEntity, NoSuchResource, ResourceError},
     modification_queue::{ModificationQueue, ModificationQueuePool},
     resource_bundle::{Fetch, ResourceBundle},
     system::ArchetypeSet,
-    Component, ComponentBundle, ComponentError, ComponentRef, ComponentRefMut, Components,
-    DynamicComponentBundle, Entity, NoSuchEntity, NoSuchResource, Query, QueryBorrow, Resource,
-    ResourceEntry, ResourceError, ResourceRef, ResourceRefMut,
+    Component, ComponentBundle, ComponentRef, ComponentRefMut, Components, DynamicComponentBundle,
+    Entity, Query, QueryBorrow, Resource, ResourceEntry, ResourceRef, ResourceRefMut,
 };
 
 #[derive(Default)]
@@ -23,7 +23,10 @@ impl World {
         Self::default()
     }
 
-    pub fn spawn(&mut self, components: impl DynamicComponentBundle) -> Entity {
+    pub fn spawn<C>(&mut self, components: C) -> Entity
+    where
+        C: DynamicComponentBundle,
+    {
         self.entities.spawn(components)
     }
 
@@ -39,32 +42,31 @@ impl World {
         self.entities.contains(entity)
     }
 
-    pub fn add_components(
-        &mut self,
-        entity: Entity,
-        components: impl DynamicComponentBundle,
-    ) -> Result<(), NoSuchEntity> {
+    pub fn add_components<C>(&mut self, entity: Entity, components: C) -> Result<(), NoSuchEntity>
+    where
+        C: DynamicComponentBundle,
+    {
         self.entities.insert(entity, components)
     }
 
-    pub fn remove_components<T: ComponentBundle>(
-        &mut self,
-        entity: Entity,
-    ) -> Result<T, ComponentError> {
+    pub fn remove_components<C>(&mut self, entity: Entity) -> Result<C, ComponentError>
+    where
+        C: ComponentBundle,
+    {
         self.entities.remove(entity)
     }
 
-    pub fn component<C: Component>(
-        &self,
-        entity: Entity,
-    ) -> Result<ComponentRef<C>, ComponentError> {
+    pub fn component<C>(&self, entity: Entity) -> Result<ComponentRef<C>, ComponentError>
+    where
+        C: Component,
+    {
         self.entities.get::<C>(entity)
     }
 
-    pub fn component_mut<C: Component>(
-        &self,
-        entity: Entity,
-    ) -> Result<ComponentRefMut<C>, ComponentError> {
+    pub fn component_mut<C>(&self, entity: Entity) -> Result<ComponentRefMut<C>, ComponentError>
+    where
+        C: Component,
+    {
         self.entities.get_mut::<C>(entity)
     }
 
@@ -72,31 +74,52 @@ impl World {
         self.entities.entity(entity)
     }
 
-    pub fn query<Q: Query>(&self) -> QueryBorrow<Q> {
+    pub fn query<Q>(&self) -> QueryBorrow<Q>
+    where
+        Q: Query,
+    {
         self.entities.query()
     }
 
-    pub fn add_resource<R: Resource>(&mut self, resource: R) -> Option<R> {
+    pub fn add_resource<R>(&mut self, resource: R) -> Option<R>
+    where
+        R: Resource,
+    {
         self.resources.insert(resource)
     }
 
-    pub fn remove_resource<R: Resource>(&mut self) -> Result<R, NoSuchResource> {
+    pub fn remove_resource<R>(&mut self) -> Result<R, NoSuchResource>
+    where
+        R: Resource,
+    {
         self.resources.remove().ok_or_else(|| NoSuchResource)
     }
 
-    pub fn resource_entry<R: Resource>(&mut self) -> ResourceEntry<R> {
+    pub fn resource_entry<R>(&mut self) -> ResourceEntry<R>
+    where
+        R: Resource,
+    {
         self.resources.entry()
     }
 
-    pub fn contains_resource<R: Resource>(&self) -> bool {
+    pub fn contains_resource<R>(&self) -> bool
+    where
+        R: Resource,
+    {
         self.resources.contains::<R>()
     }
 
-    pub fn resource<R: Resource>(&self) -> Result<ResourceRef<R>, ResourceError> {
+    pub fn resource<R>(&self) -> Result<ResourceRef<R>, ResourceError>
+    where
+        R: Resource,
+    {
         self.resources.get()
     }
 
-    pub fn resource_mut<R: Resource>(&self) -> Result<ResourceRefMut<R>, ResourceError> {
+    pub fn resource_mut<R>(&self) -> Result<ResourceRefMut<R>, ResourceError>
+    where
+        R: Resource,
+    {
         self.resources.get_mut()
     }
 
@@ -116,7 +139,7 @@ impl World {
     where
         R: RangeBounds<usize>,
     {
-        queue.drain(..).for_each(|closure| closure(self));
+        queue.drain(range).for_each(|closure| closure(self));
     }
 
     pub fn apply_all(&mut self, mut queue: ModificationQueue) {

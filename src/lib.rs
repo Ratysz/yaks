@@ -1,18 +1,19 @@
 // TODO uncomment #![warn(missing_docs)]
 
+#[doc(hidden)]
 pub use hecs::{
-    Bundle as ComponentBundle, Component, ComponentError, DynamicBundle as DynamicComponentBundle,
-    Entity, EntityRef as Components, MissingComponent, NoSuchEntity, Query, QueryBorrow,
-    Ref as ComponentRef, RefMut as ComponentRefMut,
+    Bundle as ComponentBundle, DynamicBundle as DynamicComponentBundle, EntityRef as Components,
+    Query, QueryBorrow, Ref as ComponentRef, RefMut as ComponentRefMut,
 };
-pub use resources::{
-    CantGetResource as ResourceError, Entry as ResourceEntry, NoSuchResource, Ref as ResourceRef,
-    RefMut as ResourceRefMut, Resource,
-};
+#[doc(hidden)]
+pub use resources::{Entry as ResourceEntry, Ref as ResourceRef, RefMut as ResourceRefMut};
+
+pub use hecs::{Component, Entity};
+pub use resources::Resource;
 
 mod executor;
 //mod executor_arch_disjoint;
-mod error;
+pub mod error;
 mod impls_for_tuple;
 mod modification_queue;
 mod query_bundle;
@@ -21,9 +22,9 @@ mod system;
 mod world;
 mod world_proxy;
 
-pub use error::{NoSuchSystem, NonUniqueSystemHandle};
 pub use executor::{Executor, SystemHandle};
 pub use modification_queue::ModificationQueue;
-pub use system::System;
+pub use query_bundle::QueryEffector;
+pub use system::{System, SystemBuilder};
 pub use world::World;
 pub use world_proxy::WorldProxy;

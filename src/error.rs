@@ -1,3 +1,5 @@
+pub use hecs::{ComponentError, MissingComponent, NoSuchEntity};
+pub use resources::{CantGetResource as ResourceError, NoSuchResource};
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},

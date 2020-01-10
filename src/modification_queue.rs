@@ -5,7 +5,7 @@ use std::{
     vec::Drain,
 };
 
-use crate::{ComponentBundle, DynamicComponentBundle, Entity, World, WorldProxy};
+use crate::World;
 
 type Closure = Box<dyn FnOnce(&mut World) + Send + Sync + 'static>;
 
@@ -78,21 +78,6 @@ impl ModificationQueue {
             .expect("modification queue should contain the inner queue at this point")
     }
 
-    pub fn apply_range<R, W>(&mut self, world: &mut W, range: R)
-    where
-        R: RangeBounds<usize>,
-        W: CanBeAppliedTo,
-    {
-        world.apply_range(self, range);
-    }
-
-    pub fn apply_all<W>(mut self, world: &mut W)
-    where
-        W: CanBeAppliedTo,
-    {
-        world.apply_all(self);
-    }
-
     pub fn merge(&mut self, mut other: ModificationQueue) {
         self.get_inner_mut().extend(other.get_inner_mut().drain(..));
     }
@@ -121,39 +106,5 @@ impl Extend<Closure> for ModificationQueue {
         for closure in iterator {
             inner.push(closure);
         }
-    }
-}
-
-pub trait CanBeAppliedTo {
-    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
-    where
-        R: RangeBounds<usize>;
-
-    fn apply_all(&mut self, queue: ModificationQueue);
-}
-
-impl CanBeAppliedTo for World {
-    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
-    where
-        R: RangeBounds<usize>,
-    {
-        self.apply_range(queue, range);
-    }
-
-    fn apply_all(&mut self, queue: ModificationQueue) {
-        self.apply_all(queue);
-    }
-}
-
-impl CanBeAppliedTo for WorldProxy<'_> {
-    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
-    where
-        R: RangeBounds<usize>,
-    {
-        self.apply_range(queue, range);
-    }
-
-    fn apply_all(&mut self, queue: ModificationQueue) {
-        self.apply_all(queue);
     }
 }

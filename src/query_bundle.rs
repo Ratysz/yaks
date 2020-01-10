@@ -2,7 +2,7 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     system::{ArchetypeSet, SystemBorrows},
-    Component, Query, QueryBorrow, World, WorldProxy,
+    Component, Query, World,
 };
 
 #[derive(Clone, Copy)]

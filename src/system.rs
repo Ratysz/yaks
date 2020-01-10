@@ -84,7 +84,7 @@ impl System {
     }
 
     pub fn run(&mut self, world: &mut World) {
-        self.run_with_deferred_modification(world).apply_all(world);
+        world.apply_all(self.run_with_deferred_modification(world));
     }
 
     pub fn run_with_deferred_modification(&mut self, world: &World) -> ModificationQueue {
