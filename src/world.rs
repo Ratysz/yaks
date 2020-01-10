@@ -1,5 +1,4 @@
 use hecs::World as Entities;
-use l8r::ContainsHecsWorld;
 use resources::Resources;
 use std::ops::RangeBounds;
 
@@ -117,25 +116,15 @@ impl World {
     where
         R: RangeBounds<usize>,
     {
-        queue.apply_range(self, range);
+        queue.drain(..).for_each(|closure| closure(self));
     }
 
-    pub fn apply_all(&mut self, queue: ModificationQueue) {
-        queue.apply_all(self);
+    pub fn apply_all(&mut self, mut queue: ModificationQueue) {
+        self.apply_range(&mut queue, ..);
     }
 
     pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {
         println!("archetype handling is not implemented yet");
         //archetypes.extend(self.entities.query_scope::<Q>());
-    }
-}
-
-impl ContainsHecsWorld for World {
-    fn ecs(&self) -> &hecs::World {
-        &self.entities
-    }
-
-    fn ecs_mut(&mut self) -> &mut hecs::World {
-        &mut self.entities
     }
 }

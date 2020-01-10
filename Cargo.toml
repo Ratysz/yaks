@@ -9,6 +9,6 @@ license = "MIT OR Apache-2.0"
 #fixedbitset = { version = "0.2.0", default-features = false }
 fxhash = "0.2.1"
 hecs = "0.2.7"
-l8r = { path = "../l8r" }
+#l8r = { path = "../l8r" }
 paste = "0.1.6"
 resources = "0.2.1"

@@ -40,7 +40,7 @@ where
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(&WorldProxy, Res::Effectors, Queries::Effectors)>,
+    closure: Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
 }
 
 impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
@@ -55,12 +55,13 @@ where
         _borrows: &SystemBorrows,
         _archetypes: &ArchetypeSet,
     ) -> ModificationQueue {
+        let mut queue = world.modification_queue();
         (self.closure)(
-            &WorldProxy::new(&world),
+            &mut WorldProxy::new(&world, &mut queue),
             Res::effectors(),
             Queries::effectors(),
         );
-        world.modification_queue()
+        queue
     }
 
     fn write_borrows(&self, borrows: &mut SystemBorrows) {
@@ -173,11 +174,11 @@ where
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
         Res::Effectors: Fetch<'a>,
-        F: FnMut(&WorldProxy<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
+        F: FnMut(&mut WorldProxy<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
             + 'static,
     {
         let closure = Box::new(
-            move |proxy: &WorldProxy<'a>, resources: Res::Effectors, queries| {
+            move |proxy: &mut WorldProxy<'a>, resources: Res::Effectors, queries| {
                 closure(proxy, resources.fetch(proxy.world), queries)
             },
         );
@@ -190,8 +191,8 @@ where
             // Since HRTBs cause an ICE when used with closures in the way that's needed here
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
-                Box<dyn FnMut(&WorldProxy<'a>, Res::Effectors, Queries::Effectors)>,
-                Box<dyn FnMut(&WorldProxy, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&mut WorldProxy<'a>, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
             >(closure)
         };
         let system_box = SystemBox::<Comps, Res, Queries> {

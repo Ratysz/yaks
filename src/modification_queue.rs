@@ -1,22 +1,27 @@
-use l8r::L8r;
 use std::{
+    iter::{Extend, IntoIterator},
     ops::RangeBounds,
     sync::{Arc, Mutex},
+    vec::Drain,
 };
 
-use crate::World;
+use crate::{ComponentBundle, DynamicComponentBundle, Entity, World, WorldProxy};
+
+type Closure = Box<dyn FnOnce(&mut World) + Send + Sync + 'static>;
+
+type InnerQueue = Vec<Closure>;
 
 pub struct ModificationQueuePool {
     pool: Arc<Mutex<InnerPool>>,
 }
 
 struct InnerPool {
-    queues: Vec<Option<L8r<World>>>,
+    queues: Vec<Option<InnerQueue>>,
 }
 
 impl Default for ModificationQueuePool {
     fn default() -> Self {
-        ModificationQueuePool::with_capacity(32)
+        ModificationQueuePool::with_capacity(8)
     }
 }
 
@@ -33,7 +38,7 @@ impl ModificationQueuePool {
 
     pub fn get(&self) -> ModificationQueue {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        let (index, later) = pool
+        let (index, inner) = pool
             .queues
             .iter_mut()
             .enumerate()
@@ -44,7 +49,7 @@ impl ModificationQueuePool {
                 (pool.queues.len() - 1, Some(Default::default()))
             });
         ModificationQueue {
-            later,
+            inner,
             index,
             pool: self.pool.clone(),
         }
@@ -53,7 +58,7 @@ impl ModificationQueuePool {
 
 #[must_use = "dropping a modification queue discards the modifications within"]
 pub struct ModificationQueue {
-    later: Option<L8r<World>>,
+    inner: Option<InnerQueue>,
     index: usize,
     pool: Arc<Mutex<InnerPool>>,
 }
@@ -62,35 +67,93 @@ impl Drop for ModificationQueue {
     fn drop(&mut self) {
         self.get_inner_mut().drain(..);
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        pool.queues[self.index] = self.later.take();
+        pool.queues[self.index] = self.inner.take();
     }
 }
 
 impl ModificationQueue {
-    fn get_inner_mut(&mut self) -> &mut L8r<World> {
-        self.later
+    fn get_inner_mut(&mut self) -> &mut InnerQueue {
+        self.inner
             .as_mut()
-            .expect("modification queue should contain a L8r at this point")
+            .expect("modification queue should contain the inner queue at this point")
     }
 
-    pub fn apply_range<R>(&mut self, world: &mut World, range: R)
+    pub fn apply_range<R, W>(&mut self, world: &mut W, range: R)
     where
         R: RangeBounds<usize>,
+        W: CanBeAppliedTo,
     {
-        L8r::now(self.get_inner_mut().drain(range), world);
+        world.apply_range(self, range);
     }
 
-    pub fn apply_all(mut self, world: &mut World) {
-        self.apply_range(world, ..);
+    pub fn apply_all<W>(mut self, world: &mut W)
+    where
+        W: CanBeAppliedTo,
+    {
+        world.apply_all(self);
     }
 
     pub fn merge(&mut self, mut other: ModificationQueue) {
         self.get_inner_mut().extend(other.get_inner_mut().drain(..));
     }
+
+    pub fn push<F>(&mut self, closure: F)
+    where
+        F: FnOnce(&mut World) + Send + Sync + 'static,
+    {
+        self.get_inner_mut().push(Box::new(closure))
+    }
+
+    pub fn drain<R>(&mut self, range: R) -> Drain<Closure>
+    where
+        R: RangeBounds<usize>,
+    {
+        self.get_inner_mut().drain(range)
+    }
 }
 
-pub trait ModificationQueueBundle: Send + Sync {}
+impl Extend<Closure> for ModificationQueue {
+    fn extend<T>(&mut self, iterator: T)
+    where
+        T: IntoIterator<Item = Closure>,
+    {
+        let inner = self.get_inner_mut();
+        for closure in iterator {
+            inner.push(closure);
+        }
+    }
+}
 
-impl ModificationQueueBundle for () {}
+pub trait CanBeAppliedTo {
+    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
+    where
+        R: RangeBounds<usize>;
 
-impl ModificationQueueBundle for ModificationQueue {}
+    fn apply_all(&mut self, queue: ModificationQueue);
+}
+
+impl CanBeAppliedTo for World {
+    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
+    where
+        R: RangeBounds<usize>,
+    {
+        self.apply_range(queue, range);
+    }
+
+    fn apply_all(&mut self, queue: ModificationQueue) {
+        self.apply_all(queue);
+    }
+}
+
+impl CanBeAppliedTo for WorldProxy<'_> {
+    fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
+    where
+        R: RangeBounds<usize>,
+    {
+        self.apply_range(queue, range);
+    }
+
+    fn apply_all(&mut self, queue: ModificationQueue) {
+        self.apply_all(queue);
+    }
+}
