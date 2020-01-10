@@ -5,6 +5,7 @@ use crate::{
     Component, Query, QueryBorrow, World, WorldProxy,
 };
 
+#[derive(Clone, Copy)]
 pub struct QueryEffector<Q>
 where
     Q: Query + Send + Sync,
@@ -20,34 +21,6 @@ where
         Self {
             phantom_data: PhantomData,
         }
-    }
-
-    pub fn query<'a>(&self, world: &'a impl CanBeQueried) -> QueryBorrow<'a, Q> {
-        world.query()
-    }
-}
-
-pub trait CanBeQueried {
-    fn query<Q>(&self) -> QueryBorrow<Q>
-    where
-        Q: Query;
-}
-
-impl CanBeQueried for World {
-    fn query<Q>(&self) -> QueryBorrow<Q>
-    where
-        Q: Query,
-    {
-        self.query()
-    }
-}
-
-impl CanBeQueried for WorldProxy<'_> {
-    fn query<Q>(&self) -> QueryBorrow<Q>
-    where
-        Q: Query,
-    {
-        self.world.query()
     }
 }
 

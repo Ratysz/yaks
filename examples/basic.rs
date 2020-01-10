@@ -46,7 +46,7 @@ fn main() {
         .build(
             move |world, (res_usize, mut res_str), (query1, query2, query3)| {
                 res_str.0 = "Hello, system!";
-                for (entity, (mut comp1, comp2)) in query1.query(world).into_iter() {
+                for (entity, (mut comp1, comp2)) in world.query(query1).into_iter() {
                     comp1.0 += increment;
                 }
             },
@@ -59,22 +59,22 @@ fn main() {
         .resources::<&ResUsize>()
         .query::<&Comp3>()
         .build(move |world, res_usize, q| {
-            q.query(world);
+            world.query(q);
         });
 
     System::builder()
         .query::<&Comp3>()
         .query::<&mut Comp2>()
         .build(move |world, _, (q1, q2)| {
-            q1.query(world);
-            q2.query(world);
+            world.query(q1);
+            world.query(q2);
         });
 
     System::builder()
         .query::<(&Comp3, &mut Comp2)>()
         .build(
             move |world, _, q| {
-                for (_, (_, _)) in q.query(world).into_iter() {}
+                for (_, (_, _)) in world.query(q).into_iter() {}
             },
         );
 
