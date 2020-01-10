@@ -1,5 +1,8 @@
 use fxhash::FxHasher64;
-use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault, marker::PhantomData};
+use std::{
+    any::TypeId, borrow::Cow, collections::HashSet, fmt::Debug, hash::BuildHasherDefault,
+    marker::PhantomData,
+};
 
 use crate::{
     modification_queue::ModificationQueue,
@@ -11,7 +14,7 @@ use crate::{
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
 pub type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default)]
 pub struct SystemBorrows {
     pub resources_immutable: TypeSet,
     pub resources_mutable: TypeSet,
@@ -22,6 +25,8 @@ pub struct SystemBorrows {
 trait SystemTrait {
     fn run(&mut self, world: &World) -> ModificationQueue;
 
+    fn debug_id(&self) -> &str;
+
     fn borrows(&self) -> &SystemBorrows;
 
     fn update_archetypes(&mut self, world: &World);
@@ -29,58 +34,16 @@ trait SystemTrait {
     fn archetypes(&self) -> &ArchetypeSet;
 }
 
-struct SystemBox<Comps, Res, Queries>
-where
-    Comps: QueryBundle,
-    Res: ResourceBundle,
-    Queries: QueryBundle,
-{
-    phantom_data: PhantomData<(Comps, Res, Queries)>,
-    #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
-    borrows: SystemBorrows,
-    archetypes: ArchetypeSet,
-}
-
-impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
-where
-    Comps: QueryBundle,
-    Res: ResourceBundle,
-    Queries: QueryBundle,
-{
-    fn run(&mut self, world: &World) -> ModificationQueue {
-        let mut queue = world.modification_queue();
-        (self.closure)(
-            &mut WorldProxy::new(&world, &mut queue),
-            Res::effectors(),
-            Queries::effectors(),
-        );
-        queue
-    }
-
-    fn borrows(&self) -> &SystemBorrows {
-        &self.borrows
-    }
-
-    fn update_archetypes(&mut self, world: &World) {
-        Comps::write_archetypes(world, &mut self.archetypes);
-        Queries::write_archetypes(world, &mut self.archetypes);
-    }
-
-    fn archetypes(&self) -> &ArchetypeSet {
-        &self.archetypes
-    }
-}
-
 pub struct System {
     inner: Box<dyn SystemTrait>,
 }
 
 impl System {
-    pub fn builder() -> SystemBuilder<(), (), ()> {
-        SystemBuilder {
-            phantom_data: PhantomData,
-        }
+    pub fn builder<T>(debug_id: T) -> SystemBuilder<(), (), ()>
+    where
+        T: Debug,
+    {
+        SystemBuilder::new(debug_id)
     }
 
     pub fn run(&mut self, world: &mut World) {
@@ -109,6 +72,60 @@ impl System {
     }
 }
 
+struct SystemBox<Comps, Res, Queries>
+where
+    Comps: QueryBundle,
+    Res: ResourceBundle,
+    Queries: QueryBundle,
+{
+    phantom_data: PhantomData<(Comps, Res, Queries)>,
+    #[allow(clippy::type_complexity)]
+    closure: Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
+    debug_id: String,
+    borrows: SystemBorrows,
+    archetypes: ArchetypeSet,
+}
+
+impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
+where
+    Comps: QueryBundle,
+    Res: ResourceBundle,
+    Queries: QueryBundle,
+{
+    fn run(&mut self, world: &World) -> ModificationQueue {
+        let mut queue = world.modification_queue();
+        (self.closure)(
+            &mut WorldProxy::new(
+                &world,
+                &mut queue,
+                &self.debug_id,
+                &self.borrows,
+                &self.archetypes,
+            ),
+            Res::effectors(),
+            Queries::effectors(),
+        );
+        queue
+    }
+
+    fn debug_id(&self) -> &str {
+        &self.debug_id
+    }
+
+    fn borrows(&self) -> &SystemBorrows {
+        &self.borrows
+    }
+
+    fn update_archetypes(&mut self, world: &World) {
+        Comps::write_archetypes(world, &mut self.archetypes);
+        Queries::write_archetypes(world, &mut self.archetypes);
+    }
+
+    fn archetypes(&self) -> &ArchetypeSet {
+        &self.archetypes
+    }
+}
+
 pub trait TupleAppend<T> {
     type Output;
 }
@@ -128,6 +145,19 @@ where
     Queries: QueryBundle + 'static,
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
+    debug_id: String,
+}
+
+impl SystemBuilder<(), (), ()> {
+    pub fn new<T>(debug_id: T) -> Self
+    where
+        T: Debug,
+    {
+        SystemBuilder {
+            phantom_data: PhantomData,
+            debug_id: format!("{:?}", debug_id),
+        }
+    }
 }
 
 impl<Comps, Queries> SystemBuilder<Comps, (), Queries>
@@ -141,6 +171,7 @@ where
     {
         SystemBuilder {
             phantom_data: PhantomData,
+            debug_id: self.debug_id,
         }
     }
 }
@@ -153,12 +184,13 @@ where
 {
     pub fn component<C>(self) -> SystemBuilder<Comps::Output, Res, Queries>
     where
-        C: QueryUnit,
+        C: QueryUnit + QuerySingle,
         Comps: TupleAppend<C>,
         <Comps as TupleAppend<C>>::Output: QueryBundle,
     {
         SystemBuilder {
             phantom_data: PhantomData,
+            debug_id: self.debug_id,
         }
     }
 
@@ -170,6 +202,7 @@ where
     {
         SystemBuilder {
             phantom_data: PhantomData,
+            debug_id: self.debug_id,
         }
     }
 
@@ -197,13 +230,16 @@ where
                 Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
             >(closure)
         };
+
         let mut borrows = SystemBorrows::default();
         Comps::write_borrows(&mut borrows);
         Res::write_borrows(&mut borrows);
         Queries::write_borrows(&mut borrows);
+
         let system_box = SystemBox::<Comps, Res, Queries> {
             phantom_data: PhantomData,
             closure,
+            debug_id: self.debug_id,
             borrows,
             archetypes: ArchetypeSet::default(),
         };
@@ -218,7 +254,7 @@ fn test() {
     let mut world = World::new();
     world.add_resource::<usize>(1);
     world.add_resource::<f32>(1.0);
-    let mut system = System::builder()
+    let mut system = System::builder("")
         .resources::<(&usize, &mut f32)>()
         .query::<(&usize, Option<&usize>)>()
         .build(|world, (res1, mut res2), query| {

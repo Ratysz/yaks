@@ -89,7 +89,7 @@ where
             .filter_map(|option| option);
         let queue = queues.next().map(|queue| {
             queues.fold(queue, |mut first, current| {
-                first.merge(current);
+                first.absorb(current);
                 first
             })
         });
@@ -235,7 +235,7 @@ impl Stage1 {
             .filter_map(|option| option);
         queues.next().map(|queue| {
             queues.fold(queue, |mut first, current| {
-                first.merge(current);
+                first.absorb(current);
                 first
             })
         })
@@ -296,7 +296,7 @@ impl Stage2 {
             .map(|container| container.system.run_without_updating_archetypes(world));
         queues.next().map(|queue| {
             queues.fold(queue, |mut first, current| {
-                first.merge(current);
+                first.absorb(current);
                 first
             })
         })

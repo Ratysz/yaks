@@ -38,7 +38,7 @@ fn main() {
 
     let increment = 6;
 
-    let mut system = System::builder()
+    let mut system = System::builder("demo system one")
         .resources::<(&ResUsize, &mut ResStr)>()
         .query::<(&mut Comp1, &Comp2)>()
         .query::<&Comp1>()
@@ -55,14 +55,14 @@ fn main() {
 
     assert_eq!(world.fetch::<&ResStr>().0, "Hello, system!");
 
-    System::builder()
+    System::builder(())
         .resources::<&ResUsize>()
         .query::<&Comp3>()
         .build(move |world, res_usize, q| {
             world.query(q);
         });
 
-    System::builder()
+    System::builder(())
         .query::<&Comp3>()
         .query::<&mut Comp2>()
         .build(move |world, _, (q1, q2)| {
@@ -70,7 +70,7 @@ fn main() {
             world.query(q2);
         });
 
-    System::builder()
+    System::builder(())
         .query::<(&Comp3, &mut Comp2)>()
         .build(
             move |world, _, q| {
@@ -78,7 +78,5 @@ fn main() {
             },
         );
 
-    system
-        .run_with_deferred_modification(&world)
-        .apply_all(&mut world);
+    world.apply_all(system.run_with_deferred_modification(&world));
 }

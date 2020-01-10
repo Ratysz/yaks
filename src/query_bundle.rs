@@ -145,6 +145,26 @@ where
     }
 }
 
+impl<Q> QuerySingle for (Q,)
+where
+    Q: QueryUnit,
+    Self: Query,
+{
+    type Effector = QueryEffector<Self>;
+
+    fn effector() -> Self::Effector {
+        QueryEffector::new()
+    }
+
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        Q::write_borrows(borrows);
+    }
+
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        world.write_archetypes::<Self>(archetypes);
+    }
+}
+
 impl QueryBundle for () {
     type Effectors = ();
 

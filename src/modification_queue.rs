@@ -65,7 +65,7 @@ pub struct ModificationQueue {
 
 impl Drop for ModificationQueue {
     fn drop(&mut self) {
-        self.get_inner_mut().drain(..);
+        self.get_inner_mut().clear();
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
         pool.queues[self.index] = self.inner.take();
     }
@@ -78,7 +78,7 @@ impl ModificationQueue {
             .expect("modification queue should contain the inner queue at this point")
     }
 
-    pub fn merge(&mut self, mut other: ModificationQueue) {
+    pub fn absorb(&mut self, mut other: ModificationQueue) {
         self.get_inner_mut().extend(other.get_inner_mut().drain(..));
     }
 

@@ -1,8 +1,12 @@
-use std::ops::RangeBounds;
+use std::{
+    any::{type_name, TypeId},
+    ops::RangeBounds,
+};
 
 use crate::{
     error::{ComponentError, NoSuchEntity, NoSuchResource},
     query_bundle::QueryEffector,
+    system::{ArchetypeSet, SystemBorrows},
     Component, ComponentBundle, ComponentRef, ComponentRefMut, DynamicComponentBundle, Entity,
     ModificationQueue, Query, QueryBorrow, Resource, World,
 };
@@ -10,11 +14,43 @@ use crate::{
 pub struct WorldProxy<'a> {
     pub(crate) world: &'a World,
     queue: &'a mut ModificationQueue,
+    debug_id: &'a str,
+    borrows: &'a SystemBorrows,
+    archetypes: &'a ArchetypeSet,
 }
 
 impl<'a> WorldProxy<'a> {
-    pub(crate) fn new(world: &'a World, queue: &'a mut ModificationQueue) -> Self {
-        Self { world, queue }
+    pub(crate) fn new(
+        world: &'a World,
+        queue: &'a mut ModificationQueue,
+        debug_id: &'a str,
+        borrows: &'a SystemBorrows,
+        archetypes: &'a ArchetypeSet,
+    ) -> Self {
+        Self {
+            world,
+            queue,
+            debug_id,
+            borrows,
+            archetypes,
+        }
+    }
+
+    fn can_access<C>(&self) -> bool
+    where
+        C: Component,
+    {
+        self.borrows
+            .components_immutable
+            .contains(&TypeId::of::<C>())
+            || self.can_mut_access::<C>()
+    }
+
+    fn can_mut_access<C>(&self) -> bool
+    where
+        C: Component,
+    {
+        self.borrows.components_mutable.contains(&TypeId::of::<C>())
     }
 
     pub fn spawn<C>(&mut self, components: C)
@@ -71,7 +107,16 @@ impl<'a> WorldProxy<'a> {
     where
         C: Component,
     {
-        // TODO statically verify accessibility?
+        if !self.can_access::<C>() {
+            panic!(
+                "system '{0}' can't access {1} of Entity({2:?}) immutably: \
+                 it's not required by the queries, \
+                 or declared in `SystemBuilder::component()`",
+                self.debug_id,
+                type_name::<C>(),
+                entity,
+            );
+        }
         self.world.component(entity)
     }
 
@@ -79,7 +124,16 @@ impl<'a> WorldProxy<'a> {
     where
         C: Component,
     {
-        // TODO statically verify accessibility?
+        if !self.can_access::<C>() {
+            panic!(
+                "system '{0}' can't access {1} of Entity({2:?}) mutably: \
+                 it's not required by the queries, \
+                 or declared in `SystemBuilder::component()`",
+                self.debug_id,
+                type_name::<C>(),
+                entity,
+            );
+        }
         self.world.component_mut(entity)
     }
 
@@ -135,6 +189,6 @@ impl<'a> WorldProxy<'a> {
     }
 
     pub fn apply_all(&mut self, queue: ModificationQueue) {
-        self.queue.merge(queue);
+        self.queue.absorb(queue);
     }
 }
