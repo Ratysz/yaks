@@ -17,7 +17,7 @@ struct Comp4(usize);
 #[test]
 fn basic() {
     let mut world = World::new();
-    System::builder()
+    System::builder(())
         .build(|world, _, _| {
             world.add_resource(Res1(0));
         })
