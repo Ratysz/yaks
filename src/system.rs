@@ -20,16 +20,13 @@ pub struct SystemBorrows {
 }
 
 trait SystemTrait {
-    fn run(
-        &mut self,
-        world: &World,
-        borrows: &SystemBorrows,
-        archetypes: &ArchetypeSet,
-    ) -> ModificationQueue;
+    fn run(&mut self, world: &World) -> ModificationQueue;
 
-    fn write_borrows(&self, borrows: &mut SystemBorrows);
+    fn borrows(&self) -> &SystemBorrows;
 
-    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
+    fn update_archetypes(&mut self, world: &World);
+
+    fn archetypes(&self) -> &ArchetypeSet;
 }
 
 struct SystemBox<Comps, Res, Queries>
@@ -41,6 +38,8 @@ where
     phantom_data: PhantomData<(Comps, Res, Queries)>,
     #[allow(clippy::type_complexity)]
     closure: Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
+    borrows: SystemBorrows,
+    archetypes: ArchetypeSet,
 }
 
 impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
@@ -49,12 +48,7 @@ where
     Res: ResourceBundle,
     Queries: QueryBundle,
 {
-    fn run(
-        &mut self,
-        world: &World,
-        _borrows: &SystemBorrows,
-        _archetypes: &ArchetypeSet,
-    ) -> ModificationQueue {
+    fn run(&mut self, world: &World) -> ModificationQueue {
         let mut queue = world.modification_queue();
         (self.closure)(
             &mut WorldProxy::new(&world, &mut queue),
@@ -64,22 +58,22 @@ where
         queue
     }
 
-    fn write_borrows(&self, borrows: &mut SystemBorrows) {
-        Comps::write_borrows(borrows);
-        Res::write_borrows(borrows);
-        Queries::write_borrows(borrows);
+    fn borrows(&self) -> &SystemBorrows {
+        &self.borrows
     }
 
-    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
-        Comps::write_archetypes(world, archetypes);
-        Queries::write_archetypes(world, archetypes);
+    fn update_archetypes(&mut self, world: &World) {
+        Comps::write_archetypes(world, &mut self.archetypes);
+        Queries::write_archetypes(world, &mut self.archetypes);
+    }
+
+    fn archetypes(&self) -> &ArchetypeSet {
+        &self.archetypes
     }
 }
 
 pub struct System {
     inner: Box<dyn SystemTrait>,
-    pub(crate) borrows: SystemBorrows,
-    pub(crate) archetypes: ArchetypeSet,
 }
 
 impl System {
@@ -98,12 +92,20 @@ impl System {
         self.run_without_updating_archetypes(world)
     }
 
-    pub(crate) fn update_archetypes(&mut self, world: &World) {
-        self.inner.write_archetypes(world, &mut self.archetypes);
+    pub(crate) fn run_without_updating_archetypes(&mut self, world: &World) -> ModificationQueue {
+        self.inner.run(world)
     }
 
-    pub(crate) fn run_without_updating_archetypes(&mut self, world: &World) -> ModificationQueue {
-        self.inner.run(world, &self.borrows, &self.archetypes)
+    pub(crate) fn borrows(&self) -> &SystemBorrows {
+        self.inner.borrows()
+    }
+
+    pub(crate) fn update_archetypes(&mut self, world: &World) {
+        self.inner.update_archetypes(world);
+    }
+
+    pub(crate) fn archetypes(&self) -> &ArchetypeSet {
+        &self.inner.archetypes()
     }
 }
 
@@ -195,16 +197,18 @@ where
                 Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
             >(closure)
         };
+        let mut borrows = SystemBorrows::default();
+        Comps::write_borrows(&mut borrows);
+        Res::write_borrows(&mut borrows);
+        Queries::write_borrows(&mut borrows);
         let system_box = SystemBox::<Comps, Res, Queries> {
             phantom_data: PhantomData,
             closure,
-        };
-        let mut borrows = SystemBorrows::default();
-        system_box.write_borrows(&mut borrows);
-        System {
-            inner: Box::new(system_box),
             borrows,
             archetypes: ArchetypeSet::default(),
+        };
+        System {
+            inner: Box::new(system_box),
         }
     }
 }

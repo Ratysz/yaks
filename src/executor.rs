@@ -53,7 +53,7 @@ where
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.system.borrows))
+            .find(|(_, stage)| stage.is_compatible(&container.system.borrows()))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -193,14 +193,14 @@ impl Stage1 {
 
     fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.resources_immutable
-            .extend(&container.system.borrows.resources_immutable);
+            .extend(&container.system.borrows().resources_immutable);
         self.resources_mutable
-            .extend(&container.system.borrows.resources_mutable);
+            .extend(&container.system.borrows().resources_mutable);
         let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.system.borrows))
+            .find(|(_, stage)| stage.is_compatible(&container.system.borrows()))
         {
             Some((index, stage)) => (index, stage),
             None => {
@@ -268,9 +268,9 @@ impl Stage2 {
 
     fn add(&mut self, container: SystemContainer) -> SystemIndex {
         self.components_immutable
-            .extend(&container.system.borrows.components_immutable);
+            .extend(&container.system.borrows().components_immutable);
         self.components_mutable
-            .extend(&container.system.borrows.components_mutable);
+            .extend(&container.system.borrows().components_mutable);
         self.systems.push(container);
         SystemIndex {
             stage1: 0,
