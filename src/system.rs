@@ -1,13 +1,10 @@
 use fxhash::FxHasher64;
-use std::{
-    any::TypeId, collections::HashSet, fmt::Debug, hash::BuildHasherDefault, marker::PhantomData,
-};
+use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault, marker::PhantomData};
 
 use crate::{
-    modification_queue::ModificationQueue,
     query_bundle::{QueryBundle, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, ResourceBundle},
-    World, WorldFacade,
+    World,
 };
 
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
@@ -22,15 +19,11 @@ pub struct SystemBorrows {
 }
 
 trait SystemTrait {
-    fn run(&mut self, world: &World) -> ModificationQueue;
+    fn run(&mut self, world: &World);
 
-    fn debug_id(&self) -> &str;
+    fn write_borrows(&self, borrows: &mut SystemBorrows);
 
-    fn borrows(&self) -> &SystemBorrows;
-
-    fn update_archetypes(&mut self, world: &World);
-
-    fn archetypes(&self) -> &ArchetypeSet;
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
 }
 
 pub struct System {
@@ -38,36 +31,25 @@ pub struct System {
 }
 
 impl System {
-    pub fn builder<T>(debug_id: T) -> SystemBuilder<(), (), ()>
-    where
-        T: Debug,
-    {
-        SystemBuilder::new(debug_id)
+    pub fn builder() -> SystemBuilder<(), (), ()> {
+        SystemBuilder::new()
     }
 
-    pub fn run(&mut self, world: &mut World) {
-        world.apply_all(self.run_with_deferred_modification(world));
+    pub fn run_and_flush(&mut self, world: &mut World) {
+        self.run(world);
+        world.flush_mod_queues();
     }
 
-    pub fn run_with_deferred_modification(&mut self, world: &World) -> ModificationQueue {
-        self.update_archetypes(world);
-        self.run_without_updating_archetypes(world)
+    pub fn run(&mut self, world: &World) {
+        self.inner.run(world);
     }
 
-    pub(crate) fn run_without_updating_archetypes(&mut self, world: &World) -> ModificationQueue {
-        self.inner.run(world)
+    pub(crate) fn write_borrows(&self, borrows: &mut SystemBorrows) {
+        self.inner.write_borrows(borrows);
     }
 
-    pub(crate) fn borrows(&self) -> &SystemBorrows {
-        self.inner.borrows()
-    }
-
-    pub(crate) fn update_archetypes(&mut self, world: &World) {
-        self.inner.update_archetypes(world);
-    }
-
-    pub(crate) fn archetypes(&self) -> &ArchetypeSet {
-        &self.inner.archetypes()
+    pub(crate) fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
+        self.inner.write_archetypes(world, archetypes);
     }
 }
 
@@ -79,10 +61,7 @@ where
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(&mut WorldFacade, Res::Effectors, Queries::Effectors)>,
-    debug_id: String,
-    borrows: SystemBorrows,
-    archetypes: ArchetypeSet,
+    closure: Box<dyn FnMut(&World, Res::Effectors, Queries::Effectors)>,
 }
 
 impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
@@ -91,37 +70,19 @@ where
     Res: ResourceBundle,
     Queries: QueryBundle,
 {
-    fn run(&mut self, world: &World) -> ModificationQueue {
-        let mut queue = world.modification_queue();
-        (self.closure)(
-            &mut WorldFacade::new(
-                &world,
-                &mut queue,
-                &self.debug_id,
-                &self.borrows,
-                &self.archetypes,
-            ),
-            Res::effectors(),
-            Queries::effectors(),
-        );
-        queue
+    fn run(&mut self, world: &World) {
+        (self.closure)(world, Res::effectors(), Queries::effectors());
     }
 
-    fn debug_id(&self) -> &str {
-        &self.debug_id
+    fn write_borrows(&self, borrows: &mut SystemBorrows) {
+        Comps::write_borrows(borrows);
+        Res::write_borrows(borrows);
+        Queries::write_borrows(borrows);
     }
 
-    fn borrows(&self) -> &SystemBorrows {
-        &self.borrows
-    }
-
-    fn update_archetypes(&mut self, world: &World) {
-        Comps::write_archetypes(world, &mut self.archetypes);
-        Queries::write_archetypes(world, &mut self.archetypes);
-    }
-
-    fn archetypes(&self) -> &ArchetypeSet {
-        &self.archetypes
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
+        Comps::write_archetypes(world, archetypes);
+        Queries::write_archetypes(world, archetypes);
     }
 }
 
@@ -144,17 +105,13 @@ where
     Queries: QueryBundle + 'static,
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
-    debug_id: String,
 }
 
 impl SystemBuilder<(), (), ()> {
-    pub fn new<T>(debug_id: T) -> Self
-    where
-        T: Debug,
-    {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
         SystemBuilder {
             phantom_data: PhantomData,
-            debug_id: format!("{:?}", debug_id),
         }
     }
 }
@@ -170,7 +127,6 @@ where
     {
         SystemBuilder {
             phantom_data: PhantomData,
-            debug_id: self.debug_id,
         }
     }
 }
@@ -189,7 +145,6 @@ where
     {
         SystemBuilder {
             phantom_data: PhantomData,
-            debug_id: self.debug_id,
         }
     }
 
@@ -201,19 +156,17 @@ where
     {
         SystemBuilder {
             phantom_data: PhantomData,
-            debug_id: self.debug_id,
         }
     }
 
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
         Res::Effectors: Fetch<'a>,
-        F: FnMut(&mut WorldFacade<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
-            + 'static,
+        F: FnMut(&'a World, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors) + 'static,
     {
         let closure = Box::new(
-            move |facade: &mut WorldFacade<'a>, resources: Res::Effectors, queries| {
-                closure(facade, resources.fetch(facade.world), queries)
+            move |world: &'a World, resources: Res::Effectors, queries| {
+                closure(world, resources.fetch(world), queries)
             },
         );
         let closure = unsafe {
@@ -225,22 +178,13 @@ where
             // Since HRTBs cause an ICE when used with closures in the way that's needed here
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
-                Box<dyn FnMut(&mut WorldFacade<'a>, Res::Effectors, Queries::Effectors)>,
-                Box<dyn FnMut(&mut WorldFacade, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&'a World, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&World, Res::Effectors, Queries::Effectors)>,
             >(closure)
         };
-
-        let mut borrows = SystemBorrows::default();
-        Comps::write_borrows(&mut borrows);
-        Res::write_borrows(&mut borrows);
-        Queries::write_borrows(&mut borrows);
-
         let system_box = SystemBox::<Comps, Res, Queries> {
             phantom_data: PhantomData,
             closure,
-            debug_id: self.debug_id,
-            borrows,
-            archetypes: ArchetypeSet::default(),
         };
         System {
             inner: Box::new(system_box),

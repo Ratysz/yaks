@@ -15,16 +15,14 @@ mod executor;
 //mod executor_arch_disjoint;
 pub mod error;
 mod impls_for_tuple;
-mod modification_queue;
+mod mod_queue;
 mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
-mod world_facade;
 
 pub use executor::{Executor, SystemHandle};
-pub use modification_queue::ModificationQueue;
+pub use mod_queue::ModQueue;
 pub use query_bundle::QueryEffector;
 pub use system::{System, SystemBuilder};
 pub use world::World;
-pub use world_facade::WorldFacade;

@@ -2,10 +2,9 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
     system::{ArchetypeSet, SystemBorrows},
-    Component, Query, World,
+    Component, Query, QueryBorrow, World,
 };
 
-#[derive(Clone, Copy)]
 pub struct QueryEffector<Q>
 where
     Q: Query + Send + Sync,
@@ -17,12 +16,30 @@ impl<Q> QueryEffector<Q>
 where
     Q: Query + Send + Sync,
 {
-    pub(crate) fn new() -> Self {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            phantom_data: PhantomData,
+        }
+    }
+
+    pub fn query<'a>(&self, world: &'a World) -> QueryBorrow<'a, Q> {
+        world.query::<Q>()
+    }
+}
+
+impl<Q> Clone for QueryEffector<Q>
+where
+    Q: Query + Send + Sync,
+{
+    fn clone(&self) -> Self {
         Self {
             phantom_data: PhantomData,
         }
     }
 }
+
+impl<Q> Copy for QueryEffector<Q> where Q: Query + Send + Sync {}
 
 pub trait QueryUnit: Send + Sync {
     fn write_borrows(borrows: &mut SystemBorrows);

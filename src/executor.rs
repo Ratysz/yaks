@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     error::{NoSuchSystem, NonUniqueSystemHandle},
-    system::{ArchetypeSet, SystemBorrows, TypeSet},
+    system::{ArchetypeSet, SystemBorrows},
     System, World,
 };
 
@@ -18,6 +18,8 @@ struct SystemIndex(usize);
 struct SystemContainer {
     system: System,
     active: bool,
+    borrows: SystemBorrows,
+    archetypes: ArchetypeSet,
 }
 
 pub struct Executor<H = ()>
@@ -58,7 +60,17 @@ where
         } else {
             SystemIndex(self.systems.len())
         };
-        let container = SystemContainer { system, active };
+
+        let mut borrows = SystemBorrows::default();
+        system.write_borrows(&mut borrows);
+        let archetypes = ArchetypeSet::default();
+        let container = SystemContainer {
+            system,
+            active,
+            borrows,
+            archetypes,
+        };
+
         self.systems.insert(index, container);
         /*let (index, stage) = match self
             .stages
@@ -90,20 +102,11 @@ where
     }
 
     pub fn run(&mut self, world: &mut World) {
-        let mut queues = self
-            .systems
+        self.systems
             .values_mut()
             .filter(|container| container.active)
-            .map(|container| container.system.run_with_deferred_modification(world));
-        let queue = queues.next().map(|queue| {
-            queues.fold(queue, |mut first, current| {
-                first.absorb(current);
-                first
-            })
-        });
-        if let Some(queue) = queue {
-            world.apply_all(queue);
-        }
+            .for_each(|container| container.system.run(world));
+        world.flush_mod_queues();
     }
 
     #[allow(dead_code, unused_variables)]

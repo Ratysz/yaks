@@ -1,21 +1,21 @@
 use hecs::World as Entities;
 use resources::Resources;
-use std::ops::RangeBounds;
 
 use crate::{
     error::{ComponentError, NoSuchEntity, NoSuchResource, ResourceError},
-    modification_queue::{ModificationQueue, ModificationQueuePool},
+    mod_queue::{ModQueue, ModQueuePool},
     resource_bundle::{Fetch, ResourceBundle},
     system::ArchetypeSet,
     Component, ComponentBundle, ComponentRef, ComponentRefMut, Components, DynamicComponentBundle,
-    Entity, Query, QueryBorrow, Resource, ResourceEntry, ResourceRef, ResourceRefMut,
+    Entity, Query, QueryBorrow, QueryEffector, Resource, ResourceEntry, ResourceRef,
+    ResourceRefMut,
 };
 
 #[derive(Default)]
 pub struct World {
     entities: Entities,
     resources: Resources,
-    modification_queues: ModificationQueuePool,
+    mod_queues: ModQueuePool,
 }
 
 impl World {
@@ -81,6 +81,13 @@ impl World {
         self.entities.query()
     }
 
+    pub fn query_by<Q>(&self, _: QueryEffector<Q>) -> QueryBorrow<Q>
+    where
+        Q: Query + Send + Sync,
+    {
+        self.query::<Q>()
+    }
+
     pub fn add_resource<R>(&mut self, resource: R) -> Option<R>
     where
         R: Resource,
@@ -131,23 +138,18 @@ impl World {
         RB::effectors().fetch(self)
     }
 
-    pub fn modification_queue(&self) -> ModificationQueue {
-        self.modification_queues.get()
+    pub fn new_mod_queue(&self) -> ModQueue {
+        self.mod_queues.get()
     }
 
-    pub fn apply_range<R>(&mut self, queue: &mut ModificationQueue, range: R)
-    where
-        R: RangeBounds<usize>,
-    {
-        queue.drain(range).for_each(|closure| closure(self));
-    }
-
-    pub fn apply_all(&mut self, mut queue: ModificationQueue) {
-        self.apply_range(&mut queue, ..);
+    pub fn flush_mod_queues(&mut self) {
+        if let Some(mut queue) = self.mod_queues.flatten() {
+            queue.apply_all(self);
+        }
     }
 
     pub(crate) fn write_archetypes<Q: Query>(&self, _archetypes: &mut ArchetypeSet) {
-        println!("archetype handling is not implemented yet");
+        //println!("archetype handling is not implemented yet");
         //archetypes.extend(self.entities.query_scope::<Q>());
     }
 }

@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 use secs::{System, World};
 
 struct ResUsize(usize);
@@ -38,7 +39,7 @@ fn main() {
 
     let increment = 6;
 
-    let mut system = System::builder("demo system one")
+    let mut system = System::builder()
         .resources::<(&ResUsize, &mut ResStr)>()
         .query::<(&mut Comp1, &Comp2)>()
         .query::<&Comp1>()
@@ -46,37 +47,35 @@ fn main() {
         .build(
             move |world, (res_usize, mut res_str), (query1, query2, query3)| {
                 res_str.0 = "Hello, system!";
-                for (entity, (mut comp1, comp2)) in world.query(query1).into_iter() {
+                for (entity, (mut comp1, comp2)) in query1.query(world).into_iter() {
                     comp1.0 += increment;
                 }
             },
         );
-    system.run(&mut world);
+    system.run_and_flush(&mut world);
 
     assert_eq!(world.fetch::<&ResStr>().0, "Hello, system!");
 
-    System::builder(())
+    System::builder()
         .resources::<&ResUsize>()
         .query::<&Comp3>()
-        .build(move |world, res_usize, q| {
-            world.query(q);
+        .build(move |world, _, q| {
+            q.query(world);
         });
 
-    System::builder(())
+    System::builder()
         .query::<&Comp3>()
         .query::<&mut Comp2>()
         .build(move |world, _, (q1, q2)| {
-            world.query(q1);
-            world.query(q2);
+            q1.query(world);
+            q2.query(world);
         });
 
-    System::builder(())
+    System::builder()
         .query::<(&Comp3, &mut Comp2)>()
         .build(
             move |world, _, q| {
-                for (_, (_, _)) in world.query(q).into_iter() {}
+                for (_, (_, _)) in q.query(world).into_iter() {}
             },
         );
-
-    world.apply_all(system.run_with_deferred_modification(&world));
 }
