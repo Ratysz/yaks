@@ -20,11 +20,11 @@ mod query_bundle;
 mod resource_bundle;
 mod system;
 mod world;
-mod world_proxy;
+mod world_facade;
 
 pub use executor::{Executor, SystemHandle};
 pub use modification_queue::ModificationQueue;
 pub use query_bundle::QueryEffector;
 pub use system::{System, SystemBuilder};
 pub use world::World;
-pub use world_proxy::WorldProxy;
+pub use world_facade::WorldFacade;

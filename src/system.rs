@@ -7,7 +7,7 @@ use crate::{
     modification_queue::ModificationQueue,
     query_bundle::{QueryBundle, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, ResourceBundle},
-    World, WorldProxy,
+    World, WorldFacade,
 };
 
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
@@ -79,7 +79,7 @@ where
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
+    closure: Box<dyn FnMut(&mut WorldFacade, Res::Effectors, Queries::Effectors)>,
     debug_id: String,
     borrows: SystemBorrows,
     archetypes: ArchetypeSet,
@@ -94,7 +94,7 @@ where
     fn run(&mut self, world: &World) -> ModificationQueue {
         let mut queue = world.modification_queue();
         (self.closure)(
-            &mut WorldProxy::new(
+            &mut WorldFacade::new(
                 &world,
                 &mut queue,
                 &self.debug_id,
@@ -208,12 +208,12 @@ where
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
         Res::Effectors: Fetch<'a>,
-        F: FnMut(&mut WorldProxy<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
+        F: FnMut(&mut WorldFacade<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
             + 'static,
     {
         let closure = Box::new(
-            move |proxy: &mut WorldProxy<'a>, resources: Res::Effectors, queries| {
-                closure(proxy, resources.fetch(proxy.world), queries)
+            move |facade: &mut WorldFacade<'a>, resources: Res::Effectors, queries| {
+                closure(facade, resources.fetch(facade.world), queries)
             },
         );
         let closure = unsafe {
@@ -225,8 +225,8 @@ where
             // Since HRTBs cause an ICE when used with closures in the way that's needed here
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
-                Box<dyn FnMut(&mut WorldProxy<'a>, Res::Effectors, Queries::Effectors)>,
-                Box<dyn FnMut(&mut WorldProxy, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&mut WorldFacade<'a>, Res::Effectors, Queries::Effectors)>,
+                Box<dyn FnMut(&mut WorldFacade, Res::Effectors, Queries::Effectors)>,
             >(closure)
         };
 

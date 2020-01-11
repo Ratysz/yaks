@@ -11,7 +11,7 @@ use crate::{
     ModificationQueue, Query, QueryBorrow, Resource, World,
 };
 
-pub struct WorldProxy<'a> {
+pub struct WorldFacade<'a> {
     pub(crate) world: &'a World,
     queue: &'a mut ModificationQueue,
     debug_id: &'a str,
@@ -19,7 +19,7 @@ pub struct WorldProxy<'a> {
     archetypes: &'a ArchetypeSet,
 }
 
-impl<'a> WorldProxy<'a> {
+impl<'a> WorldFacade<'a> {
     pub(crate) fn new(
         world: &'a World,
         queue: &'a mut ModificationQueue,
