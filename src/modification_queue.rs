@@ -27,7 +27,7 @@ impl Default for ModificationQueuePool {
 
 impl ModificationQueuePool {
     pub fn with_capacity(capacity: usize) -> Self {
-        let queues = std::iter::repeat_with(Default::default)
+        let queues = std::iter::repeat_with(|| Some(Default::default()))
             .take(capacity)
             .collect();
         let inner = InnerPool { queues };

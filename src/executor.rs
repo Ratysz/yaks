@@ -1,19 +1,19 @@
-use std::{collections::HashMap, hash::Hash};
+use fxhash::FxHasher64;
+use std::{
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hash},
+};
 
 use crate::{
     error::{NoSuchSystem, NonUniqueSystemHandle},
     system::{ArchetypeSet, SystemBorrows, TypeSet},
-    ModificationQueue, System, World,
+    System, World,
 };
 
 pub trait SystemHandle: Hash + Eq + PartialEq {}
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
-struct SystemIndex {
-    stage1: usize,
-    stage2: usize,
-    index: usize,
-}
+struct SystemIndex(usize);
 
 struct SystemContainer {
     system: System,
@@ -24,8 +24,10 @@ pub struct Executor<H = ()>
 where
     H: Hash + Eq + PartialEq,
 {
-    stages: Vec<Stage1>,
-    system_map: HashMap<H, SystemIndex>,
+    systems: HashMap<SystemIndex, SystemContainer, BuildHasherDefault<FxHasher64>>,
+    system_handles: HashMap<H, SystemIndex>,
+    free_indices: Vec<SystemIndex>,
+    //stages: Vec<Stage1>,
 }
 
 impl<H> Default for Executor<H>
@@ -34,8 +36,10 @@ where
 {
     fn default() -> Self {
         Self {
-            stages: Default::default(),
-            system_map: HashMap::with_hasher(Default::default()),
+            systems: Default::default(),
+            free_indices: Default::default(),
+            system_handles: HashMap::default(),
+            //stages: Default::default(),
         }
     }
 }
@@ -49,8 +53,14 @@ where
     }
 
     fn add_inner(&mut self, system: System, active: bool) -> SystemIndex {
+        let index = if let Some(index) = self.free_indices.pop() {
+            index
+        } else {
+            SystemIndex(self.systems.len())
+        };
         let container = SystemContainer { system, active };
-        let (index, stage) = match self
+        self.systems.insert(index, container);
+        /*let (index, stage) = match self
             .stages
             .iter_mut()
             .enumerate()
@@ -66,10 +76,8 @@ where
                         .expect("there has to be at least one stage at this point"),
                 )
             }
-        };
-        let mut system_index = stage.add(container);
-        system_index.stage1 = index;
-        system_index
+        };*/
+        index
     }
 
     pub fn add(&mut self, system: System) {
@@ -83,10 +91,10 @@ where
 
     pub fn run(&mut self, world: &mut World) {
         let mut queues = self
-            .stages
-            .iter_mut()
-            .map(|stage| stage.run(world))
-            .filter_map(|option| option);
+            .systems
+            .values_mut()
+            .filter(|container| container.active)
+            .map(|container| container.system.run_with_deferred_modification(world));
         let queue = queues.next().map(|queue| {
             queues.fold(queue, |mut first, current| {
                 first.absorb(current);
@@ -101,6 +109,20 @@ where
     #[allow(dead_code, unused_variables)]
     pub fn run_parallel(&mut self, world: &mut World) {
         unimplemented!()
+        /*let mut queues = self
+            .stages
+            .iter_mut()
+            .map(|stage| stage.run(world))
+            .filter_map(|option| option);
+        let queue = queues.next().map(|queue| {
+            queues.fold(queue, |mut first, current| {
+                first.absorb(current);
+                first
+            })
+        });
+        if let Some(queue) = queue {
+            world.apply_all(queue);
+        }*/
     }
 }
 
@@ -115,11 +137,11 @@ where
         system: System,
         active: bool,
     ) -> Result<(), NonUniqueSystemHandle> {
-        if self.system_map.contains_key(&handle) {
+        if self.system_handles.contains_key(&handle) {
             Err(NonUniqueSystemHandle)
         } else {
             let index = self.add_inner(system, active);
-            self.system_map.insert(handle, index);
+            self.system_handles.insert(handle, index);
             Ok(())
         }
     }
@@ -155,16 +177,23 @@ where
     }
 
     pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
-        self.system_map
-            .get(handle)
-            .ok_or_else(|| NoSuchSystem)
-            .map(|system_index| self.stages[system_index.stage1].is_active(*system_index))
+        match self.system_handles.get(handle) {
+            Some(index) => Ok(self
+                .systems
+                .get(index)
+                .expect("system handles should always map to valid system indices")
+                .active),
+            None => Err(NoSuchSystem),
+        }
     }
 
     pub fn set_active(&mut self, handle: &H, active: bool) -> Result<(), NoSuchSystem> {
-        match self.system_map.get(handle) {
-            Some(system_index) => {
-                self.stages[system_index.stage1].set_active(*system_index, active);
+        match self.system_handles.get_mut(handle) {
+            Some(index) => {
+                self.systems
+                    .get_mut(index)
+                    .expect("system handles should always map to valid system indices")
+                    .active = active;
                 Ok(())
             }
             None => Err(NoSuchSystem),
@@ -172,7 +201,7 @@ where
     }
 }
 
-#[derive(Default)]
+/*#[derive(Default)]
 struct Stage1 {
     stages: Vec<Stage2>,
     resources_immutable: TypeSet,
@@ -306,4 +335,4 @@ impl Stage2 {
     fn run_parallel(&mut self, world: &World) {
         unimplemented!()
     }
-}
+}*/

@@ -1,7 +1,6 @@
 use fxhash::FxHasher64;
 use std::{
-    any::TypeId, borrow::Cow, collections::HashSet, fmt::Debug, hash::BuildHasherDefault,
-    marker::PhantomData,
+    any::TypeId, collections::HashSet, fmt::Debug, hash::BuildHasherDefault, marker::PhantomData,
 };
 
 use crate::{
@@ -247,21 +246,4 @@ where
             inner: Box::new(system_box),
         }
     }
-}
-
-#[test]
-fn test() {
-    let mut world = World::new();
-    world.add_resource::<usize>(1);
-    world.add_resource::<f32>(1.0);
-    let mut system = System::builder("")
-        .resources::<(&usize, &mut f32)>()
-        .query::<(&usize, Option<&usize>)>()
-        .build(|world, (res1, mut res2), query| {
-            *res2 += 1.0;
-        });
-    system.run(&mut world);
-    assert_eq!(*world.fetch::<&f32>(), 2.0);
-    system.run(&mut world);
-    assert_eq!(*world.fetch::<&f32>(), 3.0);
 }
