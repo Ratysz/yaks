@@ -98,11 +98,11 @@ impl Drop for ModQueue {
 }
 
 impl ModQueue {
-    fn get_inner_mut(&mut self) -> &mut Vec<Closure> {
+    fn get_inner_mut(&mut self, will_be_dirty: bool) -> &mut Vec<Closure> {
         self.inner
             .as_mut()
             .map(|inner| {
-                inner.dirty = true;
+                inner.dirty = will_be_dirty;
                 &mut inner.closures
             })
             .expect("modification queue should contain the inner queue at this point")
@@ -112,11 +112,11 @@ impl ModQueue {
     where
         F: FnOnce(&mut World) + Send + Sync + 'static,
     {
-        self.get_inner_mut().push(Box::new(closure))
+        self.get_inner_mut(true).push(Box::new(closure))
     }
 
     pub(crate) fn apply_all(&mut self, world: &mut World) {
-        self.get_inner_mut()
+        self.get_inner_mut(false)
             .drain(..)
             .for_each(|closure| closure(world));
     }
