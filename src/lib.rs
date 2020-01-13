@@ -1,4 +1,18 @@
-// TODO uncomment #![warn(missing_docs)]
+//! [![Latest Version]][crates.io]
+//! [![Documentation]][docs.rs]
+//! [![Dependencies]][deps.rs]
+//! [![License]][license link]
+//!
+//! [Latest Version]: https://img.shields.io/crates/v/yaks.svg
+//! [crates.io]: https://crates.io/crates/yaks
+//! [Documentation]: https://docs.rs/yaks/badge.svg
+//! [docs.rs]: https://docs.rs/yaks
+//! [Dependencies]: https://deps.rs/repo/github/Ratysz/yaks/status.svg
+//! [deps.rs]: https://deps.rs/repo/github/Ratysz/yaks
+//! [License]: https://img.shields.io/crates/l/yaks.svg
+//! [license link]: https://github.com/Ratysz/yaks/blob/master/LICENSE.md
+
+#![warn(missing_docs)]
 
 #[doc(hidden)]
 pub use hecs::{
