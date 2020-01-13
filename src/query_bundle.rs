@@ -16,7 +16,6 @@ impl<Q> QueryEffector<Q>
 where
     Q: Query + Send + Sync,
 {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             phantom_data: PhantomData,
@@ -28,14 +27,21 @@ where
     }
 }
 
+impl<Q> Default for QueryEffector<Q>
+where
+    Q: Query + Send + Sync,
+{
+    fn default() -> Self {
+        QueryEffector::new()
+    }
+}
+
 impl<Q> Clone for QueryEffector<Q>
 where
     Q: Query + Send + Sync,
 {
     fn clone(&self) -> Self {
-        Self {
-            phantom_data: PhantomData,
-        }
+        QueryEffector::new()
     }
 }
 

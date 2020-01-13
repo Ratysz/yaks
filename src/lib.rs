@@ -11,9 +11,8 @@ pub use resources::{Entry as ResourceEntry, Ref as ResourceRef, RefMut as Resour
 pub use hecs::{Component, Entity, QueryBorrow};
 pub use resources::Resource;
 
-mod executor;
-//mod executor_arch_disjoint;
 pub mod error;
+mod executor;
 mod impls_for_tuple;
 mod mod_queue;
 mod query_bundle;
@@ -21,7 +20,7 @@ mod resource_bundle;
 mod system;
 mod world;
 
-pub use executor::{Executor, SystemHandle};
+pub use executor::Executor;
 pub use mod_queue::ModQueue;
 pub use query_bundle::QueryEffector;
 pub use system::{System, SystemBuilder};

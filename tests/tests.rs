@@ -1,9 +1,4 @@
-use secs::{Executor, QueryEffector, System, SystemHandle, World};
-
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-struct Handle(usize);
-
-impl SystemHandle for Handle {}
+use secs::{Executor, QueryEffector, System, World};
 
 struct Res1(usize);
 
@@ -29,8 +24,20 @@ fn setup_world() -> World {
 }
 
 #[test]
+#[should_panic]
+fn system_invalid_resources() {
+    let mut world = setup_world();
+    System::builder()
+        .resources::<(&Res1, &mut Res1)>()
+        .build(|_, _, _| ())
+        .run_and_flush(&mut world);
+}
+
+#[test]
 fn mod_queue_entity_spawn_despawn() {
     let mut world = setup_world();
+    // NB: This is not the intended way: it skips informing the system of it's dependency on the
+    // components returned by the query, most likely leading to a panic when used in an executor.
     let query = QueryEffector::<(&Comp1, &Comp2, &Comp3)>::new();
     System::builder()
         .build(move |world, _, _| {
@@ -119,18 +126,18 @@ fn executor_single_no_handle() {
 
 #[test]
 fn executor_non_unique_system_handle() {
-    let mut executor = Executor::<Handle>::new();
-    let result = executor.add_with_handle(Handle(0), System::builder().build(|_, _, _| {}));
-    assert!(result.is_ok());
-    let result = executor.add_with_handle(Handle(0), System::builder().build(|_, _, _| {}));
-    assert!(result.is_err());
+    let mut executor = Executor::<usize>::new();
+    let option = executor.add_with_handle(0, System::builder().build(|_, _, _| {}));
+    assert!(option.is_none());
+    let option = executor.add_with_handle(0, System::builder().build(|_, _, _| {}));
+    assert!(option.is_some());
 }
 
 #[test]
 fn executor_single() {
     let mut world = setup_world();
-    let mut executor = Executor::<Handle>::new().with_handle(
-        Handle(0),
+    let mut executor = Executor::<usize>::new().with_handle(
+        0,
         System::builder()
             .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
@@ -142,10 +149,10 @@ fn executor_single() {
 }
 
 #[test]
-fn executor_single_inactive() {
+fn executor_single_deactivation() {
     let mut world = setup_world();
-    let mut executor = Executor::<Handle>::new().with_handle_deactivated(
-        Handle(0),
+    let mut executor = Executor::<usize>::new().with_handle(
+        0,
         System::builder()
             .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
@@ -153,23 +160,56 @@ fn executor_single_inactive() {
             }),
     );
     executor.run(&mut world);
-    assert_eq!(world.fetch::<&Res1>().0, 0);
+    assert_eq!(world.fetch::<&Res1>().0, 1);
+    assert!(executor.set_active(&0, false).is_ok());
+    executor.run(&mut world);
+    assert_eq!(world.fetch::<&Res1>().0, 1);
+    assert!(executor.set_active(&0, true).is_ok());
+    executor.run(&mut world);
+    assert_eq!(world.fetch::<&Res1>().0, 2);
+}
+
+/*#[test]
+fn executor_sequential() {
+    let mut world = setup_world();
+    let mut executor = Executor::<()>::new()
+        .with(
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(|_, mut resource, _| {
+                    resource.0 += 1;
+                }),
+        )
+        .with(
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(|_, mut resource, _| {
+                    resource.0 += 1;
+                }),
+        );
+    executor.run(&mut world);
+    assert_eq!(world.fetch::<&Res1>().0, 2);
 }
 
 #[test]
-fn executor_single_late_activation() {
+fn executor_parallel() {
     let mut world = setup_world();
-    let mut executor = Executor::<Handle>::new().with_handle_deactivated(
-        Handle(0),
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(move |_, mut resource, _| {
-                resource.0 += 1;
-            }),
-    );
-    executor.run(&mut world);
-    assert_eq!(world.fetch::<&Res1>().0, 0);
-    assert!(executor.set_active(&Handle(0), true).is_ok());
-    executor.run(&mut world);
-    assert_eq!(world.fetch::<&Res1>().0, 1);
-}
+    let mut pool = scoped_threadpool::Pool::new(4);
+    let mut executor = Executor::<()>::new()
+        .with(
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(|_, mut resource, _| {
+                    resource.0 += 1;
+                }),
+        )
+        .with(
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(|_, mut resource, _| {
+                    resource.0 += 2;
+                }),
+        );
+    executor.run_parallel(&mut world, &mut pool);
+    assert_eq!(world.fetch::<&Res1>().0, 3);
+}*/

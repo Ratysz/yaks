@@ -6,17 +6,6 @@ use std::{
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NonUniqueSystemHandle;
-
-impl Display for NonUniqueSystemHandle {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.pad("system handles can only appear once in an executor")
-    }
-}
-
-impl Error for NonUniqueSystemHandle {}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NoSuchSystem;
 
 impl Display for NoSuchSystem {
@@ -26,3 +15,14 @@ impl Display for NoSuchSystem {
 }
 
 impl Error for NoSuchSystem {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct CyclicDependency;
+
+impl Display for CyclicDependency {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.pad("adding the system would create an unresolvable cycle")
+    }
+}
+
+impl Error for CyclicDependency {}

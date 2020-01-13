@@ -5,12 +5,11 @@ use std::{
 };
 
 use crate::{
-    error::{NoSuchSystem, NonUniqueSystemHandle},
-    system::{ArchetypeSet, SystemBorrows},
-    System, World,
+    error::NoSuchSystem,
+    //system::{ArchetypeSet, SystemBorrows},
+    System,
+    World,
 };
-
-pub trait SystemHandle: Hash + Eq + PartialEq {}
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 struct SystemIndex(usize);
@@ -18,8 +17,22 @@ struct SystemIndex(usize);
 struct SystemContainer {
     system: System,
     active: bool,
-    borrows: SystemBorrows,
-    archetypes: ArchetypeSet,
+    //borrows: SystemBorrows,
+    //archetypes: ArchetypeSet,
+}
+
+impl SystemContainer {
+    fn new(system: System) -> Self {
+        /*let mut borrows = SystemBorrows::default();
+        system.write_borrows(&mut borrows);
+        let archetypes = ArchetypeSet::default();*/
+        Self {
+            system,
+            active: true,
+            //borrows,
+            //archetypes,
+        }
+    }
 }
 
 pub struct Executor<H = ()>
@@ -29,7 +42,6 @@ where
     systems: HashMap<SystemIndex, SystemContainer, BuildHasherDefault<FxHasher64>>,
     system_handles: HashMap<H, SystemIndex>,
     free_indices: Vec<SystemIndex>,
-    //stages: Vec<Stage1>,
 }
 
 impl<H> Default for Executor<H>
@@ -37,12 +49,7 @@ where
     H: Hash + Eq + PartialEq,
 {
     fn default() -> Self {
-        Self {
-            systems: Default::default(),
-            free_indices: Default::default(),
-            system_handles: HashMap::default(),
-            //stages: Default::default(),
-        }
+        Self::new()
     }
 }
 
@@ -51,54 +58,19 @@ where
     H: Hash + Eq + PartialEq,
 {
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            systems: Default::default(),
+            free_indices: Default::default(),
+            system_handles: HashMap::default(),
+        }
     }
 
-    fn add_inner(&mut self, system: System, active: bool) -> SystemIndex {
-        let index = if let Some(index) = self.free_indices.pop() {
+    fn new_system_index(&mut self) -> SystemIndex {
+        if let Some(index) = self.free_indices.pop() {
             index
         } else {
             SystemIndex(self.systems.len())
-        };
-
-        let mut borrows = SystemBorrows::default();
-        system.write_borrows(&mut borrows);
-        let archetypes = ArchetypeSet::default();
-        let container = SystemContainer {
-            system,
-            active,
-            borrows,
-            archetypes,
-        };
-
-        self.systems.insert(index, container);
-        /*let (index, stage) = match self
-            .stages
-            .iter_mut()
-            .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.system.borrows()))
-        {
-            Some((index, stage)) => (index, stage),
-            None => {
-                self.stages.push(Stage1::default());
-                (
-                    self.stages.len() - 1,
-                    self.stages
-                        .last_mut()
-                        .expect("there has to be at least one stage at this point"),
-                )
-            }
-        };*/
-        index
-    }
-
-    pub fn add(&mut self, system: System) {
-        self.add_inner(system, true);
-    }
-
-    pub fn with(mut self, system: System) -> Self {
-        self.add(system);
-        self
+        }
     }
 
     pub fn run(&mut self, world: &mut World) {
@@ -109,73 +81,45 @@ where
         world.flush_mod_queues();
     }
 
-    #[allow(dead_code, unused_variables)]
-    pub fn run_parallel(&mut self, world: &mut World) {
-        unimplemented!()
-        /*let mut queues = self
-            .stages
-            .iter_mut()
-            .map(|stage| stage.run(world))
-            .filter_map(|option| option);
-        let queue = queues.next().map(|queue| {
-            queues.fold(queue, |mut first, current| {
-                first.absorb(current);
-                first
-            })
-        });
-        if let Some(queue) = queue {
-            world.apply_all(queue);
-        }*/
-    }
-}
-
-impl<H> Executor<H>
-where
-    H: SystemHandle,
-{
-    #[allow(clippy::map_entry)]
-    fn add_with_handle_inner(
-        &mut self,
-        handle: H,
-        system: System,
-        active: bool,
-    ) -> Result<(), NonUniqueSystemHandle> {
-        if self.system_handles.contains_key(&handle) {
-            Err(NonUniqueSystemHandle)
-        } else {
-            let index = self.add_inner(system, active);
-            self.system_handles.insert(handle, index);
-            Ok(())
-        }
+    //fn add_inner(&mut self, dependencies: &[H], system: System) -> SystemIndex {
+    fn add_inner(&mut self, system: System) -> SystemIndex {
+        let container = SystemContainer::new(system);
+        let index = self.new_system_index();
+        self.systems.insert(index, container);
+        index
     }
 
-    pub fn add_with_handle(
-        &mut self,
-        handle: H,
-        system: System,
-    ) -> Result<(), NonUniqueSystemHandle> {
-        self.add_with_handle_inner(handle, system, true)
+    pub fn add(&mut self, system: System) {
+        self.add_inner(system);
     }
 
-    pub fn add_with_handle_deactivated(
-        &mut self,
-        handle: H,
-        system: System,
-    ) -> Result<(), NonUniqueSystemHandle> {
-        self.add_with_handle_inner(handle, system, false)
-    }
-
-    pub fn with_handle(mut self, handle: H, system: System) -> Self {
-        if let Err(error) = self.add_with_handle(handle, system) {
-            panic!("{}", error);
-        }
+    pub fn with(mut self, system: System) -> Self {
+        self.add(system);
         self
     }
 
-    pub fn with_handle_deactivated(mut self, handle: H, system: System) -> Self {
-        if let Err(error) = self.add_with_handle_deactivated(handle, system) {
-            panic!("{}", error);
-        }
+    fn add_with_handle_inner(&mut self, handle: H, system: System) -> Option<System> {
+        let container = SystemContainer::new(system);
+        let index = self
+            .system_handles
+            .get(&handle)
+            .copied()
+            .unwrap_or_else(|| {
+                let index = self.new_system_index();
+                self.system_handles.insert(handle, index);
+                index
+            });
+        self.systems
+            .insert(index, container)
+            .map(|container| container.system)
+    }
+
+    pub fn add_with_handle(&mut self, handle: H, system: System) -> Option<System> {
+        self.add_with_handle_inner(handle, system)
+    }
+
+    pub fn with_handle(mut self, handle: H, system: System) -> Self {
+        self.add_with_handle(handle, system);
         self
     }
 
@@ -202,140 +146,62 @@ where
             None => Err(NoSuchSystem),
         }
     }
-}
 
-/*#[derive(Default)]
-struct Stage1 {
-    stages: Vec<Stage2>,
-    resources_immutable: TypeSet,
-    resources_mutable: TypeSet,
-}
-
-impl Stage1 {
-    fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
-        borrows
-            .resources_mutable
-            .is_disjoint(&self.resources_mutable)
-            && borrows
-                .resources_immutable
-                .is_disjoint(&self.resources_mutable)
-            && borrows
-                .resources_mutable
-                .is_disjoint(&self.resources_immutable)
+    /*pub fn add(&mut self, dependencies: &[H], system: System) {
+        self.add_inner(dependencies, system);
     }
 
-    fn add(&mut self, container: SystemContainer) -> SystemIndex {
-        self.resources_immutable
-            .extend(&container.system.borrows().resources_immutable);
-        self.resources_mutable
-            .extend(&container.system.borrows().resources_mutable);
-        let (index, stage) = match self
-            .stages
-            .iter_mut()
-            .enumerate()
-            .find(|(_, stage)| stage.is_compatible(&container.system.borrows()))
-        {
-            Some((index, stage)) => (index, stage),
-            None => {
-                self.stages.push(Stage2::default());
-                (
-                    self.stages.len() - 1,
-                    self.stages
-                        .last_mut()
-                        .expect("there has to be at least one stage at this point"),
-                )
-            }
-        };
-        let mut system_index = stage.add(container);
-        system_index.stage2 = index;
-        system_index
+    pub fn with(mut self, dependencies: &[H], system: System) -> Self {
+        self.add(dependencies, system);
+        self
     }
 
-    fn is_active(&self, system_index: SystemIndex) -> bool {
-        self.stages[system_index.stage2].is_active(system_index.index)
-    }
-
-    fn set_active(&mut self, system_index: SystemIndex, active: bool) {
-        self.stages[system_index.stage2].set_active(system_index.index, active);
-    }
-
-    fn run(&mut self, world: &World) -> Option<ModificationQueue> {
-        let mut queues = self
-            .stages
-            .iter_mut()
-            .map(|stage| stage.run(world))
-            .filter_map(|option| option);
-        queues.next().map(|queue| {
-            queues.fold(queue, |mut first, current| {
-                first.absorb(current);
-                first
-            })
-        })
-    }
-
-    #[allow(dead_code, unused_variables)]
-    fn run_parallel(&mut self, world: &World) {
-        unimplemented!()
-    }
-}
-
-#[derive(Default)]
-struct Stage2 {
-    systems: Vec<SystemContainer>,
-    components_immutable: TypeSet,
-    components_mutable: TypeSet,
-}
-
-impl Stage2 {
-    fn is_compatible(&self, borrows: &SystemBorrows) -> bool {
-        borrows
-            .components_mutable
-            .is_disjoint(&self.components_mutable)
-            && borrows
-                .components_immutable
-                .is_disjoint(&self.components_mutable)
-            && borrows
-                .components_mutable
-                .is_disjoint(&self.components_immutable)
-    }
-
-    fn add(&mut self, container: SystemContainer) -> SystemIndex {
-        self.components_immutable
-            .extend(&container.system.borrows().components_immutable);
-        self.components_mutable
-            .extend(&container.system.borrows().components_mutable);
-        self.systems.push(container);
-        SystemIndex {
-            stage1: 0,
-            stage2: 0,
-            index: self.systems.len() - 1,
+    #[allow(clippy::map_entry)]
+    fn add_with_handle_inner(
+        &mut self,
+        handle: H,
+        dependencies: &[H],
+        system: System,
+    ) -> Result<(), SystemHandleIsNotUnique> {
+        if self.system_handles.contains_key(&handle) {
+            Err(SystemHandleIsNotUnique)
+        } else {
+            let index = self.add_inner(dependencies, system);
+            self.system_handles.insert(handle, index);
+            Ok(())
         }
     }
 
-    fn is_active(&self, index: usize) -> bool {
-        self.systems[index].active
+    pub fn add_with_handle(
+        &mut self,
+        handle: H,
+        dependencies: &[H],
+        system: System,
+    ) -> Result<(), SystemHandleIsNotUnique> {
+        self.add_with_handle_inner(handle, dependencies, system)
     }
 
-    fn set_active(&mut self, index: usize, active: bool) {
-        self.systems[index].active = active;
-    }
+    pub fn with_handle(mut self, handle: H, dependencies: &[H], system: System) -> Self {
+        if let Err(error) = self.add_with_handle(handle, dependencies, system) {
+            panic!("{}", error);
+        }
+        self
+    }*/
 
-    fn run(&mut self, world: &World) -> Option<ModificationQueue> {
-        let mut queues = self
-            .systems
-            .iter_mut()
-            .filter(|container| container.active)
-            .map(|container| container.system.run_without_updating_archetypes(world));
-        queues.next().map(|queue| {
-            queues.fold(queue, |mut first, current| {
-                first.absorb(current);
-                first
-            })
-        })
-    }
-
-    #[allow(dead_code, unused_variables)]
-    fn run_parallel(&mut self, world: &World) {
-        unimplemented!()
-    }
-}*/
+    /*pub fn run_parallel(&mut self, world: &mut World, pool: &mut scoped_threadpool::Pool) {
+        pool.scoped(|scope| {
+            let world: &World = world;
+            for system in self.systems.values_mut().filter_map(|container| {
+                if container.active {
+                    Some(&mut container.system)
+                } else {
+                    None
+                }
+            }) {
+                scope.execute(move || system.run(world));
+            }
+            scope.join_all();
+        });
+        world.flush_mod_queues();
+    }*/
+}

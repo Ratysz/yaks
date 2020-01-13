@@ -2,7 +2,7 @@ use fxhash::FxHasher64;
 use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault, marker::PhantomData};
 
 use crate::{
-    query_bundle::{QueryBundle, QuerySingle, QueryUnit},
+    query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
     World,
 };
@@ -18,7 +18,7 @@ pub struct SystemBorrows {
     pub components_mutable: TypeSet,
 }
 
-trait SystemTrait {
+pub(crate) trait SystemTrait {
     fn run(&mut self, world: &World);
 
     fn write_borrows(&self, borrows: &mut SystemBorrows);
@@ -44,13 +44,9 @@ impl System {
         self.inner.run(world);
     }
 
-    pub(crate) fn write_borrows(&self, borrows: &mut SystemBorrows) {
-        self.inner.write_borrows(borrows);
-    }
-
-    pub(crate) fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
-        self.inner.write_archetypes(world, archetypes);
-    }
+    /*pub(crate) fn inner(&self) -> &dyn SystemTrait {
+        self.inner.as_ref()
+    }*/
 }
 
 struct SystemBox<Comps, Res, Queries>
@@ -137,7 +133,7 @@ where
     Res: ResourceBundle + 'static,
     Queries: QueryBundle + 'static,
 {
-    pub fn component<C>(self) -> SystemBuilder<Comps::Output, Res, Queries>
+    /*pub fn component<C>(self) -> SystemBuilder<Comps::Output, Res, Queries>
     where
         C: QueryUnit + QuerySingle,
         Comps: TupleAppend<C>,
@@ -146,7 +142,7 @@ where
         SystemBuilder {
             phantom_data: PhantomData,
         }
-    }
+    }*/
 
     pub fn query<Q>(self) -> SystemBuilder<Comps, Res, Queries::Output>
     where

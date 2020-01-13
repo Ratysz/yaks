@@ -30,6 +30,10 @@ impl World {
         self.entities.spawn(components)
     }
 
+    /*pub fn reserve(&self) -> Entity {
+        self.entities.reserve()
+    }*/
+
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
         self.entities.despawn(entity)
     }
@@ -143,6 +147,7 @@ impl World {
     }
 
     pub fn flush_mod_queues(&mut self) {
+        //self.entities.flush();
         if let Some(mut queue) = self.mod_queues.flatten() {
             queue.apply_all(self);
         }
