@@ -22,6 +22,5 @@ mod world;
 
 pub use executor::Executor;
 pub use mod_queue::ModQueue;
-pub use query_bundle::QueryEffector;
 pub use system::{System, SystemBuilder};
 pub use world::World;

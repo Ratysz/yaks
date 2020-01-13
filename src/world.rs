@@ -7,8 +7,7 @@ use crate::{
     resource_bundle::{Fetch, ResourceBundle},
     system::ArchetypeSet,
     Component, ComponentBundle, ComponentRef, ComponentRefMut, Components, DynamicComponentBundle,
-    Entity, Query, QueryBorrow, QueryEffector, Resource, ResourceEntry, ResourceRef,
-    ResourceRefMut,
+    Entity, Query, QueryBorrow, Resource, ResourceEntry, ResourceRef, ResourceRefMut,
 };
 
 #[derive(Default)]
@@ -83,13 +82,6 @@ impl World {
         Q: Query,
     {
         self.entities.query()
-    }
-
-    pub fn query_by<Q>(&self, _: QueryEffector<Q>) -> QueryBorrow<Q>
-    where
-        Q: Query + Send + Sync,
-    {
-        self.query::<Q>()
     }
 
     pub fn add_resource<R>(&mut self, resource: R) -> Option<R>

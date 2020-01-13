@@ -1,4 +1,4 @@
-use secs::{Executor, QueryEffector, System, World};
+use secs::{Executor, System, World};
 
 struct Res1(usize);
 
@@ -36,12 +36,11 @@ fn system_invalid_resources() {
 #[test]
 fn mod_queue_entity_spawn_despawn() {
     let mut world = setup_world();
-    // NB: This is not the intended way: it skips informing the system of it's dependency on the
-    // components returned by the query, most likely leading to a panic when used in an executor.
-    let query = QueryEffector::<(&Comp1, &Comp2, &Comp3)>::new();
+    type Query<'a> = (&'a Comp1, &'a Comp2, &'a Comp3);
     System::builder()
-        .build(move |world, _, _| {
-            assert_eq!(world.query_by(query).iter().collect::<Vec<_>>().len(), 2);
+        .query::<Query>()
+        .build(move |world, _, query| {
+            assert_eq!(query.query(world).iter().collect::<Vec<_>>().len(), 2);
             let mut queue = world.new_mod_queue();
             queue.push(|world| {
                 world.spawn((Comp1(6), Comp2(3.0), Comp3("NaN")));
@@ -49,22 +48,23 @@ fn mod_queue_entity_spawn_despawn() {
         })
         .run_and_flush(&mut world);
     let entities = world
-        .query_by(query)
+        .query::<Query>()
         .iter()
         .map(|(entity, _)| entity)
         .collect::<Vec<_>>();
     assert_eq!(entities.len(), 3);
     let entity = entities[0];
     System::builder()
-        .build(move |world, _, _| {
-            assert_eq!(world.query_by(query).iter().collect::<Vec<_>>().len(), 3);
+        .query::<Query>()
+        .build(move |world, _, query| {
+            assert_eq!(query.query(world).iter().collect::<Vec<_>>().len(), 3);
             let mut queue = world.new_mod_queue();
             queue.push(move |world| {
                 assert!(world.despawn(entity).is_ok());
             });
         })
         .run_and_flush(&mut world);
-    assert_eq!(world.query_by(query).iter().collect::<Vec<_>>().len(), 2);
+    assert_eq!(world.query::<Query>().iter().collect::<Vec<_>>().len(), 2);
 }
 
 #[test]
@@ -149,7 +149,7 @@ fn executor_single() {
 }
 
 #[test]
-fn executor_single_deactivation() {
+fn executor_single_handle() {
     let mut world = setup_world();
     let mut executor = Executor::<usize>::new().with_handle(
         0,
@@ -161,55 +161,13 @@ fn executor_single_deactivation() {
     );
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
+    assert!(executor.is_active(&0).unwrap());
     assert!(executor.set_active(&0, false).is_ok());
+    assert!(!executor.is_active(&0).unwrap());
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
     assert!(executor.set_active(&0, true).is_ok());
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 2);
+    assert!(executor.is_active(&2).is_err())
 }
-
-/*#[test]
-fn executor_sequential() {
-    let mut world = setup_world();
-    let mut executor = Executor::<()>::new()
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut resource, _| {
-                    resource.0 += 1;
-                }),
-        )
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut resource, _| {
-                    resource.0 += 1;
-                }),
-        );
-    executor.run(&mut world);
-    assert_eq!(world.fetch::<&Res1>().0, 2);
-}
-
-#[test]
-fn executor_parallel() {
-    let mut world = setup_world();
-    let mut pool = scoped_threadpool::Pool::new(4);
-    let mut executor = Executor::<()>::new()
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut resource, _| {
-                    resource.0 += 1;
-                }),
-        )
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut resource, _| {
-                    resource.0 += 2;
-                }),
-        );
-    executor.run_parallel(&mut world, &mut pool);
-    assert_eq!(world.fetch::<&Res1>().0, 3);
-}*/

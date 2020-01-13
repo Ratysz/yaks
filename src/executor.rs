@@ -35,7 +35,7 @@ impl SystemContainer {
     }
 }
 
-pub struct Executor<H = ()>
+pub struct Executor<H>
 where
     H: Hash + Eq + PartialEq,
 {
@@ -49,7 +49,11 @@ where
     H: Hash + Eq + PartialEq,
 {
     fn default() -> Self {
-        Self::new()
+        Self {
+            systems: Default::default(),
+            free_indices: Default::default(),
+            system_handles: HashMap::default(),
+        }
     }
 }
 
@@ -58,11 +62,7 @@ where
     H: Hash + Eq + PartialEq,
 {
     pub fn new() -> Self {
-        Self {
-            systems: Default::default(),
-            free_indices: Default::default(),
-            system_handles: HashMap::default(),
-        }
+        Default::default()
     }
 
     fn new_system_index(&mut self) -> SystemIndex {
@@ -81,7 +81,6 @@ where
         world.flush_mod_queues();
     }
 
-    //fn add_inner(&mut self, dependencies: &[H], system: System) -> SystemIndex {
     fn add_inner(&mut self, system: System) -> SystemIndex {
         let container = SystemContainer::new(system);
         let index = self.new_system_index();
@@ -123,6 +122,25 @@ where
         self
     }
 
+    pub fn remove(&mut self, handle: &H) -> Option<System> {
+        self.system_handles
+            .remove(handle)
+            .and_then(|index| self.systems.remove(&index))
+            .map(|container| container.system)
+    }
+
+    pub fn contains(&mut self, handle: &H) -> bool {
+        self.system_handles.contains_key(handle)
+    }
+
+    pub fn get_mut(&mut self, handle: &H) -> Result<&mut System, NoSuchSystem> {
+        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
+        self.systems
+            .get_mut(&index)
+            .map(|container| &mut container.system)
+            .ok_or(NoSuchSystem)
+    }
+
     pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
         match self.system_handles.get(handle) {
             Some(index) => Ok(self
@@ -146,62 +164,4 @@ where
             None => Err(NoSuchSystem),
         }
     }
-
-    /*pub fn add(&mut self, dependencies: &[H], system: System) {
-        self.add_inner(dependencies, system);
-    }
-
-    pub fn with(mut self, dependencies: &[H], system: System) -> Self {
-        self.add(dependencies, system);
-        self
-    }
-
-    #[allow(clippy::map_entry)]
-    fn add_with_handle_inner(
-        &mut self,
-        handle: H,
-        dependencies: &[H],
-        system: System,
-    ) -> Result<(), SystemHandleIsNotUnique> {
-        if self.system_handles.contains_key(&handle) {
-            Err(SystemHandleIsNotUnique)
-        } else {
-            let index = self.add_inner(dependencies, system);
-            self.system_handles.insert(handle, index);
-            Ok(())
-        }
-    }
-
-    pub fn add_with_handle(
-        &mut self,
-        handle: H,
-        dependencies: &[H],
-        system: System,
-    ) -> Result<(), SystemHandleIsNotUnique> {
-        self.add_with_handle_inner(handle, dependencies, system)
-    }
-
-    pub fn with_handle(mut self, handle: H, dependencies: &[H], system: System) -> Self {
-        if let Err(error) = self.add_with_handle(handle, dependencies, system) {
-            panic!("{}", error);
-        }
-        self
-    }*/
-
-    /*pub fn run_parallel(&mut self, world: &mut World, pool: &mut scoped_threadpool::Pool) {
-        pool.scoped(|scope| {
-            let world: &World = world;
-            for system in self.systems.values_mut().filter_map(|container| {
-                if container.active {
-                    Some(&mut container.system)
-                } else {
-                    None
-                }
-            }) {
-                scope.execute(move || system.run(world));
-            }
-            scope.join_all();
-        });
-        world.flush_mod_queues();
-    }*/
 }
