@@ -4,7 +4,8 @@
 //! [![License]][license link]
 //!
 //! `yaks` aims to be a minimalistic, yet featureful and performant
-//! entity-component-system (ECS) framework. It is built upon [`hecs`] and [`resources`].
+//! entity-component-system (ECS) framework. It is built upon [`hecs`] and [`resources`],
+//! and can be described as "parallelizable systems extension for `hecs`".
 //!
 //! The goals are, in no particular order:
 //! - safety
@@ -81,13 +82,13 @@
 
 #[doc(hidden)]
 pub use hecs::{
-    Bundle as ComponentBundle, DynamicBundle as DynamicComponentBundle, EntityRef as Components,
-    Query, Ref as ComponentRef, RefMut as ComponentRefMut,
+    DynamicBundle as DynamicComponentBundle, EntityRef as Components, Query, Ref as ComponentRef,
+    RefMut as ComponentRefMut,
 };
 #[doc(hidden)]
 pub use resources::{Entry as ResourceEntry, Ref as ResourceRef, RefMut as ResourceRefMut};
 
-pub use hecs::{Component, Entity, QueryBorrow};
+pub use hecs::{Bundle as ComponentBundle, Component, Entity, EntityBuilder, QueryBorrow};
 pub use resources::Resource;
 
 pub mod error;

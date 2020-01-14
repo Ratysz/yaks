@@ -1,3 +1,5 @@
+//! Error types used by `yaks`.
+
 pub use hecs::{ComponentError, MissingComponent, NoSuchEntity};
 pub use resources::{CantGetResource as ResourceError, NoSuchResource};
 use std::{
@@ -5,6 +7,10 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
+/// Error indicating that no [`System`] with the provided handle is present in an [`Executor`].
+///
+/// [`System`]: struct.System.html
+/// [`Executor`]: struct.Executor.html
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NoSuchSystem;
 

@@ -1,6 +1,6 @@
 [package]
 name = "yaks"
-version = "0.0.0-alpha1"
+version = "0.1.0-alpha.0"
 description = "A minimalistic ECS."
 authors = ["Alexander Sepity <alexander.sepity@gmail.com>"]
 edition = "2018"

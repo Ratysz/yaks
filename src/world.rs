@@ -10,6 +10,16 @@ use crate::{
     Entity, Query, QueryBorrow, Resource, ResourceEntry, ResourceRef, ResourceRefMut,
 };
 
+/// A collection of [`Entities`], each with any number of associated [`Components`],
+/// and [`Resources`], which are components that are not associated with any particular entity.
+///
+/// More information: [`hecs::World`], [`resources::Resources`].
+///
+/// [`Entities`]: struct.Entity.html
+/// [`Components`]: trait.Component.html
+/// [`Resources`]: trait.Resource.html
+/// [`hecs::World`]: ../hecs/struct.World.html
+/// [`resources::Resources`]: ../resources/struct.Resources.html
 #[derive(Default)]
 pub struct World {
     entities: Entities,
@@ -18,10 +28,14 @@ pub struct World {
 }
 
 impl World {
+    /// Creates an empty world. Functionally identical to [`::default()`](#method.default).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates an entity with `components`, returning it's ID. Components can be given as
+    /// any tuple, structs that derive [`ComponentBundle`](trait.ComponentBundle.html),
+    /// or an [`EntityBuilder`](struct.EntityBuilder.html).
     pub fn spawn<C>(&mut self, components: C) -> Entity
     where
         C: DynamicComponentBundle,
@@ -33,18 +47,24 @@ impl World {
         self.entities.reserve()
     }*/
 
+    /// Destroy the `entity` and all of it's components.
     pub fn despawn(&mut self, entity: Entity) -> Result<(), NoSuchEntity> {
         self.entities.despawn(entity)
     }
 
+    /// Destroy all entities and all of their components.
     pub fn despawn_all(&mut self) {
         self.entities.clear();
     }
 
+    /// Returns `true` if the given entity exists in the `World`.
     pub fn is_alive(&self, entity: Entity) -> bool {
         self.entities.contains(entity)
     }
 
+    /// Adds the `components` to the `entity`. Components can be given as any tuple,
+    /// structs that derive [`ComponentBundle`](trait.ComponentBundle.html),
+    /// or an [`EntityBuilder`](struct.EntityBuilder.html).
     pub fn add_components<C>(&mut self, entity: Entity, components: C) -> Result<(), NoSuchEntity>
     where
         C: DynamicComponentBundle,
@@ -52,6 +72,8 @@ impl World {
         self.entities.insert(entity, components)
     }
 
+    /// Removes components from the `entity`. Components can be specified by any tuple,
+    /// or structs that derive [`ComponentBundle`](trait.ComponentBundle.html).
     pub fn remove_components<C>(&mut self, entity: Entity) -> Result<C, ComponentError>
     where
         C: ComponentBundle,
@@ -59,6 +81,8 @@ impl World {
         self.entities.remove(entity)
     }
 
+    /// Returns a borrow of the `C` component of `entity`.
+    /// Panics if it is already borrowed in an incompatible way.
     pub fn component<C>(&self, entity: Entity) -> Result<ComponentRef<C>, ComponentError>
     where
         C: Component,
@@ -66,6 +90,8 @@ impl World {
         self.entities.get::<C>(entity)
     }
 
+    /// Returns a mutable borrow of the `C` component of `entity`.
+    /// Panics if it is already borrowed in an incompatible way.
     pub fn component_mut<C>(&self, entity: Entity) -> Result<ComponentRefMut<C>, ComponentError>
     where
         C: Component,
@@ -73,6 +99,8 @@ impl World {
         self.entities.get_mut::<C>(entity)
     }
 
+    /// Returns a [`Components`](struct.Components.html) struct that can be used to access
+    /// components of the `entity`. Does not immediately borrow any components.
     pub fn components(&self, entity: Entity) -> Result<Components, NoSuchEntity> {
         self.entities.entity(entity)
     }
