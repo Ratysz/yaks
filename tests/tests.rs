@@ -1,4 +1,4 @@
-use secs::{Executor, System, World};
+use yaks::{Executor, System, World};
 
 struct Res1(usize);
 
