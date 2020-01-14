@@ -4,6 +4,13 @@ version = "0.0.0-alpha1"
 authors = ["Alexander Sepity <alexander.sepity@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/Ratysz/yaks"
+readme = "README.md"
+keywords = ["ecs", "entity", "component"]
+categories = ["data-structures", "game-engines"]
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 #fixedbitset = { version = "0.2.0", default-features = false }
