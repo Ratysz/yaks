@@ -78,7 +78,7 @@
 //! [License]: https://img.shields.io/crates/l/yaks.svg
 //! [license link]: https://github.com/Ratysz/yaks/blob/master/LICENSE.md
 
-#![warn(missing_docs)]
+// TODO uncomment #![warn(missing_docs)]
 
 #[doc(hidden)]
 pub use hecs::{
@@ -91,6 +91,7 @@ pub use resources::{Entry as ResourceEntry, Ref as ResourceRef, RefMut as Resour
 pub use hecs::{Bundle as ComponentBundle, Component, Entity, EntityBuilder, QueryBorrow};
 pub use resources::Resource;
 
+mod borrows;
 pub mod error;
 mod executor;
 mod impls_for_tuple;

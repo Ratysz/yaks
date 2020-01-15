@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased](https://github.com/Ratysz/yaks/compare/0.0.0-aplha1..HEAD)
 ### Added
 - `ComponentBundle` and `EntityBuilder` are now in public API.
+- `macros` feature: enables `hecs/macros`.
+- `parallel` feature: enables `Executor::run_parallel()` (not implemented).
 ### Changed
 - Documentation pass (`error`, partially `World`).
 

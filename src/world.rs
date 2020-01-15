@@ -2,10 +2,10 @@ use hecs::World as Entities;
 use resources::Resources;
 
 use crate::{
+    borrows::ArchetypeSet,
     error::{ComponentError, NoSuchEntity, NoSuchResource, ResourceError},
     mod_queue::{ModQueue, ModQueuePool},
     resource_bundle::{Fetch, ResourceBundle},
-    system::ArchetypeSet,
     Component, ComponentBundle, ComponentRef, ComponentRefMut, Components, DynamicComponentBundle,
     Entity, Query, QueryBorrow, Resource, ResourceEntry, ResourceRef, ResourceRefMut,
 };

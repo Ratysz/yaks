@@ -1,7 +1,8 @@
 use crate::{
+    borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QueryEffector, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
-    system::{ArchetypeSet, SystemBorrows, TupleAppend},
+    system::TupleAppend,
     Query, Resource, World,
 };
 

@@ -1,7 +1,7 @@
 use std::{any::TypeId, marker::PhantomData};
 
 use crate::{
-    system::{ArchetypeSet, SystemBorrows},
+    borrows::{ArchetypeSet, SystemBorrows},
     Component, Query, QueryBorrow, World,
 };
 

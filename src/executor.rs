@@ -1,3 +1,4 @@
+use fixedbitset::FixedBitSet;
 use fxhash::FxHasher64;
 use std::{
     collections::HashMap,
@@ -5,10 +6,9 @@ use std::{
 };
 
 use crate::{
+    borrows::{ArchetypeSet, CondensedBorrows, SystemBorrows, TypeSet},
     error::NoSuchSystem,
-    //system::{ArchetypeSet, SystemBorrows},
-    System,
-    World,
+    System, World,
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -17,20 +17,22 @@ struct SystemIndex(usize);
 struct SystemContainer {
     system: System,
     active: bool,
-    //borrows: SystemBorrows,
-    //archetypes: ArchetypeSet,
+    borrows: SystemBorrows,
+    condensed: CondensedBorrows,
+    archetypes: ArchetypeSet,
 }
 
 impl SystemContainer {
     fn new(system: System) -> Self {
-        /*let mut borrows = SystemBorrows::default();
-        system.write_borrows(&mut borrows);
-        let archetypes = ArchetypeSet::default();*/
+        let mut borrows = SystemBorrows::default();
+        system.inner().write_borrows(&mut borrows);
+        let archetypes = ArchetypeSet::default();
         Self {
             system,
             active: true,
-            //borrows,
-            //archetypes,
+            borrows,
+            condensed: CondensedBorrows::with_capacity(0, 0),
+            archetypes,
         }
     }
 }
@@ -42,6 +44,11 @@ where
     systems: HashMap<SystemIndex, SystemContainer, BuildHasherDefault<FxHasher64>>,
     system_handles: HashMap<H, SystemIndex>,
     free_indices: Vec<SystemIndex>,
+    dirty: bool,
+    all_resources: TypeSet,
+    all_components: TypeSet,
+    current_resources: FixedBitSet,
+    current_components: FixedBitSet,
 }
 
 impl<H> Default for Executor<H>
@@ -53,6 +60,11 @@ where
             systems: Default::default(),
             free_indices: Default::default(),
             system_handles: HashMap::default(),
+            dirty: true,
+            all_resources: Default::default(),
+            all_components: Default::default(),
+            current_resources: Default::default(),
+            current_components: Default::default(),
         }
     }
 }
@@ -73,23 +85,53 @@ where
         }
     }
 
-    pub fn run(&mut self, world: &mut World) {
+    fn add_inner(&mut self, handle: Option<H>, system: System) -> Option<System> {
+        let container = SystemContainer::new(system);
+        let index = match handle {
+            Some(handle) => self
+                .system_handles
+                .get(&handle)
+                .copied()
+                .unwrap_or_else(|| {
+                    let index = self.new_system_index();
+                    self.system_handles.insert(handle, index);
+                    index
+                }),
+            None => self.new_system_index(),
+        };
+        self.dirty = true;
         self.systems
-            .values_mut()
-            .filter(|container| container.active)
-            .for_each(|container| container.system.run(world));
-        world.flush_mod_queues();
+            .insert(index, container)
+            .map(|container| container.system)
     }
 
-    fn add_inner(&mut self, system: System) -> SystemIndex {
-        let container = SystemContainer::new(system);
-        let index = self.new_system_index();
-        self.systems.insert(index, container);
-        index
+    fn maintain(&mut self) {
+        if self.dirty {
+            self.all_resources.clear();
+            self.all_components.clear();
+            for container in self.systems.values() {
+                self.all_resources
+                    .extend(&container.borrows.resources_mutable);
+                self.all_resources
+                    .extend(&container.borrows.resources_immutable);
+                self.all_components
+                    .extend(&container.borrows.components_mutable);
+                self.all_components
+                    .extend(&container.borrows.components_immutable);
+            }
+            for container in self.systems.values_mut() {
+                container.condensed = container
+                    .borrows
+                    .condense(&self.all_resources, &self.all_components);
+            }
+            self.current_resources.grow(self.all_resources.len());
+            self.current_components.grow(self.all_components.len());
+            self.dirty = false;
+        }
     }
 
     pub fn add(&mut self, system: System) {
-        self.add_inner(system);
+        self.add_inner(None, system);
     }
 
     pub fn with(mut self, system: System) -> Self {
@@ -97,24 +139,8 @@ where
         self
     }
 
-    fn add_with_handle_inner(&mut self, handle: H, system: System) -> Option<System> {
-        let container = SystemContainer::new(system);
-        let index = self
-            .system_handles
-            .get(&handle)
-            .copied()
-            .unwrap_or_else(|| {
-                let index = self.new_system_index();
-                self.system_handles.insert(handle, index);
-                index
-            });
-        self.systems
-            .insert(index, container)
-            .map(|container| container.system)
-    }
-
     pub fn add_with_handle(&mut self, handle: H, system: System) -> Option<System> {
-        self.add_with_handle_inner(handle, system)
+        self.add_inner(Some(handle), system)
     }
 
     pub fn with_handle(mut self, handle: H, system: System) -> Self {
@@ -163,5 +189,20 @@ where
             }
             None => Err(NoSuchSystem),
         }
+    }
+
+    pub fn run(&mut self, world: &mut World) {
+        self.maintain();
+        self.systems
+            .values_mut()
+            .filter(|container| container.active)
+            .for_each(|container| container.system.run(world));
+        world.flush_mod_queues();
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn run_parallel(&mut self, world: &mut World) {
+        self.maintain();
+        unimplemented!();
     }
 }

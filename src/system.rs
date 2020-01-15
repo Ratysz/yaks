@@ -1,22 +1,11 @@
-use fxhash::FxHasher64;
-use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
+    borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
     World,
 };
-
-pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
-pub type ArchetypeSet = HashSet<u32, BuildHasherDefault<FxHasher64>>;
-
-#[derive(Default)]
-pub struct SystemBorrows {
-    pub resources_immutable: TypeSet,
-    pub resources_mutable: TypeSet,
-    pub components_immutable: TypeSet,
-    pub components_mutable: TypeSet,
-}
 
 pub(crate) trait SystemTrait {
     fn run(&mut self, world: &World);
@@ -44,9 +33,9 @@ impl System {
         self.inner.run(world);
     }
 
-    /*pub(crate) fn inner(&self) -> &dyn SystemTrait {
+    pub(crate) fn inner(&self) -> &dyn SystemTrait {
         self.inner.as_ref()
-    }*/
+    }
 }
 
 struct SystemBox<Comps, Res, Queries>
