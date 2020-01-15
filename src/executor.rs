@@ -5,6 +5,8 @@ use std::{
     hash::{BuildHasherDefault, Hash},
 };
 
+#[cfg(feature = "parallel")]
+use crate::Threadpool;
 use crate::{
     borrows::{ArchetypeSet, CondensedBorrows, SystemBorrows, TypeSet},
     error::NoSuchSystem,
@@ -14,21 +16,29 @@ use crate::{
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 struct SystemIndex(usize);
 
-struct SystemContainer {
+struct SystemContainer<H>
+where
+    H: Hash + Eq + PartialEq,
+{
     system: System,
+    dependencies: Vec<H>,
     active: bool,
     borrows: SystemBorrows,
     condensed: CondensedBorrows,
     archetypes: ArchetypeSet,
 }
 
-impl SystemContainer {
-    fn new(system: System) -> Self {
+impl<H> SystemContainer<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    fn new(system: System, dependencies: Vec<H>) -> Self {
         let mut borrows = SystemBorrows::default();
         system.inner().write_borrows(&mut borrows);
         let archetypes = ArchetypeSet::default();
         Self {
             system,
+            dependencies,
             active: true,
             borrows,
             condensed: CondensedBorrows::with_capacity(0, 0),
@@ -41,7 +51,7 @@ pub struct Executor<H>
 where
     H: Hash + Eq + PartialEq,
 {
-    systems: HashMap<SystemIndex, SystemContainer, BuildHasherDefault<FxHasher64>>,
+    systems: HashMap<SystemIndex, SystemContainer<H>, BuildHasherDefault<FxHasher64>>,
     system_handles: HashMap<H, SystemIndex>,
     free_indices: Vec<SystemIndex>,
     dirty: bool,
@@ -85,8 +95,13 @@ where
         }
     }
 
-    fn add_inner(&mut self, handle: Option<H>, system: System) -> Option<System> {
-        let container = SystemContainer::new(system);
+    fn add_inner(
+        &mut self,
+        handle: Option<H>,
+        dependencies: Vec<H>,
+        system: System,
+    ) -> Option<System> {
+        let container = SystemContainer::new(system, dependencies);
         let index = match handle {
             Some(handle) => self
                 .system_handles
@@ -130,21 +145,23 @@ where
         }
     }
 
-    pub fn add(&mut self, system: System) {
-        self.add_inner(None, system);
+    pub fn add<A>(&mut self, args: A) -> Option<System>
+    where
+        A: Into<SystemInsertionArguments<H>>,
+    {
+        let SystemInsertionArguments {
+            system,
+            handle,
+            dependencies,
+        } = args.into();
+        self.add_inner(handle, dependencies, system)
     }
 
-    pub fn with(mut self, system: System) -> Self {
-        self.add(system);
-        self
-    }
-
-    pub fn add_with_handle(&mut self, handle: H, system: System) -> Option<System> {
-        self.add_inner(Some(handle), system)
-    }
-
-    pub fn with_handle(mut self, handle: H, system: System) -> Self {
-        self.add_with_handle(handle, system);
+    pub fn with<A>(mut self, args: A) -> Self
+    where
+        A: Into<SystemInsertionArguments<H>>,
+    {
+        self.add(args);
         self
     }
 
@@ -201,8 +218,71 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    pub fn run_parallel(&mut self, world: &mut World) {
+    pub fn run_parallel<P>(&mut self, world: &mut World, threadpool: P)
+    where
+        P: Threadpool,
+    {
         self.maintain();
-        unimplemented!();
+    }
+}
+
+pub struct SystemInsertionArguments<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    handle: Option<H>,
+    dependencies: Vec<H>,
+    system: System,
+}
+
+impl<H> From<System> for SystemInsertionArguments<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    fn from(args: System) -> Self {
+        SystemInsertionArguments {
+            handle: None,
+            dependencies: Vec::default(),
+            system: args,
+        }
+    }
+}
+
+impl<H> From<(H, System)> for SystemInsertionArguments<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    fn from(args: (H, System)) -> Self {
+        SystemInsertionArguments {
+            handle: Some(args.0),
+            dependencies: Vec::default(),
+            system: args.1,
+        }
+    }
+}
+
+impl<H> From<(Vec<H>, System)> for SystemInsertionArguments<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    fn from(args: (Vec<H>, System)) -> Self {
+        SystemInsertionArguments {
+            handle: None,
+            dependencies: args.0,
+            system: args.1,
+        }
+    }
+}
+
+impl<'a, H> From<(H, Vec<H>, System)> for SystemInsertionArguments<H>
+where
+    H: Hash + Eq + PartialEq,
+{
+    fn from(args: (H, Vec<H>, System)) -> Self {
+        SystemInsertionArguments {
+            handle: Some(args.0),
+            dependencies: args.1,
+            system: args.2,
+        }
     }
 }

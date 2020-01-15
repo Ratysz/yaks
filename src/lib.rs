@@ -91,6 +91,9 @@ pub use resources::{Entry as ResourceEntry, Ref as ResourceRef, RefMut as Resour
 pub use hecs::{Bundle as ComponentBundle, Component, Entity, EntityBuilder, QueryBorrow};
 pub use resources::Resource;
 
+#[cfg(feature = "impl_scoped_threadpool")]
+pub use scoped_threadpool;
+
 mod borrows;
 pub mod error;
 mod executor;
@@ -99,9 +102,12 @@ mod mod_queue;
 mod query_bundle;
 mod resource_bundle;
 mod system;
+mod threadpool;
 mod world;
 
 pub use executor::Executor;
 pub use mod_queue::ModQueue;
 pub use system::{System, SystemBuilder};
+#[cfg(feature = "parallel")]
+pub use threadpool::Threadpool;
 pub use world::World;

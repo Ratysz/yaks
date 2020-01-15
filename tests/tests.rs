@@ -127,23 +127,23 @@ fn executor_single_no_handle() {
 #[test]
 fn executor_non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
-    let option = executor.add_with_handle(0, System::builder().build(|_, _, _| {}));
+    let option = executor.add((0, System::builder().build(|_, _, _| {})));
     assert!(option.is_none());
-    let option = executor.add_with_handle(0, System::builder().build(|_, _, _| {}));
+    let option = executor.add((0, System::builder().build(|_, _, _| {})));
     assert!(option.is_some());
 }
 
 #[test]
 fn executor_single() {
     let mut world = setup_world();
-    let mut executor = Executor::<usize>::new().with_handle(
+    let mut executor = Executor::<usize>::new().with((
         0,
         System::builder()
             .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
-    );
+    ));
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
 }
@@ -151,14 +151,14 @@ fn executor_single() {
 #[test]
 fn executor_single_handle() {
     let mut world = setup_world();
-    let mut executor = Executor::<usize>::new().with_handle(
+    let mut executor = Executor::<usize>::new().with((
         0,
         System::builder()
             .resources::<&mut Res1>()
             .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
-    );
+    ));
     executor.run(&mut world);
     assert_eq!(world.fetch::<&Res1>().0, 1);
     assert!(executor.is_active(&0).unwrap());
