@@ -180,6 +180,7 @@ where
     }
 
     pub fn remove(&mut self, handle: &H) -> Option<System> {
+        self.dirty = true;
         self.system_handles
             .remove(handle)
             .and_then(|index| self.systems.remove(&index))
