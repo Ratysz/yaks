@@ -145,6 +145,20 @@ where
         }
     }
 
+    fn get_container(&self, handle: &H) -> Result<&SystemContainer<H>, NoSuchSystem> {
+        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
+        self.systems
+            .get(&index)
+            .ok_or_else(|| panic!("system handles should always map to valid system indices"))
+    }
+
+    fn get_mut_container(&mut self, handle: &H) -> Result<&mut SystemContainer<H>, NoSuchSystem> {
+        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
+        self.systems
+            .get_mut(&index)
+            .ok_or_else(|| panic!("system handles should always map to valid system indices"))
+    }
+
     pub fn add<A>(&mut self, args: A) -> Option<System>
     where
         A: Into<SystemInsertionArguments<H>>,
@@ -177,35 +191,17 @@ where
     }
 
     pub fn get_mut(&mut self, handle: &H) -> Result<&mut System, NoSuchSystem> {
-        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
-        self.systems
-            .get_mut(&index)
+        self.get_mut_container(handle)
             .map(|container| &mut container.system)
-            .ok_or(NoSuchSystem)
     }
 
     pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
-        match self.system_handles.get(handle) {
-            Some(index) => Ok(self
-                .systems
-                .get(index)
-                .expect("system handles should always map to valid system indices")
-                .active),
-            None => Err(NoSuchSystem),
-        }
+        self.get_container(handle).map(|container| container.active)
     }
 
     pub fn set_active(&mut self, handle: &H, active: bool) -> Result<(), NoSuchSystem> {
-        match self.system_handles.get_mut(handle) {
-            Some(index) => {
-                self.systems
-                    .get_mut(index)
-                    .expect("system handles should always map to valid system indices")
-                    .active = active;
-                Ok(())
-            }
-            None => Err(NoSuchSystem),
-        }
+        self.get_mut_container(handle)
+            .map(|container| container.active = active)
     }
 
     pub fn run(&mut self, world: &mut World) {
@@ -223,6 +219,9 @@ where
         P: Threadpool,
     {
         self.maintain();
+        self.current_resources.clear();
+        self.current_components.clear();
+        //for container in self.systems
     }
 }
 
