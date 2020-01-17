@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `resources::Resources`, and `ModQueuePool`.
 - `error` module, errors are now in crate root.
 ### Added
-- `WorldFacade` to be used to refer to state system closures.
+- `WorldFacade`, bundles up state references in system closures.
 - `ModQueuePool::apply_all()`, flushes the changes.
 - `parallel` feature: enables `Executor::run_parallel()` (not implemented), exposes
 `Threadpool` trait, an argument implementing which is required by `run_parallel()`.
