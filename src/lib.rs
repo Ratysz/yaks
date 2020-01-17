@@ -91,7 +91,7 @@ pub use hecs::{Entity, World};
 pub use resources::Resources;
 
 mod borrows;
-pub mod error;
+mod error;
 mod executor;
 mod impls_for_tuple;
 mod mod_queue;
@@ -101,6 +101,7 @@ mod system;
 mod threadpool;
 mod world_facade;
 
+pub use error::NoSuchSystem;
 pub use executor::Executor;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{System, SystemBuilder};

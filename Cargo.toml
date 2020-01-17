@@ -14,7 +14,6 @@ categories = ["data-structures", "game-engines"]
 maintenance = { status = "actively-developed" }
 
 [features]
-macros = ["hecs/macros"]
 parallel = ["crossbeam"]
 impl_scoped_threadpool = ["scoped_threadpool"]
 
