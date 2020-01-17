@@ -1,9 +1,11 @@
+use hecs::{Query, World};
+use resources::{Resource, Resources};
+
 use crate::{
     borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QueryEffector, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
     system::TupleAppend,
-    Query, Resource, World,
 };
 
 macro_rules! impls_for_tuple {
@@ -40,8 +42,8 @@ macro_rules! impls_for_tuple {
                     $(<ResourceEffector<[<M $letter>], [<R $letter>]> as Fetch<'a>>::Refs,)*
                 );
 
-                fn fetch(&self, world: &'a World) -> Self::Refs {
-                    ($(ResourceEffector::<[<M $letter>], [<R $letter>]>::new().fetch(world),)*)
+                fn fetch(&self, resources: &'a Resources) -> Self::Refs {
+                    ($(ResourceEffector::<[<M $letter>], [<R $letter>]>::new().fetch(resources),)*)
                 }
             }
         }
@@ -61,8 +63,8 @@ macro_rules! impls_for_tuple {
                 $($letter::write_borrows(borrows);)*
             }
 
-            fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-                world.write_archetypes::<Self>(archetypes);
+            fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
+                // TODO world.write_archetypes::<Self>(archetypes);
             }
         }
 

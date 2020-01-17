@@ -1,8 +1,8 @@
+use hecs::World;
+use resources::Resources;
 use std::sync::{Arc, Mutex};
 
-use crate::World;
-
-type Closure = Box<dyn FnOnce(&mut World) + Send + Sync + 'static>;
+type Closure = Box<dyn FnOnce(&mut World, &mut Resources) + Send + Sync + 'static>;
 
 type ModQueuePoolArc = Arc<Mutex<Vec<Option<ModQueueInner>>>>;
 
@@ -18,11 +18,15 @@ pub struct ModQueuePool {
 
 impl Default for ModQueuePool {
     fn default() -> Self {
-        ModQueuePool::with_capacity(8)
+        ModQueuePool::with_capacity(4)
     }
 }
 
 impl ModQueuePool {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn with_capacity(capacity: usize) -> Self {
         let queues = std::iter::repeat_with(|| Some(Default::default()))
             .take(capacity)
@@ -56,31 +60,17 @@ impl ModQueuePool {
         }
     }
 
-    pub fn flatten(&mut self) -> Option<ModQueue> {
+    pub fn apply_all(&self, world: &mut World, resources: &mut Resources) {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        let mut iterator = pool
-            .iter_mut()
-            .enumerate()
-            .filter(|(_, option)| option.is_some());
-        iterator.next().map(|(index, inner)| {
-            let inner = inner.take().map(|mut inner| {
-                inner.closures.extend(
-                    iterator
-                        .filter_map(|(_, inner)| {
-                            inner
-                                .as_mut()
-                                .and_then(|inner| if inner.dirty { Some(inner) } else { None })
-                        })
-                        .flat_map(|inner| inner.closures.drain(..)),
-                );
+        pool.iter_mut().for_each(|option| {
+            if let Some(ref mut inner) = option {
                 inner
-            });
-            ModQueue {
-                inner,
-                index,
-                pool: self.pool.clone(),
+                    .closures
+                    .drain(..)
+                    .for_each(|closure| closure(world, resources));
+                inner.dirty = false;
             }
-        })
+        });
     }
 }
 
@@ -110,14 +100,8 @@ impl ModQueue {
 
     pub fn push<F>(&mut self, closure: F)
     where
-        F: FnOnce(&mut World) + Send + Sync + 'static,
+        F: FnOnce(&mut World, &mut Resources) + Send + Sync + 'static,
     {
         self.get_inner_mut(true).push(Box::new(closure))
-    }
-
-    pub(crate) fn apply_all(&mut self, world: &mut World) {
-        self.get_inner_mut(false)
-            .drain(..)
-            .for_each(|closure| closure(world));
     }
 }
