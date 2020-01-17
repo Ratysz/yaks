@@ -38,11 +38,11 @@
 //! let motion = System::builder()
 //!     .query::<(&mut Position, &Velocity)>()
 //!     .query::<(&mut Velocity, &Acceleration)>()
-//!     .build(|world, _, _, _, (q_1, q_2)| {
-//!         for (_, (mut pos, vel)) in q_1.query(world).iter() {
+//!     .build(|facade, _, (q_1, q_2)| {
+//!         for (_, (mut pos, vel)) in facade.query(q_1).iter() {
 //!             pos.0 += vel.0;
 //!         }
-//!         for (_, (mut vel, acc)) in q_2.query(world).iter() {
+//!         for (_, (mut vel, acc)) in facade.query(q_2).iter() {
 //!             vel.0 += acc.0;
 //!         }
 //!     });
@@ -50,8 +50,8 @@
 //! let find_highest = System::builder()
 //!     .resources::<&mut HighestVelocity>()
 //!     .query::<&Velocity>()
-//!     .build(|world, _, _, mut highest, query| {
-//!         for (_, vel) in query.query(world).iter() {
+//!     .build(|facade, mut highest, query| {
+//!         for (_, vel) in facade.query(query).iter() {
 //!             if vel.0 > highest.0 {
 //!                 highest.0 = vel.0;
 //!             }
@@ -99,9 +99,11 @@ mod query_bundle;
 mod resource_bundle;
 mod system;
 mod threadpool;
+mod world_facade;
 
 pub use executor::Executor;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{System, SystemBuilder};
 #[cfg(feature = "parallel")]
 pub use threadpool::Threadpool;
+pub use world_facade::WorldFacade;

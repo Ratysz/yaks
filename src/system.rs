@@ -6,11 +6,11 @@ use crate::{
     borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
-    ModQueuePool,
+    ModQueuePool, WorldFacade,
 };
 
 pub(crate) trait SystemTrait: Send {
-    fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool);
+    fn run(&mut self, facade: WorldFacade);
 
     fn write_borrows(&self, borrows: &mut SystemBorrows);
 
@@ -27,7 +27,8 @@ impl System {
     }
 
     pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
-        self.inner.run(world, resources, mod_queues);
+        self.inner
+            .run(WorldFacade::new(world, resources, mod_queues));
     }
 
     pub(crate) fn inner(&self) -> &dyn SystemTrait {
@@ -43,9 +44,7 @@ where
 {
     phantom_data: PhantomData<(Comps, Res, Queries)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<
-        dyn FnMut(&World, &Resources, &ModQueuePool, Res::Effectors, Queries::Effectors) + Send,
-    >,
+    closure: Box<dyn FnMut(WorldFacade, Res::Effectors, Queries::Effectors) + Send>,
 }
 
 impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
@@ -54,14 +53,8 @@ where
     Res: ResourceBundle,
     Queries: QueryBundle,
 {
-    fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
-        (self.closure)(
-            world,
-            resources,
-            mod_queues,
-            Res::effectors(),
-            Queries::effectors(),
-        );
+    fn run(&mut self, facade: WorldFacade) {
+        (self.closure)(facade, Res::effectors(), Queries::effectors());
     }
 
     fn write_borrows(&self, borrows: &mut SystemBorrows) {
@@ -152,28 +145,14 @@ where
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
         Res::Effectors: Fetch<'a>,
-        F: FnMut(
-                &World,
-                &Resources,
-                &ModQueuePool,
-                <Res::Effectors as Fetch<'a>>::Refs,
-                Queries::Effectors,
-            ) + Send
+        F: FnMut(WorldFacade<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
+            + Send
             + 'static,
     {
         let closure = Box::new(
-            move |world: &World,
-                  resources: &'a Resources,
-                  mod_queues: &ModQueuePool,
-                  resource_effectors: Res::Effectors,
-                  queries| {
-                closure(
-                    world,
-                    resources,
-                    mod_queues,
-                    resource_effectors.fetch(resources),
-                    queries,
-                )
+            move |facade: WorldFacade<'a>, resource_effectors: Res::Effectors, queries| {
+                let fetch = resource_effectors.fetch(&facade.resources);
+                closure(facade, fetch, queries)
             },
         );
         let closure = unsafe {
@@ -185,19 +164,8 @@ where
             // Since HRTBs cause an ICE when used with closures in the way that's needed here
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
-                Box<
-                    dyn FnMut(
-                            &World,
-                            &'a Resources,
-                            &ModQueuePool,
-                            Res::Effectors,
-                            Queries::Effectors,
-                        ) + Send,
-                >,
-                Box<
-                    dyn FnMut(&World, &Resources, &ModQueuePool, Res::Effectors, Queries::Effectors)
-                        + Send,
-                >,
+                Box<dyn FnMut(WorldFacade<'a>, Res::Effectors, Queries::Effectors) + Send>,
+                Box<dyn FnMut(WorldFacade, Res::Effectors, Queries::Effectors) + Send>,
             >(closure)
         };
         let system_box = SystemBox::<Comps, Res, Queries> {

@@ -30,7 +30,7 @@ fn system_invalid_resources() {
     let (world, resources, mod_queues) = setup();
     System::builder()
         .resources::<(&Res1, &mut Res1)>()
-        .build(|_, _, _, _, _| ())
+        .build(|_, _, _| ())
         .run(&world, &resources, &mod_queues);
 }
 
@@ -40,9 +40,9 @@ fn mod_queue_entity_spawn_despawn() {
     type Query<'a> = (&'a Comp1, &'a Comp2, &'a Comp3);
     System::builder()
         .query::<Query>()
-        .build(move |world, _, mod_queues, _, query| {
-            assert_eq!(query.query(world).iter().collect::<Vec<_>>().len(), 2);
-            mod_queues.get().push(|world, _| {
+        .build(|facade, _, query| {
+            assert_eq!(facade.query(query).iter().collect::<Vec<_>>().len(), 2);
+            facade.new_mod_queue().push(|world, _| {
                 world.spawn((Comp1(6), Comp2(3.0), Comp3("NaN")));
             });
         })
@@ -57,9 +57,9 @@ fn mod_queue_entity_spawn_despawn() {
     let entity = entities[0];
     System::builder()
         .query::<Query>()
-        .build(move |world, _, mod_queues, _, query| {
-            assert_eq!(query.query(world).iter().collect::<Vec<_>>().len(), 3);
-            mod_queues.get().push(move |world, _| {
+        .build(move |facade, _, query| {
+            assert_eq!(facade.query(query).iter().collect::<Vec<_>>().len(), 3);
+            facade.new_mod_queue().push(move |world, _| {
                 assert!(world.despawn(entity).is_ok());
             });
         })
@@ -73,8 +73,8 @@ fn mod_queue_resource_add_remove() {
     let (mut world, mut resources, mod_queues) = setup();
     assert!(resources.contains::<Res1>());
     System::builder()
-        .build(|_, _, mod_queues, _, _| {
-            mod_queues.get().push(|_, resources| {
+        .build(|facade, _, _| {
+            facade.new_mod_queue().push(|_, resources| {
                 assert!(resources.remove::<Res1>().is_some());
             });
         })
@@ -82,8 +82,8 @@ fn mod_queue_resource_add_remove() {
     mod_queues.apply_all(&mut world, &mut resources);
     assert!(!resources.contains::<Res1>());
     System::builder()
-        .build(|_, _, mod_queues, _, _| {
-            mod_queues.get().push(|_, resources| {
+        .build(|facade, _, _| {
+            facade.new_mod_queue().push(|_, resources| {
                 resources.insert(Res1(1));
             });
         })
@@ -95,17 +95,16 @@ fn mod_queue_resource_add_remove() {
 #[test]
 fn mod_queue_manual_flushing() {
     let (mut world, mut resources, mod_queues) = setup();
-    let mut system_2 = System::builder().build(|_, _, mod_queues, _, _| {
-        mod_queues
-            .get()
+    let mut system_2 = System::builder().build(|facade, _, _| {
+        facade
+            .new_mod_queue()
             .push(|_, resources| assert!(resources.remove::<Res1>().is_some()));
     });
-    let mut system_1 =
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(|_, _, _, mut resource, _| {
-                resource.0 = 1;
-            });
+    let mut system_1 = System::builder()
+        .resources::<&mut Res1>()
+        .build(|_, mut resource, _| {
+            resource.0 = 1;
+        });
     assert!(resources.contains::<Res1>());
     system_1.run(&world, &resources, &mod_queues);
     system_2.run(&world, &resources, &mod_queues);
@@ -119,7 +118,7 @@ fn executor_single_no_handle() {
     let (world, resources, mod_queues) = setup();
     let mut executor =
         Executor::<()>::new().with(System::builder().resources::<&mut Res1>().build(
-            move |_, _, _, mut resource, _| {
+            move |_, mut resource, _| {
                 resource.0 += 1;
             },
         ));
@@ -130,9 +129,9 @@ fn executor_single_no_handle() {
 #[test]
 fn executor_non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
-    let option = executor.add((0, System::builder().build(|_, _, _, _, _| {})));
+    let option = executor.add((0, System::builder().build(|_, _, _| {})));
     assert!(option.is_none());
-    let option = executor.add((0, System::builder().build(|_, _, _, _, _| {})));
+    let option = executor.add((0, System::builder().build(|_, _, _| {})));
     assert!(option.is_some());
 }
 
@@ -143,7 +142,7 @@ fn executor_single() {
         0,
         System::builder()
             .resources::<&mut Res1>()
-            .build(move |_, _, _, mut resource, _| {
+            .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
     ));
@@ -158,7 +157,7 @@ fn executor_single_handle() {
         0,
         System::builder()
             .resources::<&mut Res1>()
-            .build(move |_, _, _, mut resource, _| {
+            .build(move |_, mut resource, _| {
                 resource.0 += 1;
             }),
     ));

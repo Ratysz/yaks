@@ -36,7 +36,7 @@ impl ModQueuePool {
         }
     }
 
-    pub fn get(&self) -> ModQueue {
+    pub fn new_mod_queue(&self) -> ModQueue {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
         let (index, inner) = pool
             .iter_mut()
