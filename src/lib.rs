@@ -21,7 +21,9 @@
 //!
 //! # Example
 //! ```rust
-//! use yaks::{System, Executor, World, Resources, ModQueuePool};
+//! use hecs::World;
+//! use resources::Resources;
+//! use yaks::{Executor, ModQueuePool, System};
 //!
 //! struct Position(f32);
 //! struct Velocity(f32);

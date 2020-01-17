@@ -1,6 +1,8 @@
 //! Duplication of the crate level documentation example, for ease of editing.
 
-use yaks::{Executor, ModQueuePool, Resources, System, World};
+use hecs::World;
+use resources::Resources;
+use yaks::{Executor, ModQueuePool, System};
 
 struct Position(f32);
 struct Velocity(f32);

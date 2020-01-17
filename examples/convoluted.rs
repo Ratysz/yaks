@@ -1,7 +1,9 @@
 //! An intentionally convoluted (and inefficient) example, simulating a race between
 //! three entities, complete with celebratory confetti.
 
-use yaks::{Entity, Executor, ModQueuePool, Resources, System, World};
+use hecs::{Entity, World};
+use resources::Resources;
+use yaks::{Executor, ModQueuePool, System};
 
 struct Position(f32);
 
