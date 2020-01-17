@@ -1,7 +1,8 @@
-use fixedbitset::FixedBitSet;
+#[cfg(feature = "parallel")]
+use crossbeam::{deque::Injector, sync::Parker};
 use fxhash::FxHasher64;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{BuildHasherDefault, Hash},
 };
 
@@ -54,11 +55,15 @@ where
     systems: HashMap<SystemIndex, SystemContainer<H>, BuildHasherDefault<FxHasher64>>,
     system_handles: HashMap<H, SystemIndex>,
     free_indices: Vec<SystemIndex>,
+
     dirty: bool,
     all_resources: TypeSet,
     all_components: TypeSet,
-    current_resources: FixedBitSet,
-    current_components: FixedBitSet,
+
+    systems_sorted: Vec<SystemIndex>,
+    systems_to_run: Vec<SystemIndex>,
+    current_systems: HashSet<SystemIndex, BuildHasherDefault<FxHasher64>>,
+    finished_systems: HashSet<SystemIndex, BuildHasherDefault<FxHasher64>>,
 }
 
 impl<H> Default for Executor<H>
@@ -68,13 +73,17 @@ where
     fn default() -> Self {
         Self {
             systems: Default::default(),
+            system_handles: Default::default(),
             free_indices: Default::default(),
-            system_handles: HashMap::default(),
+
             dirty: true,
             all_resources: Default::default(),
             all_components: Default::default(),
-            current_resources: Default::default(),
-            current_components: Default::default(),
+
+            systems_sorted: Default::default(),
+            systems_to_run: Default::default(),
+            current_systems: Default::default(),
+            finished_systems: Default::default(),
         }
     }
 }
@@ -139,8 +148,25 @@ where
                     .borrows
                     .condense(&self.all_resources, &self.all_components);
             }
-            self.current_resources.grow(self.all_resources.len());
-            self.current_components.grow(self.all_components.len());
+            let mut sorted = Vec::new();
+            sorted.extend(self.systems.keys());
+            sorted.sort_by(|a, b| {
+                let a_len = self
+                    .systems
+                    .get(a)
+                    .expect("this key should be present at this point")
+                    .dependencies
+                    .len();
+                let b_len = &self
+                    .systems
+                    .get(b)
+                    .expect("this key should be present at this point")
+                    .dependencies
+                    .len();
+                a_len.cmp(b_len)
+            });
+            self.systems_sorted.clear();
+            self.systems_sorted.extend(sorted);
             self.dirty = false;
         }
     }
@@ -215,14 +241,73 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    pub fn run_parallel<P>(&mut self, world: &mut World, threadpool: P)
+    pub fn run_parallel<P>(&mut self, world: &mut World, threadpool: &mut P)
     where
         P: Threadpool,
     {
         self.maintain();
-        self.current_resources.clear();
-        self.current_components.clear();
-        //for container in self.systems
+        self.systems_to_run.clear();
+        self.current_systems.clear();
+        self.finished_systems.clear();
+        for index in &self.systems_sorted {
+            if self
+                .systems
+                .get(index)
+                .expect("this key should be present at this point")
+                .active
+            {
+                self.systems_to_run.push(*index);
+            }
+        }
+        /*while !self.systems_to_run.is_empty() {
+            for i in 0..self.systems_to_run.len() {
+                if self.can_run_now(i) {
+                    let container = &mut self
+                        .systems
+                        .get_mut(&self.systems_to_run[i])
+                        .expect("this key should be present at this point");
+                    let system = &mut container.system;
+                    threadpool.execute(|| system.run(world));
+                }
+            }
+        }*/
+        world.flush_mod_queues();
+    }
+
+    fn can_run_now(&self, system_to_run_index: usize) -> bool {
+        let container = self
+            .systems
+            .get(&self.systems_to_run[system_to_run_index])
+            .expect("this key should be present at this point");
+        for dependency in &container.dependencies {
+            if !self.finished_systems.contains(
+                self.system_handles
+                    .get(dependency)
+                    .expect("system handles should always map to valid system indices"),
+            ) {
+                return false;
+            }
+        }
+        for current in self.current_systems.iter().map(|index| {
+            self.systems
+                .get(index)
+                .expect("this key should be present at this point")
+        }) {
+            if !container
+                .condensed
+                .are_resources_compatible(&current.condensed)
+            {
+                return false;
+            }
+            if !container
+                .condensed
+                .are_components_compatible(&current.condensed)
+            {
+                // TODO archetypes
+                return false;
+            }
+        }
+        true
     }
 }
 

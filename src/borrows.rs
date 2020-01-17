@@ -67,6 +67,7 @@ impl SystemBorrows {
     }
 }
 
+#[derive(Clone)]
 pub struct CondensedBorrows {
     pub resources_immutable: FixedBitSet,
     pub resources_mutable: FixedBitSet,
@@ -75,12 +76,33 @@ pub struct CondensedBorrows {
 }
 
 impl CondensedBorrows {
-    pub fn with_capacity(resoirces: usize, components: usize) -> Self {
+    pub fn with_capacity(resources: usize, components: usize) -> Self {
         Self {
-            resources_immutable: FixedBitSet::with_capacity(resoirces),
-            resources_mutable: FixedBitSet::with_capacity(resoirces),
+            resources_immutable: FixedBitSet::with_capacity(resources),
+            resources_mutable: FixedBitSet::with_capacity(resources),
             components_immutable: FixedBitSet::with_capacity(components),
             components_mutable: FixedBitSet::with_capacity(components),
         }
+    }
+
+    pub fn are_resources_compatible(&self, other: &CondensedBorrows) -> bool {
+        self.resources_mutable.is_disjoint(&other.resources_mutable)
+            && self
+                .resources_mutable
+                .is_disjoint(&other.resources_immutable)
+            && self
+                .resources_immutable
+                .is_disjoint(&other.resources_mutable)
+    }
+
+    pub fn are_components_compatible(&self, other: &CondensedBorrows) -> bool {
+        self.components_mutable
+            .is_disjoint(&other.components_mutable)
+            && self
+                .components_mutable
+                .is_disjoint(&other.components_immutable)
+            && self
+                .components_immutable
+                .is_disjoint(&other.components_mutable)
     }
 }
