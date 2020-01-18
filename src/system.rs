@@ -31,6 +31,7 @@ impl System {
             .run(WorldFacade::new(world, resources, mod_queues));
     }
 
+    #[cfg(feature = "parallel")]
     pub(crate) fn inner(&self) -> &dyn SystemTrait {
         self.inner.as_ref()
     }

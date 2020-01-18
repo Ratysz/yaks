@@ -1,17 +1,36 @@
-pub trait Threadpool {
-    fn execute<'a, F>(&mut self, closure: F)
+pub trait Threadpool<'pool, 'scope, S>
+where
+    S: Scope<'pool, 'scope>,
+{
+    fn scope<F>(&'pool mut self, closure: F)
     where
-        F: FnOnce() + Send + 'a;
+        F: FnOnce(&S);
+}
+
+pub trait Scope<'pool, 'scope> {
+    fn execute<F>(&self, closure: F)
+    where
+        F: FnOnce() + Send + 'scope;
 }
 
 #[cfg(feature = "impl_scoped_threadpool")]
-impl Threadpool for scoped_threadpool::Pool {
-    fn execute<'a, F>(&mut self, closure: F)
+impl<'pool, 'scope> Threadpool<'pool, 'scope, scoped_threadpool::Scope<'pool, 'scope>>
+    for scoped_threadpool::Pool
+{
+    fn scope<F>(&'pool mut self, closure: F)
     where
-        F: FnOnce() + Send + 'a,
+        F: FnOnce(&scoped_threadpool::Scope<'pool, 'scope>),
     {
-        self.scoped(|scope| {
-            scope.execute(closure);
-        });
+        self.scoped(closure);
+    }
+}
+
+#[cfg(feature = "impl_scoped_threadpool")]
+impl<'pool, 'scope> Scope<'pool, 'scope> for scoped_threadpool::Scope<'pool, 'scope> {
+    fn execute<F>(&self, closure: F)
+    where
+        F: FnOnce() + Send + 'scope,
+    {
+        self.execute(closure);
     }
 }

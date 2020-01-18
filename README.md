@@ -4,7 +4,7 @@
 [![Dependencies]][deps.rs]
 [![License]][license link]
 
-`yaks` aims to be a minimalistic, yet featureful and performant systems framework for [`hecs`]
+`yaks` aims to be a minimalistic, yet featureful and performant systems framework for [`hecs`],
 with optional parallel execution. It is built upon [`hecs`] and [`resources`].
 
 The goals are, in no particular order:
