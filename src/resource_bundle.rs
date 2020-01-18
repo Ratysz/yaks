@@ -1,9 +1,10 @@
+use resources::{Ref, RefMut, Resource, Resources};
 use std::{
     any::{type_name, TypeId},
     marker::PhantomData,
 };
 
-use crate::{borrows::SystemBorrows, Resource, ResourceRef, ResourceRefMut, World};
+use crate::borrows::SystemBorrows;
 
 pub struct Immutable;
 
@@ -54,7 +55,7 @@ pub trait ResourceBundle: Send + Sync {
 pub trait Fetch<'a> {
     type Refs;
 
-    fn fetch(&self, world: &'a World) -> Self::Refs;
+    fn fetch(&self, resources: &'a Resources) -> Self::Refs;
 }
 
 impl<R> ResourceSingle for &'_ R
@@ -128,18 +129,18 @@ where
 impl<'a> Fetch<'a> for () {
     type Refs = ();
 
-    fn fetch(&self, _: &'a World) -> Self::Refs {}
+    fn fetch(&self, _: &'a Resources) -> Self::Refs {}
 }
 
 impl<'a, R> Fetch<'a> for ResourceEffector<Immutable, R>
 where
     R: Resource,
 {
-    type Refs = ResourceRef<'a, R>;
+    type Refs = Ref<'a, R>;
 
-    fn fetch(&self, world: &'a World) -> Self::Refs {
-        world
-            .resource()
+    fn fetch(&self, resources: &'a Resources) -> Self::Refs {
+        resources
+            .get()
             .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
     }
 }
@@ -148,11 +149,11 @@ impl<'a, R> Fetch<'a> for ResourceEffector<Mutable, R>
 where
     R: Resource,
 {
-    type Refs = ResourceRefMut<'a, R>;
+    type Refs = RefMut<'a, R>;
 
-    fn fetch(&self, world: &'a World) -> Self::Refs {
-        world
-            .resource_mut()
+    fn fetch(&self, resources: &'a Resources) -> Self::Refs {
+        resources
+            .get_mut()
             .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
     }
 }

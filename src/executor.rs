@@ -1,6 +1,8 @@
 #[cfg(feature = "parallel")]
 use crossbeam::{deque::Injector, sync::Parker};
 use fxhash::FxHasher64;
+use hecs::World;
+use resources::Resources;
 use std::{
     collections::{HashMap, HashSet},
     hash::{BuildHasherDefault, Hash},
@@ -11,7 +13,7 @@ use crate::Threadpool;
 use crate::{
     borrows::{ArchetypeSet, CondensedBorrows, SystemBorrows, TypeSet},
     error::NoSuchSystem,
-    System, World,
+    ModQueuePool, System,
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -231,17 +233,16 @@ where
             .map(|container| container.active = active)
     }
 
-    pub fn run(&mut self, world: &mut World) {
+    pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
         self.maintain();
         self.systems
             .values_mut()
             .filter(|container| container.active)
-            .for_each(|container| container.system.run(world));
-        world.flush_mod_queues();
+            .for_each(|container| container.system.run(world, resources, mod_queues));
     }
 
     #[cfg(feature = "parallel")]
-    pub fn run_parallel<P>(&mut self, world: &mut World, threadpool: &mut P)
+    pub fn run_parallel<P>(&mut self, _world: &mut World, _threadpool: &mut P)
     where
         P: Threadpool,
     {
@@ -271,7 +272,7 @@ where
                 }
             }
         }*/
-        world.flush_mod_queues();
+        //world.flush_mod_queues();
     }
 
     fn can_run_now(&self, system_to_run_index: usize) -> bool {

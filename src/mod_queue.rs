@@ -1,16 +1,10 @@
+use hecs::World;
+use resources::Resources;
 use std::sync::{Arc, Mutex};
 
-use crate::World;
+type Closure = Box<dyn FnOnce(&mut World, &mut Resources) + Send + Sync + 'static>;
 
-type Closure = Box<dyn FnOnce(&mut World) + Send + Sync + 'static>;
-
-type ModQueuePoolArc = Arc<Mutex<Vec<Option<ModQueueInner>>>>;
-
-#[derive(Default)]
-struct ModQueueInner {
-    closures: Vec<Closure>,
-    dirty: bool,
-}
+type ModQueuePoolArc = Arc<Mutex<Vec<Option<Vec<Closure>>>>>;
 
 pub struct ModQueuePool {
     pool: ModQueuePoolArc,
@@ -18,11 +12,15 @@ pub struct ModQueuePool {
 
 impl Default for ModQueuePool {
     fn default() -> Self {
-        ModQueuePool::with_capacity(8)
+        ModQueuePool::with_capacity(4)
     }
 }
 
 impl ModQueuePool {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn with_capacity(capacity: usize) -> Self {
         let queues = std::iter::repeat_with(|| Some(Default::default()))
             .take(capacity)
@@ -32,60 +30,38 @@ impl ModQueuePool {
         }
     }
 
-    pub fn get(&self) -> ModQueue {
+    pub fn new_mod_queue(&self) -> ModQueue {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        let (index, inner) = pool
+        let (index, closures) = pool
             .iter_mut()
             .enumerate()
-            .find(|(_, option)| {
-                if let Some(inner) = option {
-                    !inner.dirty
-                } else {
-                    false
-                }
-            })
+            .find(|(_, option)| option.is_some())
             .map(|(index, option)| (index, option.take()))
             .unwrap_or_else(|| {
                 pool.push(None);
                 (pool.len() - 1, Some(Default::default()))
             });
         ModQueue {
-            inner,
+            closures,
             index,
             pool: self.pool.clone(),
         }
     }
 
-    pub fn flatten(&mut self) -> Option<ModQueue> {
+    pub fn apply_all(&self, world: &mut World, resources: &mut Resources) {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        let mut iterator = pool
-            .iter_mut()
-            .enumerate()
-            .filter(|(_, option)| option.is_some());
-        iterator.next().map(|(index, inner)| {
-            let inner = inner.take().map(|mut inner| {
-                inner.closures.extend(
-                    iterator
-                        .filter_map(|(_, inner)| {
-                            inner
-                                .as_mut()
-                                .and_then(|inner| if inner.dirty { Some(inner) } else { None })
-                        })
-                        .flat_map(|inner| inner.closures.drain(..)),
-                );
-                inner
-            });
-            ModQueue {
-                inner,
-                index,
-                pool: self.pool.clone(),
+        pool.iter_mut().for_each(|option| {
+            if let Some(ref mut closures) = option {
+                closures
+                    .drain(..)
+                    .for_each(|closure| closure(world, resources));
             }
-        })
+        });
     }
 }
 
 pub struct ModQueue {
-    inner: Option<ModQueueInner>,
+    closures: Option<Vec<Closure>>,
     index: usize,
     pool: ModQueuePoolArc,
 }
@@ -93,31 +69,21 @@ pub struct ModQueue {
 impl Drop for ModQueue {
     fn drop(&mut self) {
         let mut pool = self.pool.lock().expect("mutexes should never be poisoned");
-        pool[self.index] = self.inner.take();
+        pool[self.index] = self.closures.take();
     }
 }
 
 impl ModQueue {
-    fn get_inner_mut(&mut self, will_be_dirty: bool) -> &mut Vec<Closure> {
-        self.inner
+    fn closures_mut(&mut self) -> &mut Vec<Closure> {
+        self.closures
             .as_mut()
-            .map(|inner| {
-                inner.dirty = will_be_dirty;
-                &mut inner.closures
-            })
             .expect("modification queue should contain the inner queue at this point")
     }
 
     pub fn push<F>(&mut self, closure: F)
     where
-        F: FnOnce(&mut World) + Send + Sync + 'static,
+        F: FnOnce(&mut World, &mut Resources) + Send + Sync + 'static,
     {
-        self.get_inner_mut(true).push(Box::new(closure))
-    }
-
-    pub(crate) fn apply_all(&mut self, world: &mut World) {
-        self.get_inner_mut(false)
-            .drain(..)
-            .for_each(|closure| closure(world));
+        self.closures_mut().push(Box::new(closure))
     }
 }

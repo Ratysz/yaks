@@ -1,9 +1,7 @@
+use hecs::{Component, Query, QueryBorrow, World};
 use std::{any::TypeId, marker::PhantomData};
 
-use crate::{
-    borrows::{ArchetypeSet, SystemBorrows},
-    Component, Query, QueryBorrow, World,
-};
+use crate::borrows::{ArchetypeSet, SystemBorrows};
 
 pub struct QueryEffector<Q>
 where
@@ -123,8 +121,8 @@ where
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
+        // TODO world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -143,8 +141,8 @@ where
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
+        // TODO world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -163,8 +161,8 @@ where
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
+        // TODO world.write_archetypes::<Self>(archetypes);
     }
 }
 
@@ -183,8 +181,8 @@ where
         Q::write_borrows(borrows);
     }
 
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
+        // TODO world.write_archetypes::<Self>(archetypes);
     }
 }
 

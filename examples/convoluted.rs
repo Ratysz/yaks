@@ -1,7 +1,9 @@
 //! An intentionally convoluted (and inefficient) example, simulating a race between
 //! three entities, complete with celebratory confetti.
 
-use yaks::{Entity, Executor, System, World};
+use hecs::{Entity, World};
+use resources::Resources;
+use yaks::{Executor, ModQueuePool, System};
 
 struct Position(f32);
 
@@ -19,26 +21,28 @@ struct ConfettiTimer(i32);
 
 fn main() {
     let mut world = World::new();
+    let mut resources = Resources::new();
+    let mod_queues = ModQueuePool::new();
     world.spawn((Position(0.0), Velocity(3.0), HasFinished(false)));
     world.spawn((Position(5.0), Velocity(2.0), HasFinished(false)));
     world.spawn((Position(10.0), Velocity(1.0), HasFinished(false)));
-    world.add_resource(Iteration(0));
-    world.add_resource(FinishLine(50.0));
+    resources.insert(Iteration(0));
+    resources.insert(FinishLine(50.0));
 
     let racing = System::builder()
         .resources::<&FinishLine>()
         .query::<(&mut Position, &Velocity)>()
         .query::<(&Position, &mut HasFinished)>()
-        .build(|world, finish_line, (query_1, query_2)| {
-            for (_, (mut position, velocity)) in query_1.query(world).iter() {
+        .build(|facade, finish_line, (query_1, query_2)| {
+            for (_, (mut position, velocity)) in facade.query(query_1).iter() {
                 position.0 += velocity.0;
             }
-            for (entity, (position, mut finished)) in query_2.query(world).iter() {
+            for (entity, (position, mut finished)) in facade.query(query_2).iter() {
                 if position.0 >= finish_line.0 {
                     finished.0 = true;
-                    if !world.contains_resource::<Winner>() {
-                        world.new_mod_queue().push(move |world| {
-                            world.add_resource(Winner(entity));
+                    if !facade.resources.contains::<Winner>() {
+                        facade.new_mod_queue().push(move |_, resources| {
+                            resources.insert(Winner(entity));
                         });
                     }
                 }
@@ -48,16 +52,16 @@ fn main() {
     let leave_track =
         System::builder()
             .query::<&HasFinished>()
-            .build(|world, _, query| {
-                let mut queue = world.new_mod_queue();
-                for entity in query.query(world).iter().filter_map(|(entity, finished)| {
+            .build(|facade, _, query| {
+                let mut queue = facade.new_mod_queue();
+                for entity in facade.query(query).iter().filter_map(|(entity, finished)| {
                     if finished.0 {
                         Some(entity)
                     } else {
                         None
                     }
                 }) {
-                    queue.push(move |world| {
+                    queue.push(move |world, _| {
                         world.despawn(entity).unwrap();
                     });
                 }
@@ -71,9 +75,9 @@ fn main() {
 
     let spawn_confetti = System::builder()
         .query::<&ConfettiTimer>()
-        .build(|world, _, query| {
-            if query.query(world).iter().len() < 20 {
-                world.new_mod_queue().push(|world| {
+        .build(|facade, _, query| {
+            if facade.query(query).iter().len() < 20 {
+                facade.new_mod_queue().push(|world, _| {
                     world.spawn((ConfettiTimer(50),));
                     world.spawn((ConfettiTimer(40),));
                     world.spawn((ConfettiTimer(30),));
@@ -84,12 +88,12 @@ fn main() {
     let confetti_cleanup =
         System::builder()
             .query::<&mut ConfettiTimer>()
-            .build(|world, _, query| {
-                for (_, mut timer) in query.query(world).iter() {
+            .build(|facade, _, query| {
+                for (_, mut timer) in facade.query(query).iter() {
                     timer.0 -= 1;
                 }
-                let decayed_confetti = query
-                    .query(world)
+                let decayed_confetti = facade
+                    .query(query)
                     .iter()
                     .filter_map(
                         |(entity, timer)| {
@@ -101,7 +105,7 @@ fn main() {
                         },
                     )
                     .collect::<Vec<_>>();
-                world.new_mod_queue().push(move |world| {
+                facade.new_mod_queue().push(move |world, _| {
                     for entity in &decayed_confetti {
                         world.despawn(*entity).unwrap();
                     }
@@ -122,25 +126,27 @@ fn main() {
         print!("{:?}|", entity);
     }
     println!();
-    while !world.contains_resource::<Winner>() {
-        let stopwatch = world.fetch::<&Iteration>().0;
+    while !resources.contains::<Winner>() {
+        let stopwatch = resources.get::<Iteration>().unwrap().0;
         print!("  {:2} |", stopwatch);
         for (_, position) in world.query::<&Position>().iter() {
             print!("{:3}|", position.0);
         }
         println!();
-        executor.run(&mut world);
+        executor.run(&world, &resources, &mod_queues);
+        mod_queues.apply_all(&mut world, &mut resources);
     }
 
     println!();
-    println!("The winner is {:?}!", world.resource::<Winner>().unwrap().0);
+    println!("The winner is {:?}!", resources.get::<Winner>().unwrap().0);
 
     executor.set_active(&"confetti", true).unwrap();
     executor.set_active(&"stopwatch", false).unwrap();
     executor.set_active(&"racing", false).unwrap();
 
     for i in 0..60 {
-        executor.run(&mut world);
+        executor.run(&world, &resources, &mod_queues);
+        mod_queues.apply_all(&mut world, &mut resources);
         for (_, timer) in world.query::<&ConfettiTimer>().iter() {
             if timer.0 > 30 {
                 print!("'");
