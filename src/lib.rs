@@ -3,9 +3,9 @@
 //! [![Dependencies]][deps.rs]
 //! [![License]][license link]
 //!
-//! `yaks` aims to be a minimalistic, yet featureful and performant
-//! entity-component-system (ECS) framework. It is built upon [`hecs`] and [`resources`],
-//! and can be described as "parallelizable systems extension for `hecs`".
+//! `yaks` aims to be a minimalistic, yet featureful and performant systems framework for [`hecs`]
+//! with optional parallel execution.
+//! It is built upon [`hecs`] and [`resources`].
 //!
 //! The goals are, in no particular order:
 //! - safety
