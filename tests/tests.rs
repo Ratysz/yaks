@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel")]
+use yaks::ParallelExecutor;
 use yaks::{Executor, ModQueuePool, Resources, System, World};
 
 struct Res1(usize);
@@ -172,4 +174,89 @@ fn executor_single_handle() {
     executor.run(&world, &resources, &mod_queues);
     assert_eq!(resources.get::<Res1>().unwrap().0, 2);
     assert!(executor.is_active(&2).is_err())
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_executor_same_resource_borrows() {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    let (world, resources, mod_queues) = setup();
+    let mut executor = ParallelExecutor::<()>::new();
+    let mut threadpool = scoped_threadpool::Pool::new(4);
+    let time = Instant::now();
+    executor.add(
+        System::builder()
+            .resources::<&mut Res1>()
+            .build(|_, mut res, _| {
+                res.0 += 1;
+                thread::sleep(Duration::from_millis(100));
+            }),
+    );
+    executor.add(
+        System::builder()
+            .resources::<&mut Res1>()
+            .build(|_, mut res, _| {
+                res.0 += 1;
+                thread::sleep(Duration::from_millis(100));
+            }),
+    );
+    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
+    assert!(time.elapsed() > Duration::from_millis(200));
+    assert_eq!(resources.get::<Res1>().unwrap().0, 2);
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_executor_disjoint_resource_borrows() {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    let (world, resources, mod_queues) = setup();
+    let mut executor = ParallelExecutor::<()>::new();
+    let mut threadpool = scoped_threadpool::Pool::new(4);
+    let time = Instant::now();
+    executor.add(
+        System::builder()
+            .resources::<&mut Res1>()
+            .build(|_, mut res, _| {
+                res.0 += 1;
+                thread::sleep(Duration::from_millis(100));
+            }),
+    );
+    executor.add(
+        System::builder()
+            .resources::<&mut Res2>()
+            .build(|_, mut res, _| {
+                res.0 += 1.0;
+                thread::sleep(Duration::from_millis(100));
+            }),
+    );
+    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
+    assert!(time.elapsed() < Duration::from_millis(200));
+    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
+    assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+#[should_panic]
+fn parallel_executor_invalid_resource_borrows() {
+    let (world, resources, mod_queues) = setup();
+    let mut executor = ParallelExecutor::<()>::new();
+    let mut threadpool = scoped_threadpool::Pool::new(4);
+    executor.add(System::builder().build(|facade, _, _| {
+        let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        borrow.0 += 1;
+    }));
+    executor.add(System::builder().build(|facade, _, _| {
+        let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        borrow.0 += 1;
+    }));
+    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
 }

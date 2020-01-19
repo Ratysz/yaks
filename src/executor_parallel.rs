@@ -191,7 +191,7 @@ where
                     .expect("channel should not be disconnected at this point");
                 self.finished_systems.insert(index);
                 self.current_systems.remove(&index);
-                // Process however more systems that have finished.
+                // Process any other systems that have finished.
                 while !self.receiver.is_empty() {
                     let index = self
                         .receiver
