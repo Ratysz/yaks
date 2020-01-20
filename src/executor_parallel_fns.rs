@@ -2,7 +2,7 @@ use hecs::World;
 use resources::Resources;
 use std::hash::Hash;
 
-use crate::{Executor, ModQueuePool, Scope, Threadpool};
+use crate::{Executor, ModQueuePool};
 
 impl<H> Executor<H>
 where
@@ -68,16 +68,14 @@ where
         true
     }
 
-    pub fn run_parallel<'pool, 'scope, P, S>(
-        &'pool mut self,
+    pub fn run_parallel<'scope, S>(
+        &'scope mut self,
         world: &'scope World,
         resources: &'scope Resources,
         mod_queues: &'scope ModQueuePool,
-        threadpool: &'pool mut P,
+        scope: &S,
     ) where
-        'pool: 'scope,
-        P: Threadpool<'pool, 'scope, S>,
-        S: Scope<'pool, 'scope>,
+        S: ThreadpoolScope<'scope>,
     {
         if self.dirty {
             self.maintain();
@@ -96,60 +94,74 @@ where
                 self.systems_to_run.push(*index);
             }
         }
-        threadpool.scope(|threadpool| {
-            while !self.systems_to_run.is_empty() {
-                for i in 0..self.systems_to_run.len() {
-                    if self.can_run_now(i) {
-                        let index = self.systems_to_run[i];
-                        let system = self
-                            .systems
-                            .get_mut(&index)
-                            .expect("this key should be present at this point")
-                            .system
-                            .clone();
-                        let sender = self.sender.clone();
-                        threadpool.execute(move || {
-                            system
-                                .lock()
-                                .expect("mutexes should never be poisoned")
-                                .run(world, resources, mod_queues);
-                            sender
-                                .send(index)
-                                .expect("channel should not be disconnected at this point");
-                        });
-                        self.current_systems.insert(index);
+        while !self.systems_to_run.is_empty() {
+            for i in 0..self.systems_to_run.len() {
+                if self.can_run_now(i) {
+                    let index = self.systems_to_run[i];
+                    let system = self
+                        .systems
+                        .get_mut(&index)
+                        .expect("this key should be present at this point")
+                        .system
+                        .clone();
+                    let sender = self.sender.clone();
+                    scope.execute(move || {
+                        system
+                            .lock()
+                            .expect("mutexes should never be poisoned")
+                            .run(world, resources, mod_queues);
+                        sender
+                            .send(index)
+                            .expect("channel should not be disconnected at this point");
+                    });
+                    self.current_systems.insert(index);
+                }
+            }
+            {
+                // Remove newly running systems from systems-to-run.
+                // TODO replace with `.drain_filter()` once stable
+                //  https://github.com/rust-lang/rust/issues/43244
+                let mut i = 0;
+                while i != self.systems_to_run.len() {
+                    if self.current_systems.contains(&self.systems_to_run[i]) {
+                        self.systems_to_run.remove(i);
+                    } else {
+                        i += 1;
                     }
                 }
-                {
-                    // Remove newly running systems from systems-to-run.
-                    // TODO replace with `.drain_filter()` once stable
-                    //  https://github.com/rust-lang/rust/issues/43244
-                    let mut i = 0;
-                    while i != self.systems_to_run.len() {
-                        if self.current_systems.contains(&self.systems_to_run[i]) {
-                            self.systems_to_run.remove(i);
-                        } else {
-                            i += 1;
-                        }
-                    }
-                }
-                // Wait until at least one system is finished.
+            }
+            // Wait until at least one system is finished.
+            let index = self
+                .receiver
+                .recv()
+                .expect("channel should not be disconnected at this point");
+            self.finished_systems.insert(index);
+            self.current_systems.remove(&index);
+            // Process any other systems that have finished.
+            while !self.receiver.is_empty() {
                 let index = self
                     .receiver
                     .recv()
                     .expect("channel should not be disconnected at this point");
                 self.finished_systems.insert(index);
                 self.current_systems.remove(&index);
-                // Process any other systems that have finished.
-                while !self.receiver.is_empty() {
-                    let index = self
-                        .receiver
-                        .recv()
-                        .expect("channel should not be disconnected at this point");
-                    self.finished_systems.insert(index);
-                    self.current_systems.remove(&index);
-                }
             }
-        });
+        }
+    }
+}
+
+pub trait ThreadpoolScope<'scope> {
+    fn execute<F>(&self, closure: F)
+    where
+        F: FnOnce() + Send + 'scope;
+}
+
+#[cfg(feature = "impl_scoped_threadpool")]
+impl<'pool, 'scope> ThreadpoolScope<'scope> for scoped_threadpool::Scope<'pool, 'scope> {
+    fn execute<F>(&self, closure: F)
+    where
+        F: FnOnce() + Send + 'scope,
+    {
+        self.execute(closure);
     }
 }

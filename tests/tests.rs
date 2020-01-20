@@ -201,7 +201,9 @@ fn parallel_executor_same_resource_borrows() {
         );
     let mut threadpool = scoped_threadpool::Pool::new(4);
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
+    threadpool.scoped(|scope| {
+        executor.run_parallel(&world, &resources, &mod_queues, scope);
+    });
     assert!(time.elapsed() > Duration::from_millis(200));
     assert_eq!(resources.get::<Res1>().unwrap().0, 2);
 }
@@ -233,7 +235,9 @@ fn parallel_executor_disjoint_resource_borrows() {
         );
     let mut threadpool = scoped_threadpool::Pool::new(4);
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
+    threadpool.scoped(|scope| {
+        executor.run_parallel(&world, &resources, &mod_queues, scope);
+    });
     assert!(time.elapsed() < Duration::from_millis(200));
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
     assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
@@ -256,5 +260,7 @@ fn parallel_executor_invalid_resource_borrows() {
             borrow.0 += 1;
         }));
     let mut threadpool = scoped_threadpool::Pool::new(4);
-    executor.run_parallel(&world, &resources, &mod_queues, &mut threadpool);
+    threadpool.scoped(|scope| {
+        executor.run_parallel(&world, &resources, &mod_queues, scope);
+    });
 }
