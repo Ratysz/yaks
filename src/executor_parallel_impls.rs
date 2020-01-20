@@ -28,29 +28,23 @@ where
         }
     }
 
-    pub fn can_run_now(&self, system_to_run_index: usize) -> bool {
-        let system_container = self
-            .systems
-            .get(&self.systems_to_run[system_to_run_index])
-            .expect("this key should be present at this point");
-        for dependency in &system_container.dependencies {
+    fn can_run_now(&self, system_to_run_index: usize) -> bool {
+        let index = self.systems_to_run[system_to_run_index];
+        for dependency in &self.system_container(index).dependencies {
             if !self.finished_systems.contains(
-                self.system_handles
-                    .get(dependency)
-                    .expect("system handles should always map to valid system indices"),
+                &self
+                    .index(dependency)
+                    .unwrap_or_else(|error| panic!("{}", error)),
             ) {
                 return false;
             }
         }
-        let borrows_container = self
-            .borrows
-            .get(&self.systems_to_run[system_to_run_index])
-            .expect("this key should be present at this point");
-        for current_borrows in self.current_systems.iter().map(|index| {
-            self.borrows
-                .get(index)
-                .expect("this key should be present at this point")
-        }) {
+        let borrows_container = self.borrows_container(index);
+        for current_borrows in self
+            .current_systems
+            .iter()
+            .map(|index| self.borrows_container(*index))
+        {
             if !borrows_container
                 .condensed
                 .are_resources_compatible(&current_borrows.condensed)
@@ -85,12 +79,7 @@ where
         self.current_systems.clear();
         self.finished_systems.clear();
         for index in &self.systems_sorted {
-            if self
-                .systems
-                .get(index)
-                .expect("this key should be present at this point")
-                .active
-            {
+            if self.system_container(*index).active {
                 self.systems_to_run.push(*index);
             }
         }
@@ -98,12 +87,7 @@ where
             for i in 0..self.systems_to_run.len() {
                 if self.can_run_now(i) {
                     let index = self.systems_to_run[i];
-                    let system = self
-                        .systems
-                        .get_mut(&index)
-                        .expect("this key should be present at this point")
-                        .system
-                        .clone();
+                    let system = self.system_container_mut(index).system.clone();
                     let sender = self.sender.clone();
                     scope.execute(move || {
                         system

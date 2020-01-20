@@ -18,8 +18,8 @@ impl Display for NoSuchSystem {
 
 impl Error for NoSuchSystem {}
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct CyclicDependency;
+/*#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CyclicDependency;
 
 impl Display for CyclicDependency {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -28,3 +28,4 @@ impl Display for CyclicDependency {
 }
 
 impl Error for CyclicDependency {}
+*/

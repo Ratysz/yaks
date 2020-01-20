@@ -174,6 +174,36 @@ fn executor_single_handle() {
     assert!(executor.is_active(&2).is_err())
 }
 
+#[test]
+#[should_panic]
+fn executor_invalid_dependencies() {
+    let (world, resources, mod_queues) = setup();
+    let mut executor =
+        Executor::<usize>::new().with((0, vec![1], System::builder().build(|_, _, _| {})));
+    executor.run(&world, &resources, &mod_queues);
+}
+
+#[test]
+#[should_panic]
+fn executor_cyclic_dependency_2() {
+    let (world, resources, mod_queues) = setup();
+    let mut executor = Executor::<usize>::new()
+        .with((0, vec![1], System::builder().build(|_, _, _| {})))
+        .with((1, vec![0], System::builder().build(|_, _, _| {})));
+    executor.run(&world, &resources, &mod_queues);
+}
+
+#[test]
+#[should_panic]
+fn executor_cyclic_dependency_3() {
+    let (world, resources, mod_queues) = setup();
+    let mut executor = Executor::<usize>::new()
+        .with((0, vec![1], System::builder().build(|_, _, _| {})))
+        .with((1, vec![2], System::builder().build(|_, _, _| {})))
+        .with((2, vec![0], System::builder().build(|_, _, _| {})));
+    executor.run(&world, &resources, &mod_queues);
+}
+
 #[cfg(feature = "parallel")]
 #[test]
 fn parallel_executor_same_resource_borrows() {
@@ -245,6 +275,36 @@ fn parallel_executor_disjoint_resource_borrows() {
 
 #[cfg(feature = "parallel")]
 #[test]
+fn parallel_executor_hard_dependency() {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    let (world, resources, mod_queues) = setup();
+    let mut executor = Executor::<usize>::new()
+        .with((
+            0,
+            System::builder().build(|_, _, _| {
+                thread::sleep(Duration::from_millis(100));
+            }),
+        ))
+        .with((
+            1,
+            vec![0],
+            System::builder().build(|_, _, _| {
+                thread::sleep(Duration::from_millis(100));
+            }),
+        ));
+    let mut threadpool = scoped_threadpool::Pool::new(4);
+    let time = Instant::now();
+    threadpool.scoped(|scope| {
+        executor.run_parallel(&world, &resources, &mod_queues, scope);
+    });
+    assert!(time.elapsed() > Duration::from_millis(200));
+}
+
+/*#[cfg(feature = "parallel")]
+#[test]
 #[should_panic]
 fn parallel_executor_invalid_resource_borrows() {
     let (world, resources, mod_queues) = setup();
@@ -263,4 +323,4 @@ fn parallel_executor_invalid_resource_borrows() {
     threadpool.scoped(|scope| {
         executor.run_parallel(&world, &resources, &mod_queues, scope);
     });
-}
+}*/

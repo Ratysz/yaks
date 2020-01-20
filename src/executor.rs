@@ -97,18 +97,27 @@ where
         }
     }
 
-    fn get_container(&self, handle: &H) -> Result<&SystemContainer<H>, NoSuchSystem> {
-        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
-        self.systems
-            .get(&index)
-            .ok_or_else(|| panic!("system handles should always map to valid system indices"))
+    pub(crate) fn index(&self, handle: &H) -> Result<SystemIndex, NoSuchSystem> {
+        self.system_handles.get(handle).copied().ok_or(NoSuchSystem)
     }
 
-    fn get_mut_container(&mut self, handle: &H) -> Result<&mut SystemContainer<H>, NoSuchSystem> {
-        let index = self.system_handles.get(handle).ok_or(NoSuchSystem)?;
+    pub(crate) fn system_container(&self, index: SystemIndex) -> &SystemContainer<H> {
+        self.systems
+            .get(&index)
+            .expect("system handles should always map to valid system indices")
+    }
+
+    pub(crate) fn system_container_mut(&mut self, index: SystemIndex) -> &mut SystemContainer<H> {
         self.systems
             .get_mut(&index)
-            .ok_or_else(|| panic!("system handles should always map to valid system indices"))
+            .expect("system handles should always map to valid system indices")
+    }
+
+    #[cfg(feature = "parallel")]
+    pub(crate) fn borrows_container(&self, index: SystemIndex) -> &BorrowsContainer {
+        self.borrows
+            .get(&index)
+            .expect("system handles should always map to valid system indices")
     }
 
     fn add_inner(
@@ -180,40 +189,48 @@ where
         &mut self,
         handle: &H,
     ) -> Result<impl std::ops::DerefMut<Target = System> + '_, NoSuchSystem> {
-        self.get_mut_container(handle)
-            .map(|system_container| system_container.system_mut())
+        Ok(self.system_container_mut(self.index(handle)?).system_mut())
     }
 
     pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
-        self.get_container(handle)
-            .map(|system_container| system_container.active)
+        Ok(self.system_container(self.index(handle)?).active)
     }
 
     pub fn set_active(&mut self, handle: &H, active: bool) -> Result<(), NoSuchSystem> {
-        self.get_mut_container(handle)
-            .map(|system_container| system_container.active = active)
+        self.system_container_mut(self.index(handle)?).active = active;
+        Ok(())
     }
 
     pub(crate) fn maintain(&mut self) {
-        let mut sorted = Vec::new();
-        sorted.extend(self.systems.keys());
-        sorted.sort_by(|a, b| {
-            let a_len = self
-                .systems
-                .get(a)
-                .expect("this key should be present at this point")
-                .dependencies
-                .len();
-            let b_len = &self
-                .systems
-                .get(b)
-                .expect("this key should be present at this point")
-                .dependencies
-                .len();
-            a_len.cmp(b_len)
-        }); // TODO improve
         self.systems_sorted.clear();
-        self.systems_sorted.extend(sorted);
+        while self.systems_sorted.len() != self.systems.len() {
+            let mut cycles = true;
+            for index in self
+                .systems
+                .keys()
+                .filter(|index| !self.systems_sorted.contains(index))
+            {
+                let mut dependencies_satisfied = true;
+                for dependency in &self.system_container(*index).dependencies {
+                    if !self.systems_sorted.contains(
+                        &self
+                            .index(dependency)
+                            .unwrap_or_else(|error| panic!("{}", error)),
+                    ) {
+                        dependencies_satisfied = false;
+                        break;
+                    }
+                }
+                if dependencies_satisfied {
+                    cycles = false;
+                    self.systems_sorted.push(*index);
+                    break;
+                }
+            }
+            if cycles {
+                panic!("systems have cyclic dependencies");
+            }
+        }
         self.dirty = false;
     }
 
