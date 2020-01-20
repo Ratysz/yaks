@@ -95,7 +95,7 @@ mod borrows;
 mod error;
 mod executor;
 #[cfg(feature = "parallel")]
-mod executor_parallel;
+mod executor_parallel_fns;
 mod impls_for_tuple;
 mod mod_queue;
 mod query_bundle;
@@ -107,8 +107,6 @@ mod world_facade;
 
 pub use error::NoSuchSystem;
 pub use executor::Executor;
-#[cfg(feature = "parallel")]
-pub use executor_parallel::ParallelExecutor;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{System, SystemBuilder};
 #[cfg(feature = "parallel")]

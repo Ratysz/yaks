@@ -2,8 +2,6 @@
 use std::sync::{Arc, Mutex};
 use std::{hash::Hash, ops::DerefMut};
 
-#[cfg(feature = "parallel")]
-use crate::borrows::{ArchetypeSet, CondensedBorrows, SystemBorrows};
 use crate::System;
 
 #[cfg(not(feature = "parallel"))]
@@ -29,7 +27,7 @@ where
         }
     }
 
-    pub fn unwrap(self) -> System {
+    pub fn unwrap_system(self) -> System {
         self.system
     }
 
@@ -46,9 +44,6 @@ where
     pub system: Arc<Mutex<System>>,
     pub dependencies: Vec<H>,
     pub active: bool,
-    pub borrows: SystemBorrows,
-    pub condensed: CondensedBorrows,
-    pub archetypes: ArchetypeSet,
 }
 
 #[cfg(feature = "parallel")]
@@ -57,20 +52,14 @@ where
     H: Hash + Eq + PartialEq,
 {
     pub fn new(system: System, dependencies: Vec<H>) -> Self {
-        let mut borrows = SystemBorrows::default();
-        system.inner().write_borrows(&mut borrows);
-        let archetypes = ArchetypeSet::default();
         Self {
             system: Arc::new(Mutex::new(system)),
             dependencies,
             active: true,
-            borrows,
-            condensed: CondensedBorrows::with_capacity(0, 0),
-            archetypes,
         }
     }
 
-    pub fn unwrap(self) -> System {
+    pub fn unwrap_system(self) -> System {
         match Arc::try_unwrap(self.system) {
             Ok(mutex) => mutex
                 .into_inner()

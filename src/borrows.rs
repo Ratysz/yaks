@@ -2,6 +2,8 @@ use fixedbitset::FixedBitSet;
 use fxhash::FxHasher64;
 use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
+use crate::System;
+
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
 
 #[derive(Default)]
@@ -41,7 +43,11 @@ pub struct SystemBorrows {
 }
 
 impl SystemBorrows {
-    pub fn condense(&self, all_resources: &TypeSet, all_components: &TypeSet) -> CondensedBorrows {
+    pub(crate) fn condense(
+        &self,
+        all_resources: &TypeSet,
+        all_components: &TypeSet,
+    ) -> CondensedBorrows {
         let mut condensed =
             CondensedBorrows::with_capacity(all_resources.len(), all_components.len());
         all_resources.iter().enumerate().for_each(|(i, resource)| {
@@ -68,7 +74,7 @@ impl SystemBorrows {
 }
 
 #[derive(Clone)]
-pub struct CondensedBorrows {
+pub(crate) struct CondensedBorrows {
     pub resources_immutable: FixedBitSet,
     pub resources_mutable: FixedBitSet,
     pub components_immutable: FixedBitSet,
@@ -104,5 +110,23 @@ impl CondensedBorrows {
             && self
                 .components_immutable
                 .is_disjoint(&other.components_mutable)
+    }
+}
+
+pub(crate) struct BorrowsContainer {
+    pub borrows: SystemBorrows,
+    pub condensed: CondensedBorrows,
+    pub archetypes: ArchetypeSet,
+}
+
+impl BorrowsContainer {
+    pub fn new(system: &System) -> Self {
+        let mut borrows = SystemBorrows::default();
+        system.inner().write_borrows(&mut borrows);
+        Self {
+            borrows,
+            condensed: CondensedBorrows::with_capacity(0, 0),
+            archetypes: ArchetypeSet::default(),
+        }
     }
 }
