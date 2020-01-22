@@ -1,12 +1,17 @@
-use hecs::{Query, World};
+use hecs::Query;
 use resources::{Resource, Resources};
 
+#[cfg(feature = "parallel")]
+use hecs::World;
+
 use crate::{
-    borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QueryEffector, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
     system::TupleAppend,
 };
+
+#[cfg(feature = "parallel")]
+use crate::borrows::{ArchetypeSet, SystemBorrows};
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
@@ -25,6 +30,7 @@ macro_rules! impls_for_tuple {
                 ($($letter::effector(),)*)
             }
 
+            #[cfg(feature = "parallel")]
             fn write_borrows(borrows: &mut SystemBorrows) {
                 $($letter::write_borrows(borrows);)*
             }
@@ -59,10 +65,12 @@ macro_rules! impls_for_tuple {
                 QueryEffector::new()
             }
 
+            #[cfg(feature = "parallel")]
             fn write_borrows(borrows: &mut SystemBorrows) {
                 $($letter::write_borrows(borrows);)*
             }
 
+            #[cfg(feature = "parallel")]
             fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
                 // TODO world.write_archetypes::<Self>(archetypes);
             }
@@ -78,10 +86,12 @@ macro_rules! impls_for_tuple {
                 ($($letter::effector(),)*)
             }
 
+            #[cfg(feature = "parallel")]
             fn write_borrows(borrows: &mut SystemBorrows) {
                 $($letter::write_borrows(borrows);)*
             }
 
+            #[cfg(feature = "parallel")]
             fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
                 $($letter::write_archetypes(world, archetypes);)*
             }

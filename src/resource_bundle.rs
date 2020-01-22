@@ -1,9 +1,10 @@
 use resources::{Ref, RefMut, Resource, Resources};
-use std::{
-    any::{type_name, TypeId},
-    marker::PhantomData,
-};
+use std::{any::type_name, marker::PhantomData};
 
+#[cfg(feature = "parallel")]
+use std::any::TypeId;
+
+#[cfg(feature = "parallel")]
 use crate::borrows::SystemBorrows;
 
 pub struct Immutable;
@@ -41,6 +42,7 @@ pub trait ResourceSingle: Send + Sync {
 
     fn effector() -> Self::Effector;
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 }
 
@@ -49,6 +51,7 @@ pub trait ResourceBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 }
 
@@ -68,6 +71,7 @@ where
         ResourceEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.resources_immutable.insert(TypeId::of::<R>());
     }
@@ -83,6 +87,7 @@ where
         ResourceEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.resources_mutable.insert(TypeId::of::<R>());
     }
@@ -93,6 +98,7 @@ impl ResourceBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(_: &mut SystemBorrows) {}
 }
 
@@ -106,6 +112,7 @@ where
         R::effector()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         R::write_borrows(borrows)
     }
@@ -121,6 +128,7 @@ where
         R::effector()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         R::write_borrows(borrows)
     }

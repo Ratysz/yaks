@@ -40,9 +40,13 @@ fn executor_single_no_handle() {
 #[test]
 fn executor_non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
-    let option = executor.add((0, System::builder().build(|_, _, _| {})));
+    let option = executor
+        .insert((0, System::builder().build(|_, _, _| {})))
+        .unwrap();
     assert!(option.is_none());
-    let option = executor.add((0, System::builder().build(|_, _, _| {})));
+    let option = executor
+        .insert((0, System::builder().build(|_, _, _| {})))
+        .unwrap();
     assert!(option.is_some());
 }
 

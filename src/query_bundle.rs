@@ -1,6 +1,10 @@
 use hecs::{Component, Query, QueryBorrow, World};
-use std::{any::TypeId, marker::PhantomData};
+use std::marker::PhantomData;
 
+#[cfg(feature = "parallel")]
+use std::any::TypeId;
+
+#[cfg(feature = "parallel")]
 use crate::borrows::{ArchetypeSet, SystemBorrows};
 
 pub struct QueryEffector<Q>
@@ -46,6 +50,7 @@ where
 impl<Q> Copy for QueryEffector<Q> where Q: Query + Send + Sync {}
 
 pub trait QueryUnit: Send + Sync {
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 }
 
@@ -54,8 +59,10 @@ pub trait QuerySingle: Send + Sync {
 
     fn effector() -> Self::Effector;
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
 }
 
@@ -64,8 +71,10 @@ pub trait QueryBundle: Send + Sync {
 
     fn effectors() -> Self::Effectors;
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
 }
 
@@ -73,6 +82,7 @@ impl<C> QueryUnit for &'_ C
 where
     C: Component,
 {
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.components_immutable.insert(TypeId::of::<C>());
     }
@@ -82,6 +92,7 @@ impl<C> QueryUnit for &'_ mut C
 where
     C: Component,
 {
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.components_mutable.insert(TypeId::of::<C>());
     }
@@ -91,6 +102,7 @@ impl<Q> QueryUnit for Option<Q>
 where
     Q: QueryUnit,
 {
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         Q::write_borrows(borrows);
     }
@@ -101,8 +113,10 @@ impl QuerySingle for () {
 
     fn effector() -> Self::Effector {}
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(_: &mut SystemBorrows) {}
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
@@ -117,10 +131,12 @@ where
         QueryEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
         // TODO world.write_archetypes::<Self>(archetypes);
     }
@@ -137,10 +153,12 @@ where
         QueryEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
         // TODO world.write_archetypes::<Self>(archetypes);
     }
@@ -157,10 +175,12 @@ where
         QueryEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         <Self as QueryUnit>::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
         // TODO world.write_archetypes::<Self>(archetypes);
     }
@@ -177,10 +197,12 @@ where
         QueryEffector::new()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         Q::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
         // TODO world.write_archetypes::<Self>(archetypes);
     }
@@ -191,8 +213,10 @@ impl QueryBundle for () {
 
     fn effectors() -> Self::Effectors {}
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(_: &mut SystemBorrows) {}
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
 }
 
@@ -206,10 +230,12 @@ where
         Q::effector()
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         Q::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
         Q::write_archetypes(world, archetypes);
     }

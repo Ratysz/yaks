@@ -91,6 +91,7 @@ pub use scoped_threadpool;
 pub use hecs::{Entity, World};
 pub use resources::Resources;
 
+#[cfg(feature = "parallel")]
 mod borrows;
 mod error;
 mod executor;
@@ -104,7 +105,7 @@ mod system;
 mod system_container;
 mod world_facade;
 
-pub use error::NoSuchSystem;
+pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::Executor;
 #[cfg(feature = "parallel")]
 pub use executor_parallel_impls::ThreadpoolScope;

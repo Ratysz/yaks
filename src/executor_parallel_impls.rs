@@ -1,12 +1,12 @@
 use hecs::World;
 use resources::Resources;
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 use crate::{Executor, ModQueuePool};
 
 impl<H> Executor<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn maintain_parallelization_data(&mut self) {
         self.all_resources.clear();
@@ -72,7 +72,6 @@ where
         S: ThreadpoolScope<'scope>,
     {
         if self.dirty {
-            self.maintain();
             self.maintain_parallelization_data();
         }
         self.systems_to_run.clear();

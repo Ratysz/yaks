@@ -3,10 +3,15 @@ use hecs::World;
 use resources::Resources;
 use std::{
     collections::HashMap,
+    fmt::Debug,
     hash::{BuildHasherDefault, Hash},
 };
 
-use crate::{error::NoSuchSystem, system_container::SystemContainer, ModQueuePool, System};
+use crate::{
+    error::{CantInsertSystem, NoSuchSystem},
+    system_container::SystemContainer,
+    ModQueuePool, System,
+};
 
 #[cfg(feature = "parallel")]
 use crossbeam::channel::{self, Receiver, Sender};
@@ -21,14 +26,15 @@ pub(crate) struct SystemIndex(usize);
 
 pub struct Executor<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     pub(crate) systems: HashMap<SystemIndex, SystemContainer<H>, BuildHasherDefault<FxHasher64>>,
     pub(crate) system_handles: HashMap<H, SystemIndex>,
     pub(crate) free_indices: Vec<SystemIndex>,
     pub(crate) systems_sorted: Vec<SystemIndex>,
-    pub(crate) dirty: bool,
 
+    #[cfg(feature = "parallel")]
+    pub(crate) dirty: bool,
     #[cfg(feature = "parallel")]
     pub(crate) borrows: HashMap<SystemIndex, BorrowsContainer, BuildHasherDefault<FxHasher64>>,
     #[cfg(feature = "parallel")]
@@ -49,7 +55,7 @@ where
 
 impl<H> Default for Executor<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn default() -> Self {
         #[cfg(feature = "parallel")]
@@ -59,8 +65,9 @@ where
             system_handles: Default::default(),
             free_indices: Default::default(),
             systems_sorted: Default::default(),
-            dirty: true,
 
+            #[cfg(feature = "parallel")]
+            dirty: true,
             #[cfg(feature = "parallel")]
             borrows: Default::default(),
             #[cfg(feature = "parallel")]
@@ -83,7 +90,7 @@ where
 
 impl<H> Executor<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     pub fn new() -> Self {
         Default::default()
@@ -120,16 +127,16 @@ where
             .expect("system handles should always map to valid system indices")
     }
 
-    fn add_inner(
+    fn insert_inner(
         &mut self,
         handle: Option<H>,
         dependencies: Vec<H>,
         system: System,
-    ) -> Option<System> {
+    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
         #[cfg(feature = "parallel")]
         let borrows_container = BorrowsContainer::new(&system);
         let system_container = SystemContainer::new(system, dependencies);
-        let index = match handle {
+        let new_index = match handle {
             Some(handle) => self
                 .system_handles
                 .get(&handle)
@@ -141,15 +148,82 @@ where
                 }),
             None => self.new_system_index(),
         };
-        self.dirty = true;
+
+        let has_dependencies = !system_container.dependencies.is_empty();
+
         #[cfg(feature = "parallel")]
-        self.borrows.insert(index, borrows_container);
-        self.systems
-            .insert(index, system_container)
-            .map(|system_container| system_container.unwrap_system())
+        let removed_borrows = self.borrows.insert(new_index, borrows_container);
+        let removed_system = self
+            .systems
+            .insert(new_index, system_container)
+            .map(|system_container| system_container.unwrap_container());
+
+        if has_dependencies {
+            // TODO test thoroughly
+            self.systems_sorted.clear();
+            while self.systems_sorted.len() != self.systems.len() {
+                let mut cycles = true;
+                let mut invalid_dependency = None;
+                for index in self
+                    .systems
+                    .keys()
+                    .filter(|index| !self.systems_sorted.contains(index))
+                {
+                    let mut dependencies_satisfied = true;
+                    for dependency in &self.system_container(*index).dependencies {
+                        match self.index(dependency) {
+                            Ok(dependency_index) => {
+                                if !self.systems_sorted.contains(&dependency_index) {
+                                    dependencies_satisfied = false;
+                                    break;
+                                }
+                            }
+                            Err(_) => {
+                                invalid_dependency = Some(format!("{:?}", dependency));
+                                break;
+                            }
+                        }
+                    }
+                    if invalid_dependency.is_some() {
+                        break;
+                    }
+                    if dependencies_satisfied {
+                        cycles = false;
+                        self.systems_sorted.push(*index);
+                        break;
+                    }
+                }
+                if cycles || invalid_dependency.is_some() {
+                    #[cfg(feature = "parallel")]
+                    {
+                        if let Some(borrows_container) = removed_borrows {
+                            self.borrows.insert(new_index, borrows_container);
+                        }
+                    }
+                    if let Some(system_container) = removed_system {
+                        self.systems.insert(
+                            new_index,
+                            SystemContainer::new(system_container.1, system_container.0),
+                        );
+                    }
+                    if let Some(dependency) = invalid_dependency {
+                        return Err(CantInsertSystem::DependencyNotFound(dependency));
+                    }
+                    return Err(CantInsertSystem::CyclicDependency);
+                }
+            }
+        } else {
+            self.systems_sorted.push(new_index);
+        }
+        #[cfg(feature = "parallel")]
+        {
+            self.dirty = true;
+        }
+
+        Ok(removed_system)
     }
 
-    pub fn add<A>(&mut self, args: A) -> Option<System>
+    pub fn insert<A>(&mut self, args: A) -> Result<Option<(Vec<H>, System)>, CantInsertSystem>
     where
         A: Into<SystemInsertionArguments<H>>,
     {
@@ -158,19 +232,22 @@ where
             handle,
             dependencies,
         } = args.into();
-        self.add_inner(handle, dependencies, system)
+        self.insert_inner(handle, dependencies, system)
     }
 
     pub fn with<A>(mut self, args: A) -> Self
     where
         A: Into<SystemInsertionArguments<H>>,
     {
-        self.add(args);
+        self.insert(args).unwrap();
         self
     }
 
-    pub fn remove(&mut self, handle: &H) -> Option<System> {
-        self.dirty = true;
+    pub fn remove(&mut self, handle: &H) -> Option<(Vec<H>, System)> {
+        #[cfg(feature = "parallel")]
+        {
+            self.dirty = true;
+        }
         self.system_handles
             .remove(handle)
             .and_then(|index| {
@@ -178,7 +255,7 @@ where
                 self.borrows.remove(&index);
                 self.systems.remove(&index)
             })
-            .map(|system_container| system_container.unwrap_system())
+            .map(|system_container| system_container.unwrap_container())
     }
 
     pub fn contains(&mut self, handle: &H) -> bool {
@@ -201,57 +278,24 @@ where
         Ok(())
     }
 
-    pub(crate) fn maintain(&mut self) {
-        self.systems_sorted.clear();
-        while self.systems_sorted.len() != self.systems.len() {
-            let mut cycles = true;
-            for index in self
-                .systems
-                .keys()
-                .filter(|index| !self.systems_sorted.contains(index))
-            {
-                let mut dependencies_satisfied = true;
-                for dependency in &self.system_container(*index).dependencies {
-                    if !self.systems_sorted.contains(
-                        &self
-                            .index(dependency)
-                            .unwrap_or_else(|error| panic!("{}", error)),
-                    ) {
-                        dependencies_satisfied = false;
-                        break;
-                    }
-                }
-                if dependencies_satisfied {
-                    cycles = false;
-                    self.systems_sorted.push(*index);
-                    break;
-                }
-            }
-            if cycles {
-                panic!("systems have cyclic dependencies");
-            }
-        }
-        self.dirty = false;
-    }
-
     pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
-        if self.dirty {
-            self.maintain();
-        }
-        self.systems
-            .values_mut()
-            .filter(|system_container| system_container.active)
-            .for_each(|system_container| {
+        for index in &self.systems_sorted {
+            let system_container = self
+                .systems
+                .get_mut(&index)
+                .expect("system handles should always map to valid system indices");
+            if system_container.active {
                 system_container
                     .system_mut()
                     .run(world, resources, mod_queues)
-            });
+            }
+        }
     }
 }
 
 pub struct SystemInsertionArguments<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     handle: Option<H>,
     dependencies: Vec<H>,
@@ -260,7 +304,7 @@ where
 
 impl<H> From<System> for SystemInsertionArguments<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn from(args: System) -> Self {
         SystemInsertionArguments {
@@ -273,7 +317,7 @@ where
 
 impl<H> From<(H, System)> for SystemInsertionArguments<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn from(args: (H, System)) -> Self {
         SystemInsertionArguments {
@@ -286,7 +330,7 @@ where
 
 impl<H> From<(Vec<H>, System)> for SystemInsertionArguments<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn from(args: (Vec<H>, System)) -> Self {
         SystemInsertionArguments {
@@ -299,7 +343,7 @@ where
 
 impl<'a, H> From<(H, Vec<H>, System)> for SystemInsertionArguments<H>
 where
-    H: Hash + Eq + PartialEq,
+    H: Hash + Eq + PartialEq + Debug,
 {
     fn from(args: (H, Vec<H>, System)) -> Self {
         SystemInsertionArguments {

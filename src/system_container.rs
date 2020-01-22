@@ -27,8 +27,8 @@ where
         }
     }
 
-    pub fn unwrap_system(self) -> System {
-        self.system
+    pub fn unwrap_container(self) -> (Vec<H>, System) {
+        (self.dependencies, self.system)
     }
 
     pub fn system_mut(&mut self) -> impl DerefMut<Target = System> + '_ {
@@ -59,11 +59,14 @@ where
         }
     }
 
-    pub fn unwrap_system(self) -> System {
+    pub fn unwrap_container(self) -> (Vec<H>, System) {
         match Arc::try_unwrap(self.system) {
-            Ok(mutex) => mutex
-                .into_inner()
-                .expect("mutexes should never be poisoned"),
+            Ok(mutex) => (
+                self.dependencies,
+                mutex
+                    .into_inner()
+                    .expect("mutexes should never be poisoned"),
+            ),
             Err(_) => {
                 unreachable!("unwrapping a system container should only happen in a sync scope")
             }

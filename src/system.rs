@@ -3,17 +3,21 @@ use resources::Resources;
 use std::marker::PhantomData;
 
 use crate::{
-    borrows::{ArchetypeSet, SystemBorrows},
     query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
     ModQueuePool, WorldFacade,
 };
 
+#[cfg(feature = "parallel")]
+use crate::borrows::{ArchetypeSet, SystemBorrows};
+
 pub(crate) trait SystemTrait: Send {
     fn run(&mut self, facade: WorldFacade);
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(&self, borrows: &mut SystemBorrows);
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
 }
 
@@ -31,6 +35,7 @@ impl System {
             .run(WorldFacade::new(world, resources, mod_queues));
     }
 
+    #[cfg(feature = "parallel")]
     pub(crate) fn inner(&self) -> &dyn SystemTrait {
         self.inner.as_ref()
     }
@@ -57,12 +62,14 @@ where
         (self.closure)(facade, Res::effectors(), Queries::effectors());
     }
 
+    #[cfg(feature = "parallel")]
     fn write_borrows(&self, borrows: &mut SystemBorrows) {
         Comps::write_borrows(borrows);
         Res::write_borrows(borrows);
         Queries::write_borrows(borrows);
     }
 
+    #[cfg(feature = "parallel")]
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
         Comps::write_archetypes(world, archetypes);
         Queries::write_archetypes(world, archetypes);
