@@ -1,4 +1,4 @@
-use yaks::{Executor, ModQueuePool, Resources, System, World};
+use yaks::{CantInsertSystem, Executor, ModQueuePool, Resources, System, World};
 
 struct Res1(usize);
 
@@ -25,7 +25,7 @@ fn setup() -> (World, Resources, ModQueuePool) {
 }
 
 #[test]
-fn executor_single_no_handle() {
+fn single_no_handle() {
     let (world, resources, mod_queues) = setup();
     let mut executor =
         Executor::<()>::new().with(System::builder().resources::<&mut Res1>().build(
@@ -38,7 +38,7 @@ fn executor_single_no_handle() {
 }
 
 #[test]
-fn executor_non_unique_system_handle() {
+fn non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
     let option = executor
         .insert((0, System::builder().build(|_, _, _| {})))
@@ -51,7 +51,7 @@ fn executor_non_unique_system_handle() {
 }
 
 #[test]
-fn executor_single() {
+fn single() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<usize>::new().with((
         0,
@@ -66,7 +66,7 @@ fn executor_single() {
 }
 
 #[test]
-fn executor_single_handle() {
+fn single_handle() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<usize>::new().with((
         0,
@@ -90,31 +90,59 @@ fn executor_single_handle() {
 }
 
 #[test]
-#[should_panic]
-fn executor_invalid_dependencies() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor =
-        Executor::<usize>::new().with((0, vec![1], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
+fn invalid_dependencies() {
+    let mut executor = Executor::<usize>::new();
+    let result = executor.insert((0, vec![1], System::builder().build(|_, _, _| {})));
+    assert!(result.is_err());
+    if let Err(error) = result {
+        assert_ne!(error, CantInsertSystem::CyclicDependency);
+    }
 }
 
 #[test]
-#[should_panic]
-fn executor_cyclic_dependency_2() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new()
-        .with((0, vec![1], System::builder().build(|_, _, _| {})))
-        .with((1, vec![0], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
+fn cyclic_dependency_1() {
+    let mut executor = Executor::<usize>::new();
+    assert!(executor
+        .insert((0, System::builder().build(|_, _, _| {})))
+        .is_ok());
+    let result = executor.insert((0, vec![0], System::builder().build(|_, _, _| {})));
+    assert!(result.is_err());
+    if let Err(error) = result {
+        assert_eq!(error, CantInsertSystem::CyclicDependency);
+    }
 }
 
 #[test]
-#[should_panic]
-fn executor_cyclic_dependency_3() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new()
-        .with((0, vec![1], System::builder().build(|_, _, _| {})))
-        .with((1, vec![2], System::builder().build(|_, _, _| {})))
-        .with((2, vec![0], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
+fn cyclic_dependency_2() {
+    let mut executor = Executor::<usize>::new();
+    assert!(executor
+        .insert((0, System::builder().build(|_, _, _| {})))
+        .is_ok());
+    assert!(executor
+        .insert((1, vec![0], System::builder().build(|_, _, _| {})))
+        .is_ok());
+    let result = executor.insert((0, vec![1], System::builder().build(|_, _, _| {})));
+    assert!(result.is_err());
+    if let Err(error) = result {
+        assert_eq!(error, CantInsertSystem::CyclicDependency);
+    }
+}
+
+#[test]
+fn cyclic_dependency_3() {
+    let mut executor = Executor::<usize>::new();
+    assert!(executor
+        .insert((0, System::builder().build(|_, _, _| {})))
+        .is_ok());
+    assert!(executor
+        .insert((1, vec![0], System::builder().build(|_, _, _| {})))
+        .is_ok());
+    assert!(executor
+        .insert((2, vec![1], System::builder().build(|_, _, _| {})))
+        .is_ok());
+    let result = executor.insert((0, vec![2], System::builder().build(|_, _, _| {})));
+    assert!(result.is_err());
+    if let Err(error) = result {
+        assert_eq!(error, CantInsertSystem::CyclicDependency);
+    }
 }

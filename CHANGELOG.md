@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation pass (`NoSuchSystem`).
 - `Executor` methods now take an `Into<SystemInsertionArguments>`, implemented on
 `System` and tuples bundling it with either/both a handle and a vector of dependencies.
+- `Executor` now solves system dependencies and sorts systems as they are inserted.
 
 ## [0.0.0-aplha1](https://github.com/Ratysz/yaks/releases/tag/0.0.0-aplha1)  - 2019-1-14
 ### Added
