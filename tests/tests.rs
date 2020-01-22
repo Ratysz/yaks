@@ -1,4 +1,4 @@
-use yaks::{Executor, ModQueuePool, Resources, System, World};
+use yaks::{ModQueuePool, Resources, System, World};
 
 struct Res1(usize);
 
@@ -14,8 +14,8 @@ fn setup() -> (World, Resources, ModQueuePool) {
     let mut world = World::new();
     world.spawn((Comp1(1), Comp2(0.0)));
     world.spawn((Comp1(0), Comp2(1.0)));
-    world.spawn((Comp1(1), Comp2(1.0), Comp3("one")));
-    world.spawn((Comp1(1), Comp2(1.0), Comp3("two")));
+    world.spawn((Comp1(1), Comp2(2.0), Comp3("one")));
+    world.spawn((Comp1(2), Comp2(1.0), Comp3("two")));
     world.spawn((Comp1(1), Comp3("one")));
     world.spawn((Comp2(1.0), Comp3("two")));
     let mut resources = Resources::new();
@@ -32,6 +32,27 @@ fn system_invalid_resources() {
         .resources::<(&Res1, &mut Res1)>()
         .build(|_, _, _| ())
         .run(&world, &resources, &mod_queues);
+}
+
+#[test]
+fn mod_queue_late_flushing() {
+    let (mut world, mut resources, mod_queues) = setup();
+    let mut system_1 = System::builder()
+        .resources::<&mut Res1>()
+        .build(|_, mut resource, _| {
+            resource.0 = 1;
+        });
+    let mut system_2 = System::builder().build(|facade, _, _| {
+        facade
+            .new_mod_queue()
+            .push(|_, resources| assert!(resources.remove::<Res1>().is_some()));
+    });
+    assert!(resources.contains::<Res1>());
+    system_1.run(&world, &resources, &mod_queues);
+    system_2.run(&world, &resources, &mod_queues);
+    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
+    mod_queues.apply_all(&mut world, &mut resources);
+    assert!(!resources.contains::<Res1>());
 }
 
 #[test]
@@ -91,236 +112,3 @@ fn mod_queue_resource_add_remove() {
     mod_queues.apply_all(&mut world, &mut resources);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
 }
-
-#[test]
-fn mod_queue_manual_flushing() {
-    let (mut world, mut resources, mod_queues) = setup();
-    let mut system_2 = System::builder().build(|facade, _, _| {
-        facade
-            .new_mod_queue()
-            .push(|_, resources| assert!(resources.remove::<Res1>().is_some()));
-    });
-    let mut system_1 = System::builder()
-        .resources::<&mut Res1>()
-        .build(|_, mut resource, _| {
-            resource.0 = 1;
-        });
-    assert!(resources.contains::<Res1>());
-    system_1.run(&world, &resources, &mod_queues);
-    system_2.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    mod_queues.apply_all(&mut world, &mut resources);
-    assert!(!resources.contains::<Res1>());
-}
-
-#[test]
-fn executor_single_no_handle() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor =
-        Executor::<()>::new().with(System::builder().resources::<&mut Res1>().build(
-            move |_, mut resource, _| {
-                resource.0 += 1;
-            },
-        ));
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-}
-
-#[test]
-fn executor_non_unique_system_handle() {
-    let mut executor = Executor::<usize>::new();
-    let option = executor.add((0, System::builder().build(|_, _, _| {})));
-    assert!(option.is_none());
-    let option = executor.add((0, System::builder().build(|_, _, _| {})));
-    assert!(option.is_some());
-}
-
-#[test]
-fn executor_single() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new().with((
-        0,
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(move |_, mut resource, _| {
-                resource.0 += 1;
-            }),
-    ));
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-}
-
-#[test]
-fn executor_single_handle() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new().with((
-        0,
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(move |_, mut resource, _| {
-                resource.0 += 1;
-            }),
-    ));
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert!(executor.is_active(&0).unwrap());
-    assert!(executor.set_active(&0, false).is_ok());
-    assert!(!executor.is_active(&0).unwrap());
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert!(executor.set_active(&0, true).is_ok());
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 2);
-    assert!(executor.is_active(&2).is_err())
-}
-
-#[test]
-#[should_panic]
-fn executor_invalid_dependencies() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor =
-        Executor::<usize>::new().with((0, vec![1], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
-}
-
-#[test]
-#[should_panic]
-fn executor_cyclic_dependency_2() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new()
-        .with((0, vec![1], System::builder().build(|_, _, _| {})))
-        .with((1, vec![0], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
-}
-
-#[test]
-#[should_panic]
-fn executor_cyclic_dependency_3() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new()
-        .with((0, vec![1], System::builder().build(|_, _, _| {})))
-        .with((1, vec![2], System::builder().build(|_, _, _| {})))
-        .with((2, vec![0], System::builder().build(|_, _, _| {})));
-    executor.run(&world, &resources, &mod_queues);
-}
-
-#[cfg(feature = "parallel")]
-#[test]
-fn parallel_executor_same_resource_borrows() {
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::new()
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        );
-    let mut threadpool = scoped_threadpool::Pool::new(4);
-    let time = Instant::now();
-    threadpool.scoped(|scope| {
-        executor.run_parallel(&world, &resources, &mod_queues, scope);
-    });
-    assert!(time.elapsed() > Duration::from_millis(200));
-    assert_eq!(resources.get::<Res1>().unwrap().0, 2);
-}
-
-#[cfg(feature = "parallel")]
-#[test]
-fn parallel_executor_disjoint_resource_borrows() {
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::new()
-        .with(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .with(
-            System::builder()
-                .resources::<&mut Res2>()
-                .build(|_, mut res, _| {
-                    res.0 += 1.0;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        );
-    let mut threadpool = scoped_threadpool::Pool::new(4);
-    let time = Instant::now();
-    threadpool.scoped(|scope| {
-        executor.run_parallel(&world, &resources, &mod_queues, scope);
-    });
-    assert!(time.elapsed() < Duration::from_millis(200));
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
-}
-
-#[cfg(feature = "parallel")]
-#[test]
-fn parallel_executor_hard_dependency() {
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new()
-        .with((
-            0,
-            System::builder().build(|_, _, _| {
-                thread::sleep(Duration::from_millis(100));
-            }),
-        ))
-        .with((
-            1,
-            vec![0],
-            System::builder().build(|_, _, _| {
-                thread::sleep(Duration::from_millis(100));
-            }),
-        ));
-    let mut threadpool = scoped_threadpool::Pool::new(4);
-    let time = Instant::now();
-    threadpool.scoped(|scope| {
-        executor.run_parallel(&world, &resources, &mod_queues, scope);
-    });
-    assert!(time.elapsed() > Duration::from_millis(200));
-}
-
-/*#[cfg(feature = "parallel")]
-#[test]
-#[should_panic]
-fn parallel_executor_invalid_resource_borrows() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::new()
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            borrow.0 += 1;
-        }))
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            borrow.0 += 1;
-        }));
-    let mut threadpool = scoped_threadpool::Pool::new(4);
-    threadpool.scoped(|scope| {
-        executor.run_parallel(&world, &resources, &mod_queues, scope);
-    });
-}*/
