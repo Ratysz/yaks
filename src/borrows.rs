@@ -15,7 +15,7 @@ impl ArchetypeSet {
     pub fn insert(&mut self, archetype: u32) {
         assert!(archetype < std::usize::MAX as u32);
         let archetype = archetype as usize;
-        self.bitset.grow(archetype);
+        self.bitset.grow(archetype + 1);
         self.bitset.insert(archetype);
     }
 
@@ -23,7 +23,7 @@ impl ArchetypeSet {
         self.bitset.clear();
     }
 
-    pub fn as_bitset(&self) -> &FixedBitSet {
+    pub(crate) fn as_bitset(&self) -> &FixedBitSet {
         &self.bitset
     }
 }

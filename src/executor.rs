@@ -21,6 +21,8 @@ use std::collections::HashSet;
 #[cfg(feature = "parallel")]
 use crate::borrows::{BorrowsContainer, TypeSet};
 
+pub(crate) const INVALID_INDEX: &str = "system handles should always map to valid system indices";
+
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct SystemIndex(usize);
 
@@ -104,27 +106,8 @@ where
         }
     }
 
-    pub(crate) fn index(&self, handle: &H) -> Result<SystemIndex, NoSuchSystem> {
+    pub(crate) fn resolve_handle(&self, handle: &H) -> Result<SystemIndex, NoSuchSystem> {
         self.system_handles.get(handle).copied().ok_or(NoSuchSystem)
-    }
-
-    pub(crate) fn system_container(&self, index: SystemIndex) -> &SystemContainer<H> {
-        self.systems
-            .get(&index)
-            .expect("system handles should always map to valid system indices")
-    }
-
-    pub(crate) fn system_container_mut(&mut self, index: SystemIndex) -> &mut SystemContainer<H> {
-        self.systems
-            .get_mut(&index)
-            .expect("system handles should always map to valid system indices")
-    }
-
-    #[cfg(feature = "parallel")]
-    pub(crate) fn borrows_container(&self, index: SystemIndex) -> &BorrowsContainer {
-        self.borrows
-            .get(&index)
-            .expect("system handles should always map to valid system indices")
     }
 
     fn insert_inner(
@@ -170,8 +153,8 @@ where
                     .filter(|index| !self.systems_sorted.contains(index))
                 {
                     let mut dependencies_satisfied = true;
-                    for dependency in &self.system_container(*index).dependencies {
-                        match self.index(dependency) {
+                    for dependency in &self.systems.get(index).expect(INVALID_INDEX).dependencies {
+                        match self.resolve_handle(dependency) {
                             Ok(dependency_index) => {
                                 if !self.systems_sorted.contains(&dependency_index) {
                                     dependencies_satisfied = false;
@@ -266,24 +249,32 @@ where
         &mut self,
         handle: &H,
     ) -> Result<impl std::ops::DerefMut<Target = System> + '_, NoSuchSystem> {
-        Ok(self.system_container_mut(self.index(handle)?).system_mut())
+        Ok(self
+            .systems
+            .get_mut(&self.resolve_handle(handle)?)
+            .expect(INVALID_INDEX)
+            .system_mut())
     }
 
     pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
-        Ok(self.system_container(self.index(handle)?).active)
+        Ok(self
+            .systems
+            .get(&self.resolve_handle(handle)?)
+            .expect(INVALID_INDEX)
+            .active)
     }
 
     pub fn set_active(&mut self, handle: &H, active: bool) -> Result<(), NoSuchSystem> {
-        self.system_container_mut(self.index(handle)?).active = active;
+        self.systems
+            .get_mut(&self.resolve_handle(handle)?)
+            .expect(INVALID_INDEX)
+            .active = active;
         Ok(())
     }
 
     pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
         for index in &self.systems_sorted {
-            let system_container = self
-                .systems
-                .get_mut(&index)
-                .expect("system handles should always map to valid system indices");
+            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
             if system_container.active {
                 system_container
                     .system_mut()

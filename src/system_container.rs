@@ -41,7 +41,7 @@ pub(crate) struct SystemContainer<H>
 where
     H: Hash + Eq + PartialEq,
 {
-    pub system: Arc<Mutex<System>>,
+    system: Arc<Mutex<System>>,
     pub dependencies: Vec<H>,
     pub active: bool,
 }
@@ -77,5 +77,9 @@ where
         self.system
             .lock()
             .expect("mutexes should never be poisoned")
+    }
+
+    pub fn clone_arc(&self) -> Arc<Mutex<System>> {
+        self.system.clone()
     }
 }

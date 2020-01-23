@@ -2,7 +2,10 @@ use hecs::World;
 use resources::Resources;
 use std::{fmt::Debug, hash::Hash};
 
-use crate::{Executor, ModQueuePool};
+use crate::{
+    executor::{SystemIndex, INVALID_INDEX},
+    Executor, ModQueuePool,
+};
 
 impl<H> Executor<H>
 where
@@ -28,22 +31,21 @@ where
         }
     }
 
-    fn can_run_now(&self, system_to_run_index: usize) -> bool {
-        let index = self.systems_to_run[system_to_run_index];
-        for dependency in &self.system_container(index).dependencies {
+    fn can_run_now(&self, index: SystemIndex) -> bool {
+        for dependency in &self.systems.get(&index).expect(INVALID_INDEX).dependencies {
             if !self.finished_systems.contains(
                 &self
-                    .index(dependency)
+                    .resolve_handle(dependency)
                     .unwrap_or_else(|error| panic!("{}", error)),
             ) {
                 return false;
             }
         }
-        let borrows_container = self.borrows_container(index);
+        let borrows_container = self.borrows.get(&index).expect(INVALID_INDEX);
         for current_borrows in self
             .current_systems
             .iter()
-            .map(|index| self.borrows_container(*index))
+            .map(|index| self.borrows.get(index).expect(INVALID_INDEX))
         {
             if !borrows_container
                 .condensed
@@ -54,8 +56,11 @@ where
             if !borrows_container
                 .condensed
                 .are_components_compatible(&current_borrows.condensed)
+                && !borrows_container
+                    .archetypes
+                    .as_bitset()
+                    .is_disjoint(&current_borrows.archetypes.as_bitset())
             {
-                // TODO archetypes
                 return false;
             }
         }
@@ -77,16 +82,28 @@ where
         self.systems_to_run.clear();
         self.current_systems.clear();
         self.finished_systems.clear();
-        for index in &self.systems_sorted {
-            if self.system_container(*index).active {
-                self.systems_to_run.push(*index);
+        for i in 0..self.systems_sorted.len() {
+            let index = self.systems_sorted[i];
+            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
+            if system_container.active {
+                let borrows_container = self.borrows.get_mut(&index).expect(INVALID_INDEX);
+                borrows_container.archetypes.clear();
+                system_container
+                    .system_mut()
+                    .inner()
+                    .write_archetypes(world, &mut borrows_container.archetypes);
+                self.systems_to_run.push(index);
             }
         }
         while !self.systems_to_run.is_empty() {
             for i in 0..self.systems_to_run.len() {
-                if self.can_run_now(i) {
-                    let index = self.systems_to_run[i];
-                    let system = self.system_container_mut(index).system.clone();
+                let index = self.systems_to_run[i];
+                if self.can_run_now(index) {
+                    let system = self
+                        .systems
+                        .get_mut(&index)
+                        .expect(INVALID_INDEX)
+                        .clone_arc();
                     let sender = self.sender.clone();
                     scope.execute(move || {
                         system

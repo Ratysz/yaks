@@ -51,21 +51,6 @@ fn non_unique_system_handle() {
 }
 
 #[test]
-fn single() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new().with((
-        0,
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(move |_, mut resource, _| {
-                resource.0 += 1;
-            }),
-    ));
-    executor.run(&world, &resources, &mod_queues);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-}
-
-#[test]
 fn single_handle() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<usize>::new().with((

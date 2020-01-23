@@ -137,8 +137,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
-        // TODO world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        archetypes.extend(world.query_scope::<Self>());
     }
 }
 
@@ -159,8 +159,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
-        // TODO world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        archetypes.extend(world.query_scope::<Self>());
     }
 }
 
@@ -181,8 +181,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
-        // TODO world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        archetypes.extend(world.query_scope::<Self>());
     }
 }
 
@@ -203,8 +203,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_world: &World, _archetypes: &mut ArchetypeSet) {
-        // TODO world.write_archetypes::<Self>(archetypes);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+        archetypes.extend(world.query_scope::<Self>());
     }
 }
 
