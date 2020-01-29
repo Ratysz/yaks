@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::any::TypeId;
 
 #[cfg(feature = "parallel")]
-use crate::borrows::{ArchetypeSet, SystemBorrows};
+use crate::{ArchetypeSet, SystemBorrows};
 
 pub struct QueryEffector<Q>
 where

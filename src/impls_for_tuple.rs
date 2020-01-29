@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "parallel")]
-use crate::borrows::{ArchetypeSet, SystemBorrows};
+use crate::{ArchetypeSet, SystemBorrows};
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {

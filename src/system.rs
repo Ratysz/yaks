@@ -5,24 +5,19 @@ use std::marker::PhantomData;
 use crate::{
     query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
-    ModQueuePool, WorldFacade,
+    ArchetypeSet, ModQueuePool, SystemBorrows, WorldFacade,
 };
 
-#[cfg(feature = "parallel")]
-use crate::borrows::{ArchetypeSet, SystemBorrows};
-
-pub(crate) trait SystemTrait: Send {
+pub trait Runnable: Send {
     fn run(&mut self, facade: WorldFacade);
 
-    #[cfg(feature = "parallel")]
     fn write_borrows(&self, borrows: &mut SystemBorrows);
 
-    #[cfg(feature = "parallel")]
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
 }
 
 pub struct System {
-    inner: Box<dyn SystemTrait>,
+    inner: Box<dyn Runnable>,
 }
 
 impl System {
@@ -31,12 +26,16 @@ impl System {
     }
 
     pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
+        #[cfg(feature = "parallel")]
+        self.inner
+            .run(WorldFacade::new(world, resources, mod_queues, None));
+        #[cfg(not(feature = "parallel"))]
         self.inner
             .run(WorldFacade::new(world, resources, mod_queues));
     }
 
     #[cfg(feature = "parallel")]
-    pub(crate) fn inner(&self) -> &dyn SystemTrait {
+    pub(crate) fn inner(&self) -> &dyn Runnable {
         self.inner.as_ref()
     }
 }
@@ -52,7 +51,7 @@ where
     closure: Box<dyn FnMut(WorldFacade, Res::Effectors, Queries::Effectors) + Send>,
 }
 
-impl<Comps, Res, Queries> SystemTrait for SystemBox<Comps, Res, Queries>
+impl<Comps, Res, Queries> Runnable for SystemBox<Comps, Res, Queries>
 where
     Comps: QueryBundle,
     Res: ResourceBundle,
@@ -74,6 +73,12 @@ where
         Comps::write_archetypes(world, archetypes);
         Queries::write_archetypes(world, archetypes);
     }
+
+    #[cfg(not(feature = "parallel"))]
+    fn write_borrows(&self, _: &mut SystemBorrows) {}
+
+    #[cfg(not(feature = "parallel"))]
+    fn write_archetypes(&self, _: &World, _: &mut ArchetypeSet) {}
 }
 
 pub trait TupleAppend<T> {

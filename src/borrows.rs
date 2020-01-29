@@ -2,6 +2,7 @@ use fixedbitset::FixedBitSet;
 use fxhash::FxHasher64;
 use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
+#[cfg(feature = "parallel")]
 use crate::System;
 
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
@@ -23,6 +24,7 @@ impl ArchetypeSet {
         self.bitset.clear();
     }
 
+    #[cfg(feature = "parallel")]
     pub(crate) fn as_bitset(&self) -> &FixedBitSet {
         &self.bitset
     }
@@ -42,6 +44,7 @@ pub struct SystemBorrows {
     pub components_mutable: TypeSet,
 }
 
+#[cfg(feature = "parallel")]
 impl SystemBorrows {
     pub(crate) fn condense(
         &self,
@@ -73,6 +76,7 @@ impl SystemBorrows {
     }
 }
 
+#[cfg(feature = "parallel")]
 #[derive(Clone)]
 pub(crate) struct CondensedBorrows {
     pub resources_immutable: FixedBitSet,
@@ -81,6 +85,7 @@ pub(crate) struct CondensedBorrows {
     pub components_mutable: FixedBitSet,
 }
 
+#[cfg(feature = "parallel")]
 impl CondensedBorrows {
     pub fn with_capacity(resources: usize, components: usize) -> Self {
         Self {
@@ -113,12 +118,14 @@ impl CondensedBorrows {
     }
 }
 
+#[cfg(feature = "parallel")]
 pub(crate) struct BorrowsContainer {
     pub borrows: SystemBorrows,
     pub condensed: CondensedBorrows,
     pub archetypes: ArchetypeSet,
 }
 
+#[cfg(feature = "parallel")]
 impl BorrowsContainer {
     pub fn new(system: &System) -> Self {
         let mut borrows = SystemBorrows::default();
