@@ -15,10 +15,8 @@ maintenance = { status = "actively-developed" }
 
 [features]
 parallel = ["crossbeam"]
-impl_scoped_threadpool = ["scoped_threadpool"]
 
 [dependencies]
-#fixedbitset = { version = "0.2.0", default-features = false }
 crossbeam = { version = "0.7.3", optional = true }
 fixedbitset = "0.2.0"
 fxhash = "0.2.1"
@@ -27,4 +25,3 @@ hecs = { path = "../hecs" }
 #hecs = "0.2.7"
 paste = "0.1.6"
 resources = "0.2.1"
-scoped_threadpool = { version = "0.1.9", optional = true }

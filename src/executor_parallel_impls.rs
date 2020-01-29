@@ -4,7 +4,8 @@ use std::{fmt::Debug, hash::Hash};
 
 use crate::{
     executor::{SystemIndex, INVALID_INDEX},
-    Executor, ModQueuePool,
+    threadpool::DISCONNECTED,
+    Executor, ModQueuePool, Scope,
 };
 
 impl<H> Executor<H>
@@ -36,7 +37,7 @@ where
             if !self.finished_systems.contains(
                 &self
                     .resolve_handle(dependency)
-                    .unwrap_or_else(|error| panic!("{}", error)),
+                    .expect("all dependencies should have been validated by this point"),
             ) {
                 return false;
             }
@@ -67,15 +68,13 @@ where
         true
     }
 
-    pub fn run_parallel<'scope, S>(
-        &'scope mut self,
+    pub fn run_parallel<'scope>(
+        &mut self,
         world: &'scope World,
         resources: &'scope Resources,
         mod_queues: &'scope ModQueuePool,
-        scope: &S,
-    ) where
-        S: ThreadpoolScope<'scope>,
-    {
+        scope: Scope<'scope>,
+    ) {
         if self.dirty {
             self.maintain_parallelization_data();
         }
@@ -110,9 +109,7 @@ where
                             .lock()
                             .expect("mutexes should never be poisoned")
                             .run(world, resources, mod_queues);
-                        sender
-                            .send(index)
-                            .expect("channel should not be disconnected at this point");
+                        sender.send(index).expect(DISCONNECTED);
                     });
                     self.current_systems.insert(index);
                 }
@@ -131,37 +128,15 @@ where
                 }
             }
             // Wait until at least one system is finished.
-            let index = self
-                .receiver
-                .recv()
-                .expect("channel should not be disconnected at this point");
+            let index = self.receiver.recv().expect(DISCONNECTED);
             self.finished_systems.insert(index);
             self.current_systems.remove(&index);
             // Process any other systems that have finished.
             while !self.receiver.is_empty() {
-                let index = self
-                    .receiver
-                    .recv()
-                    .expect("channel should not be disconnected at this point");
+                let index = self.receiver.recv().expect(DISCONNECTED);
                 self.finished_systems.insert(index);
                 self.current_systems.remove(&index);
             }
         }
-    }
-}
-
-pub trait ThreadpoolScope<'scope> {
-    fn execute<F>(&self, closure: F)
-    where
-        F: FnOnce() + Send + 'scope;
-}
-
-#[cfg(feature = "impl_scoped_threadpool")]
-impl<'pool, 'scope> ThreadpoolScope<'scope> for scoped_threadpool::Scope<'pool, 'scope> {
-    fn execute<F>(&self, closure: F)
-    where
-        F: FnOnce() + Send + 'scope,
-    {
-        self.execute(closure);
     }
 }

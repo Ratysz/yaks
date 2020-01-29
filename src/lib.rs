@@ -103,12 +103,14 @@ mod query_bundle;
 mod resource_bundle;
 mod system;
 mod system_container;
+#[cfg(feature = "parallel")]
+mod threadpool;
 mod world_facade;
 
 pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::Executor;
-#[cfg(feature = "parallel")]
-pub use executor_parallel_impls::ThreadpoolScope;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{System, SystemBuilder};
+#[cfg(feature = "parallel")]
+pub use threadpool::{Scope, Threadpool};
 pub use world_facade::WorldFacade;
