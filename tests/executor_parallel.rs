@@ -49,8 +49,10 @@ fn hard_dependency() {
             }),
         ));
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() > Duration::from_millis(200));
 }
 
@@ -69,7 +71,9 @@ fn valid_resource_borrows() {
             borrow.0 += 1.0;
         }));
     let threadpool = Threadpool::new(4);
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    let scope = threadpool.scope();
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
     assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
 }
@@ -90,7 +94,9 @@ fn invalid_resource_borrows() {
             borrow.0 += 1;
         }));
     let threadpool = Threadpool::new(4);
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    let scope = threadpool.scope();
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
 }
 
 #[test]
@@ -114,8 +120,10 @@ fn same_resource_borrows() {
                 }),
         );
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() > Duration::from_millis(200));
     assert_eq!(resources.get::<Res1>().unwrap().0, 2);
 }
@@ -141,8 +149,10 @@ fn disjoint_resource_borrows() {
                 }),
         );
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() < Duration::from_millis(200));
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
     assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
@@ -175,8 +185,10 @@ fn same_queries() {
                 }),
         );
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() > Duration::from_millis(200));
     for (_, (comp1, comp2)) in world.query::<(&Comp1, &Comp2)>().iter() {
         assert_eq!(comp1.0 as f32, comp2.0);
@@ -211,8 +223,10 @@ fn disjoint_queries() {
                 }),
         );
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() < Duration::from_millis(200));
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");
@@ -239,7 +253,9 @@ fn valid_queries() {
             }
         }));
     let threadpool = Threadpool::new(4);
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    let scope = threadpool.scope();
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");
     }
@@ -265,7 +281,9 @@ fn invalid_queries() {
             }
         }));
     let threadpool = Threadpool::new(4);
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    let scope = threadpool.scope();
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
 }
 
 #[test]
@@ -296,8 +314,10 @@ fn batched() {
                 }),
         );
     let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, threadpool.scope());
+    executor.run_parallel(&world, &resources, &mod_queues, &scope);
+    drop(scope);
     assert!(time.elapsed() < Duration::from_millis(200));
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");

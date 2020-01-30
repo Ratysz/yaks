@@ -12,12 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `resources::Resources`, and `ModQueuePool`.
 - `error` module, errors are now in crate root.
 ### Added
-- `WorldFacade`, bundles up state references in system closures.
+- `SystemContext`, bundles up state references in system closures.
 - `ModQueuePool` is now in public API.
-- `parallel` feature: enables `Executor::run_parallel()`, exposes
-`ThreadpoolScope` trait, an argument implementing which is required by `run_parallel()`.
-- `impl_scoped_threadpool` feature: re-exports `scoped_threadpool` crate and implements
-`ThreadpoolScope` for `scoped_threadpool::Scope`.
+- `parallel` feature: enables `System::run_with_scope()`, `Executor::run_with_scope()`,
+`Executor::run_parallel()`, exposes `Threadpool` and `Scope` - a scoped threadpool
+implementation that can be used with those.
 ### Changed
 - Documentation pass (`NoSuchSystem`).
 - `Executor` methods now take an `Into<SystemInsertionArguments>`, implemented on

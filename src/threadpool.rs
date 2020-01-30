@@ -1,4 +1,5 @@
 use crossbeam::channel::{self, Receiver, Sender};
+use hecs::{Entity, Fetch, Query, QueryBorrow};
 use std::{
     mem,
     sync::atomic::{AtomicU32, Ordering},
@@ -91,6 +92,16 @@ impl<'scope> Scope<'scope> {
 
     pub fn scope(&self) -> Scope {
         self.pool.scope()
+    }
+
+    pub fn batch<F, Q>(&self, mut query_borrow: QueryBorrow<Q>, batch_size: u32, for_each: F)
+    where
+        F: Fn((Entity, <<Q as Query>::Fetch as Fetch>::Item)) + Send + Sync,
+        Q: Query + Send + Sync,
+    {
+        query_borrow.iter_batched(batch_size).for_each(|batch| {
+            self.execute(|| batch.for_each(|item| for_each(item)));
+        });
     }
 }
 

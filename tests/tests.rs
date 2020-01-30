@@ -112,3 +112,28 @@ fn mod_queue_resource_add_remove() {
     mod_queues.apply_all(&mut world, &mut resources);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
 }
+
+#[cfg(feature = "parallel")]
+#[test]
+fn batched() {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    use yaks::Threadpool;
+    let (world, resources, mod_queues) = setup();
+    let mut system = System::builder()
+        .query::<(&Comp1, &Comp2)>()
+        .build(|facade, _, query| {
+            let borrow = facade.query(query);
+            if let Some(scope) = facade.scope() {
+                scope.batch(borrow, 1, |(_, (comp1, comp2))| {
+                    thread::sleep(Duration::from_millis(25));
+                    let _value = comp1.0 as f32 + comp2.0;
+                });
+            }
+        });
+    let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
+    system.run_with_scope(&world, &resources, &mod_queues, &scope);
+}

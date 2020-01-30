@@ -85,8 +85,6 @@
 
 pub use hecs;
 pub use resources;
-#[cfg(feature = "impl_scoped_threadpool")]
-pub use scoped_threadpool;
 
 pub use hecs::{Entity, World};
 pub use resources::Resources;
@@ -102,15 +100,15 @@ mod query_bundle;
 mod resource_bundle;
 mod system;
 mod system_container;
+mod system_context;
 #[cfg(feature = "parallel")]
 mod threadpool;
-mod world_facade;
 
 pub use borrows::{ArchetypeSet, SystemBorrows};
 pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::Executor;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{Runnable, System, SystemBuilder};
+pub use system_context::SystemContext;
 #[cfg(feature = "parallel")]
 pub use threadpool::{Scope, Threadpool};
-pub use world_facade::WorldFacade;

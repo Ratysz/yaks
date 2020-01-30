@@ -73,10 +73,11 @@ where
         world: &'scope World,
         resources: &'scope Resources,
         mod_queues: &'scope ModQueuePool,
-        scope: Scope<'scope>,
+        scope: &Scope<'scope>,
     ) {
         if self.dirty {
             self.maintain_parallelization_data();
+            self.dirty = false;
         }
         self.systems_to_run.clear();
         self.current_systems.clear();
@@ -108,7 +109,7 @@ where
                         system
                             .lock()
                             .expect("mutexes should never be poisoned")
-                            .run(world, resources, mod_queues);
+                            .run_with_scope(world, resources, mod_queues, scope);
                         sender.send(index).expect(DISCONNECTED);
                     });
                     self.current_systems.insert(index);

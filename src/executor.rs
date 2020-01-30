@@ -19,7 +19,10 @@ use crossbeam::channel::{self, Receiver, Sender};
 use std::collections::HashSet;
 
 #[cfg(feature = "parallel")]
-use crate::borrows::{BorrowsContainer, TypeSet};
+use crate::{
+    borrows::{BorrowsContainer, TypeSet},
+    Scope,
+};
 
 pub(crate) const INVALID_INDEX: &str = "system handles should always map to valid system indices";
 
@@ -61,7 +64,7 @@ where
 {
     fn default() -> Self {
         #[cfg(feature = "parallel")]
-        let (sender, receiver) = channel::bounded(1);
+        let (sender, receiver) = channel::unbounded();
         Self {
             systems: Default::default(),
             system_handles: Default::default(),
@@ -279,6 +282,24 @@ where
                 system_container
                     .system_mut()
                     .run(world, resources, mod_queues)
+            }
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn run_with_scope(
+        &mut self,
+        world: &World,
+        resources: &Resources,
+        mod_queues: &ModQueuePool,
+        scope: &Scope,
+    ) {
+        for index in &self.systems_sorted {
+            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
+            if system_container.active {
+                system_container
+                    .system_mut()
+                    .run_with_scope(world, resources, mod_queues, scope)
             }
         }
     }
