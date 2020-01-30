@@ -60,13 +60,13 @@ fn hard_dependency() {
 fn valid_resource_borrows() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<()>::new()
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
             thread::sleep(Duration::from_millis(100));
             borrow.0 += 1;
         }))
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res2>().unwrap();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.resources.get_mut::<Res2>().unwrap();
             thread::sleep(Duration::from_millis(100));
             borrow.0 += 1.0;
         }));
@@ -83,13 +83,13 @@ fn valid_resource_borrows() {
 fn invalid_resource_borrows() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<()>::new()
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
             thread::sleep(Duration::from_millis(100));
             borrow.0 += 1;
         }))
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.resources.get_mut::<Res1>().unwrap();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
             thread::sleep(Duration::from_millis(100));
             borrow.0 += 1;
         }));
@@ -165,8 +165,8 @@ fn same_queries() {
         .with(
             System::builder()
                 .query::<(&Comp1, &Comp2)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
                     for (_, (comp1, comp2)) in borrow.iter() {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32 + comp2.0;
@@ -176,8 +176,8 @@ fn same_queries() {
         .with(
             System::builder()
                 .query::<(&Comp1, &mut Comp2)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
                     for (_, (comp1, mut comp2)) in borrow.iter() {
                         thread::sleep(Duration::from_millis(25));
                         comp2.0 = comp1.0 as f32;
@@ -202,8 +202,8 @@ fn disjoint_queries() {
         .with(
             System::builder()
                 .query::<(&Comp1, &Comp2)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
                     for (_, (comp1, comp2)) in borrow.iter() {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32 + comp2.0;
@@ -213,8 +213,8 @@ fn disjoint_queries() {
         .with(
             System::builder()
                 .query::<(&Comp1, &mut Comp3)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
                     for (_, (comp1, mut comp3)) in borrow.iter() {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32;
@@ -227,7 +227,7 @@ fn disjoint_queries() {
     let time = Instant::now();
     executor.run_parallel(&world, &resources, &mod_queues, &scope);
     drop(scope);
-    assert!(time.elapsed() < Duration::from_millis(200));
+    assert!(time.elapsed() < Duration::from_millis(175));
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");
     }
@@ -237,15 +237,15 @@ fn disjoint_queries() {
 fn valid_queries() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<()>::new()
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.world.query::<(&Comp1, &Comp2)>();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.world.query::<(&Comp1, &Comp2)>();
             for (_, (comp1, comp2)) in borrow.iter() {
                 thread::sleep(Duration::from_millis(25));
                 let _value = comp1.0 as f32 + comp2.0;
             }
         }))
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.world.query::<(&Comp1, &mut Comp3)>();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.world.query::<(&Comp1, &mut Comp3)>();
             for (_, (comp1, mut comp3)) in borrow.iter() {
                 thread::sleep(Duration::from_millis(25));
                 let _value = comp1.0 as f32;
@@ -266,15 +266,15 @@ fn valid_queries() {
 fn invalid_queries() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<()>::new()
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.world.query::<(&Comp1, &Comp2)>();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.world.query::<(&Comp1, &Comp2)>();
             for (_, (comp1, comp2)) in borrow.iter() {
                 thread::sleep(Duration::from_millis(25));
                 let _value = comp1.0 as f32 + comp2.0;
             }
         }))
-        .with(System::builder().build(|facade, _, _| {
-            let mut borrow = facade.world.query::<(&Comp1, &mut Comp2)>();
+        .with(System::builder().build(|context, _, _| {
+            let mut borrow = context.world.query::<(&Comp1, &mut Comp2)>();
             for (_, (comp1, mut comp2)) in borrow.iter() {
                 thread::sleep(Duration::from_millis(25));
                 comp2.0 = comp1.0 as f32;
@@ -293,44 +293,54 @@ fn batched() {
         .with(
             System::builder()
                 .query::<(&Comp1, &Comp2)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
-                    for (_, (comp1, comp2)) in borrow.iter() {
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
+                    context.batch(&mut borrow, 1, |(_, (comp1, comp2))| {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32 + comp2.0;
-                    }
+                    });
                 }),
         )
         .with(
             System::builder()
                 .query::<(&Comp1, &mut Comp3)>()
-                .build(|facade, _, query| {
-                    let mut borrow = facade.query(query);
-                    for (_, (comp1, mut comp3)) in borrow.iter() {
+                .build(|context, _, query| {
+                    let mut borrow = context.query(query);
+                    context.batch(&mut borrow, 1, |(_, (comp1, mut comp3))| {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32;
                         comp3.0 = "test";
-                    }
+                    });
                 }),
         );
-    let threadpool = Threadpool::new(4);
+    let threadpool = Threadpool::new(8);
     let scope = threadpool.scope();
     let time = Instant::now();
     executor.run_parallel(&world, &resources, &mod_queues, &scope);
     drop(scope);
-    assert!(time.elapsed() < Duration::from_millis(200));
+    assert!(time.elapsed() < Duration::from_millis(100));
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");
     }
-}
-
-#[test]
-#[should_panic(expected = "a worker thread has panicked")]
-fn threadpool_subscope_panic() {
-    let threadpool = Threadpool::new(4);
+    System::builder()
+        .query::<(&Comp1, &mut Comp3)>()
+        .build(|context, _, query| {
+            for (_, (_, mut comp3)) in context.query(query).iter() {
+                comp3.0 = "_";
+            }
+        })
+        .run(&world, &resources, &mod_queues);
+    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
+        assert_eq!(comp3.0, "_");
+    }
     let scope = threadpool.scope();
-    let subscope = scope.scope();
-    scope.execute(move || {
-        subscope.execute(|| panic!());
-    });
+    let time = Instant::now();
+    executor.run_with_scope(&world, &resources, &mod_queues, &scope);
+    drop(scope);
+    let elapsed = time.elapsed();
+    assert!(elapsed > Duration::from_millis(50));
+    assert!(elapsed < Duration::from_millis(175));
+    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
+        assert_eq!(comp3.0, "test");
+    }
 }

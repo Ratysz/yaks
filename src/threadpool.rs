@@ -85,7 +85,10 @@ impl<'scope> Scope<'scope> {
             closure();
         };
         let message = Message::Task(Box::new(closure));
-        let message = unsafe { mem::transmute(message) };
+        let message = unsafe {
+            // Scope's Drop implementation ensures that the task does not outlive 'scope.
+            mem::transmute(message)
+        };
         self.pool.sender.send(message).expect(DISCONNECTED);
         self.tasks.fetch_add(1, Ordering::SeqCst);
     }
@@ -94,10 +97,14 @@ impl<'scope> Scope<'scope> {
         self.pool.scope()
     }
 
-    pub fn batch<F, Q>(&self, mut query_borrow: QueryBorrow<Q>, batch_size: u32, for_each: F)
-    where
-        F: Fn((Entity, <<Q as Query>::Fetch as Fetch>::Item)) + Send + Sync,
-        Q: Query + Send + Sync,
+    pub fn batch<'q, 'w, F, Q>(
+        &self,
+        query_borrow: &'q mut QueryBorrow<'w, Q>,
+        batch_size: u32,
+        for_each: F,
+    ) where
+        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        Q: Query + Send + Sync + 'q,
     {
         query_borrow.iter_batched(batch_size).for_each(|batch| {
             self.execute(|| batch.for_each(|item| for_each(item)));

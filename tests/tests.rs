@@ -42,8 +42,8 @@ fn mod_queue_late_flushing() {
         .build(|_, mut resource, _| {
             resource.0 = 1;
         });
-    let mut system_2 = System::builder().build(|facade, _, _| {
-        facade
+    let mut system_2 = System::builder().build(|context, _, _| {
+        context
             .new_mod_queue()
             .push(|_, resources| assert!(resources.remove::<Res1>().is_some()));
     });
@@ -61,9 +61,9 @@ fn mod_queue_entity_spawn_despawn() {
     type Query<'a> = (&'a Comp1, &'a Comp2, &'a Comp3);
     System::builder()
         .query::<Query>()
-        .build(|facade, _, query| {
-            assert_eq!(facade.query(query).iter().collect::<Vec<_>>().len(), 2);
-            facade.new_mod_queue().push(|world, _| {
+        .build(|context, _, query| {
+            assert_eq!(context.query(query).iter().collect::<Vec<_>>().len(), 2);
+            context.new_mod_queue().push(|world, _| {
                 world.spawn((Comp1(6), Comp2(3.0), Comp3("NaN")));
             });
         })
@@ -78,9 +78,9 @@ fn mod_queue_entity_spawn_despawn() {
     let entity = entities[0];
     System::builder()
         .query::<Query>()
-        .build(move |facade, _, query| {
-            assert_eq!(facade.query(query).iter().collect::<Vec<_>>().len(), 3);
-            facade.new_mod_queue().push(move |world, _| {
+        .build(move |context, _, query| {
+            assert_eq!(context.query(query).iter().collect::<Vec<_>>().len(), 3);
+            context.new_mod_queue().push(move |world, _| {
                 assert!(world.despawn(entity).is_ok());
             });
         })
@@ -94,8 +94,8 @@ fn mod_queue_resource_add_remove() {
     let (mut world, mut resources, mod_queues) = setup();
     assert!(resources.contains::<Res1>());
     System::builder()
-        .build(|facade, _, _| {
-            facade.new_mod_queue().push(|_, resources| {
+        .build(|context, _, _| {
+            context.new_mod_queue().push(|_, resources| {
                 assert!(resources.remove::<Res1>().is_some());
             });
         })
@@ -103,8 +103,8 @@ fn mod_queue_resource_add_remove() {
     mod_queues.apply_all(&mut world, &mut resources);
     assert!(!resources.contains::<Res1>());
     System::builder()
-        .build(|facade, _, _| {
-            facade.new_mod_queue().push(|_, resources| {
+        .build(|context, _, _| {
+            context.new_mod_queue().push(|_, resources| {
                 resources.insert(Res1(1));
             });
         })
@@ -115,25 +115,84 @@ fn mod_queue_resource_add_remove() {
 
 #[cfg(feature = "parallel")]
 #[test]
-fn batched() {
+#[should_panic(expected = "a worker thread has panicked")]
+fn threadpool_subscope_panic() {
+    let threadpool = yaks::Threadpool::new(4);
+    let scope = threadpool.scope();
+    let subscope = scope.scope();
+    scope.execute(move || {
+        subscope.execute(|| panic!());
+    });
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn batch() {
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
+    use yaks::Threadpool;
+    let (world, _, _) = setup();
+    let threadpool = Threadpool::new(4);
+    let scope = threadpool.scope();
+    let time = Instant::now();
+    scope.batch(
+        &mut world.query::<(&Comp1, &mut Comp3)>(),
+        1,
+        |(_, (comp1, mut comp3))| {
+            thread::sleep(Duration::from_millis(25));
+            let _value = comp1.0 as f32;
+            comp3.0 = "test";
+        },
+    );
+    drop(scope);
+    assert!(time.elapsed() < Duration::from_millis(100));
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn batch_system() {
     use std::{
         thread,
         time::{Duration, Instant},
     };
     use yaks::Threadpool;
     let (world, resources, mod_queues) = setup();
-    let mut system = System::builder()
-        .query::<(&Comp1, &Comp2)>()
-        .build(|facade, _, query| {
-            let borrow = facade.query(query);
-            if let Some(scope) = facade.scope() {
-                scope.batch(borrow, 1, |(_, (comp1, comp2))| {
+    let mut system =
+        System::builder()
+            .query::<(&Comp1, &mut Comp3)>()
+            .build(|context, _, query| {
+                context.batch(&mut context.query(query), 1, |(_, (comp1, mut comp3))| {
                     thread::sleep(Duration::from_millis(25));
-                    let _value = comp1.0 as f32 + comp2.0;
+                    let _value = comp1.0 as f32;
+                    comp3.0 = "test";
                 });
-            }
-        });
+            });
     let threadpool = Threadpool::new(4);
     let scope = threadpool.scope();
+    let time = Instant::now();
     system.run_with_scope(&world, &resources, &mod_queues, &scope);
+    drop(scope);
+    assert!(time.elapsed() < Duration::from_millis(75));
+    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
+        assert_eq!(comp3.0, "test");
+    }
+    System::builder()
+        .query::<(&Comp1, &mut Comp3)>()
+        .build(|context, _, query| {
+            for (_, (_, mut comp3)) in context.query(query).iter() {
+                comp3.0 = "_";
+            }
+        })
+        .run(&world, &resources, &mod_queues);
+    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
+        assert_eq!(comp3.0, "_");
+    }
+    let time = Instant::now();
+    system.run(&world, &resources, &mod_queues);
+    assert!(time.elapsed() > Duration::from_millis(75));
+    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
+        assert_eq!(comp3.0, "test");
+    }
 }

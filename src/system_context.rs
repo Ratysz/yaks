@@ -1,4 +1,4 @@
-use hecs::{Query, QueryBorrow, World};
+use hecs::{Entity, Fetch, Query, QueryBorrow, World};
 use resources::Resources;
 
 use crate::{query_bundle::QueryEffector, ModQueue, ModQueuePool};
@@ -44,5 +44,31 @@ impl<'scope> SystemContext<'scope> {
     #[cfg(feature = "parallel")]
     pub fn scope(&self) -> Option<Scope> {
         self.scope.map(|scope| scope.scope())
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn batch<'q, 'w, F, Q>(
+        &self,
+        query_borrow: &'q mut QueryBorrow<'w, Q>,
+        batch_size: u32,
+        closure: F,
+    ) where
+        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        Q: Query + Send + Sync + 'q,
+    {
+        if let Some(scope) = self.scope() {
+            scope.batch(query_borrow, batch_size, closure);
+        } else {
+            query_borrow.iter().for_each(|item| closure(item));
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn batch<'q, 'w, F, Q>(&self, query_borrow: &'q mut QueryBorrow<'w, Q>, _: u32, closure: F)
+    where
+        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        Q: Query + Send + Sync + 'q,
+    {
+        query_borrow.iter().for_each(|item| closure(item));
     }
 }
