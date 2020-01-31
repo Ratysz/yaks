@@ -40,7 +40,10 @@ fn main() {
             }
         });
 
-    let mut executor = Executor::<()>::new().with(motion).with(find_highest);
+    let mut executor = Executor::<()>::builder()
+        .system(motion)
+        .system(find_highest)
+        .build();
     assert_eq!(resources.get::<HighestVelocity>().unwrap().0, 0.0);
     executor.run(&world, &resources, &mod_queues);
     assert_eq!(resources.get::<HighestVelocity>().unwrap().0, 3.0);

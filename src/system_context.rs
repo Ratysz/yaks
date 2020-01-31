@@ -56,8 +56,8 @@ impl<'scope> SystemContext<'scope> {
         F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
         Q: Query + Send + Sync + 'q,
     {
-        if let Some(scope) = self.scope() {
-            scope.batch(query_borrow, batch_size, closure);
+        if let Some(scope) = self.scope {
+            scope.scope().batch(query_borrow, batch_size, closure);
         } else {
             query_borrow.iter().for_each(|item| closure(item));
         }

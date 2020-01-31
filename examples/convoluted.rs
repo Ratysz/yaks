@@ -112,12 +112,13 @@ fn main() {
                 });
             });
 
-    let mut executor = Executor::<&'static str>::new()
-        .with(("racing", racing))
-        .with(leave_track)
-        .with(("stopwatch", stopwatch))
-        .with(("confetti", spawn_confetti))
-        .with(confetti_cleanup);
+    let mut executor = Executor::<&'static str>::builder()
+        .system_with_handle("racing", racing)
+        .system(leave_track)
+        .system_with_handle("stopwatch", stopwatch)
+        .system_with_handle("confetti", spawn_confetti)
+        .system(confetti_cleanup)
+        .build();
 
     executor.set_active(&"confetti", false).unwrap();
 

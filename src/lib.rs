@@ -59,7 +59,10 @@
 //!         }
 //!     });
 //!
-//! let mut executor = Executor::<()>::new().with(motion).with(find_highest);
+//! let mut executor = Executor::<()>::builder()
+//!     .system(motion)
+//!     .system(find_highest)
+//!     .build();
 //! assert_eq!(resources.get::<HighestVelocity>().unwrap().0, 0.0);
 //! executor.run(&world, &resources, &mod_queues);
 //! assert_eq!(resources.get::<HighestVelocity>().unwrap().0, 3.0);
@@ -106,7 +109,7 @@ mod threadpool;
 
 pub use borrows::{ArchetypeSet, SystemBorrows};
 pub use error::{CantInsertSystem, NoSuchSystem};
-pub use executor::Executor;
+pub use executor::{Executor, ExecutorBuilder};
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use system::{Runnable, System, SystemBuilder};
 pub use system_context::SystemContext;

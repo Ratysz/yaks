@@ -101,6 +101,10 @@ where
         Default::default()
     }
 
+    pub fn builder() -> ExecutorBuilder<H> {
+        ExecutorBuilder::new()
+    }
+
     fn new_system_index(&mut self) -> SystemIndex {
         if let Some(index) = self.free_indices.pop() {
             index
@@ -209,24 +213,33 @@ where
         Ok(removed_system)
     }
 
-    pub fn insert<A>(&mut self, args: A) -> Result<Option<(Vec<H>, System)>, CantInsertSystem>
-    where
-        A: Into<SystemInsertionArguments<H>>,
-    {
-        let SystemInsertionArguments {
-            system,
-            handle,
-            dependencies,
-        } = args.into();
-        self.insert_inner(handle, dependencies, system)
+    pub fn insert(&mut self, system: System) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
+        self.insert_inner(None, vec![], system)
     }
 
-    pub fn with<A>(mut self, args: A) -> Self
-    where
-        A: Into<SystemInsertionArguments<H>>,
-    {
-        self.insert(args).unwrap();
-        self
+    pub fn insert_with_handle(
+        &mut self,
+        handle: H,
+        system: System,
+    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
+        self.insert_inner(Some(handle), vec![], system)
+    }
+
+    pub fn insert_with_deps(
+        &mut self,
+        dependencies: Vec<H>,
+        system: System,
+    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
+        self.insert_inner(None, dependencies, system)
+    }
+
+    pub fn insert_with_handle_and_deps(
+        &mut self,
+        handle: H,
+        dependencies: Vec<H>,
+        system: System,
+    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
+        self.insert_inner(Some(handle), dependencies, system)
     }
 
     pub fn remove(&mut self, handle: &H) -> Option<(Vec<H>, System)> {
@@ -305,63 +318,62 @@ where
     }
 }
 
-pub struct SystemInsertionArguments<H>
+pub struct ExecutorBuilder<H>
 where
     H: Hash + Eq + PartialEq + Debug,
 {
-    handle: Option<H>,
-    dependencies: Vec<H>,
-    system: System,
+    executor: Executor<H>,
 }
 
-impl<H> From<System> for SystemInsertionArguments<H>
+impl<H> Default for ExecutorBuilder<H>
 where
     H: Hash + Eq + PartialEq + Debug,
 {
-    fn from(args: System) -> Self {
-        SystemInsertionArguments {
-            handle: None,
-            dependencies: Vec::default(),
-            system: args,
+    fn default() -> Self {
+        Self {
+            executor: Default::default(),
         }
     }
 }
 
-impl<H> From<(H, System)> for SystemInsertionArguments<H>
+impl<H> ExecutorBuilder<H>
 where
     H: Hash + Eq + PartialEq + Debug,
 {
-    fn from(args: (H, System)) -> Self {
-        SystemInsertionArguments {
-            handle: Some(args.0),
-            dependencies: Vec::default(),
-            system: args.1,
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
-}
 
-impl<H> From<(Vec<H>, System)> for SystemInsertionArguments<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    fn from(args: (Vec<H>, System)) -> Self {
-        SystemInsertionArguments {
-            handle: None,
-            dependencies: args.0,
-            system: args.1,
-        }
+    pub fn system(mut self, system: System) -> Self {
+        self.executor.insert(system).unwrap();
+        self
     }
-}
 
-impl<'a, H> From<(H, Vec<H>, System)> for SystemInsertionArguments<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    fn from(args: (H, Vec<H>, System)) -> Self {
-        SystemInsertionArguments {
-            handle: Some(args.0),
-            dependencies: args.1,
-            system: args.2,
-        }
+    pub fn system_with_handle(mut self, handle: H, system: System) -> Self {
+        self.executor.insert_with_handle(handle, system).unwrap();
+        self
+    }
+
+    pub fn system_with_deps(mut self, dependencies: Vec<H>, system: System) -> Self {
+        self.executor
+            .insert_with_deps(dependencies, system)
+            .unwrap();
+        self
+    }
+
+    pub fn system_with_handle_and_deps(
+        mut self,
+        handle: H,
+        dependencies: Vec<H>,
+        system: System,
+    ) -> Self {
+        self.executor
+            .insert_with_handle_and_deps(handle, dependencies, system)
+            .unwrap();
+        self
+    }
+
+    pub fn build(self) -> Executor<H> {
+        self.executor
     }
 }

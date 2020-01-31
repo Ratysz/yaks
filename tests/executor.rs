@@ -27,12 +27,15 @@ fn setup() -> (World, Resources, ModQueuePool) {
 #[test]
 fn single_no_handle() {
     let (world, resources, mod_queues) = setup();
-    let mut executor =
-        Executor::<()>::new().with(System::builder().resources::<&mut Res1>().build(
-            move |_, mut resource, _| {
-                resource.0 += 1;
-            },
-        ));
+    let mut executor = Executor::<()>::builder()
+        .system(
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(move |_, mut resource, _| {
+                    resource.0 += 1;
+                }),
+        )
+        .build();
     executor.run(&world, &resources, &mod_queues);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
 }
@@ -41,11 +44,11 @@ fn single_no_handle() {
 fn non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
     let option = executor
-        .insert((0, System::builder().build(|_, _, _| {})))
+        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
         .unwrap();
     assert!(option.is_none());
     let option = executor
-        .insert((0, System::builder().build(|_, _, _| {})))
+        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
         .unwrap();
     assert!(option.is_some());
 }
@@ -53,14 +56,16 @@ fn non_unique_system_handle() {
 #[test]
 fn single_handle() {
     let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::new().with((
-        0,
-        System::builder()
-            .resources::<&mut Res1>()
-            .build(move |_, mut resource, _| {
-                resource.0 += 1;
-            }),
-    ));
+    let mut executor = Executor::<usize>::builder()
+        .system_with_handle(
+            0,
+            System::builder()
+                .resources::<&mut Res1>()
+                .build(move |_, mut resource, _| {
+                    resource.0 += 1;
+                }),
+        )
+        .build();
     executor.run(&world, &resources, &mod_queues);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
     assert!(executor.is_active(&0).unwrap());
@@ -77,7 +82,8 @@ fn single_handle() {
 #[test]
 fn invalid_dependencies() {
     let mut executor = Executor::<usize>::new();
-    let result = executor.insert((0, vec![1], System::builder().build(|_, _, _| {})));
+    let result =
+        executor.insert_with_handle_and_deps(0, vec![1], System::builder().build(|_, _, _| {}));
     assert!(result.is_err());
     if let Err(error) = result {
         assert_ne!(error, CantInsertSystem::CyclicDependency);
@@ -88,9 +94,10 @@ fn invalid_dependencies() {
 fn cyclic_dependency_1() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert((0, System::builder().build(|_, _, _| {})))
+        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
         .is_ok());
-    let result = executor.insert((0, vec![0], System::builder().build(|_, _, _| {})));
+    let result =
+        executor.insert_with_handle_and_deps(0, vec![0], System::builder().build(|_, _, _| {}));
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);
@@ -101,12 +108,13 @@ fn cyclic_dependency_1() {
 fn cyclic_dependency_2() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert((0, System::builder().build(|_, _, _| {})))
+        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
         .is_ok());
     assert!(executor
-        .insert((1, vec![0], System::builder().build(|_, _, _| {})))
+        .insert_with_handle_and_deps(1, vec![0], System::builder().build(|_, _, _| {}))
         .is_ok());
-    let result = executor.insert((0, vec![1], System::builder().build(|_, _, _| {})));
+    let result =
+        executor.insert_with_handle_and_deps(0, vec![1], System::builder().build(|_, _, _| {}));
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);
@@ -117,15 +125,16 @@ fn cyclic_dependency_2() {
 fn cyclic_dependency_3() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert((0, System::builder().build(|_, _, _| {})))
+        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
         .is_ok());
     assert!(executor
-        .insert((1, vec![0], System::builder().build(|_, _, _| {})))
+        .insert_with_handle_and_deps(1, vec![0], System::builder().build(|_, _, _| {}))
         .is_ok());
     assert!(executor
-        .insert((2, vec![1], System::builder().build(|_, _, _| {})))
+        .insert_with_handle_and_deps(2, vec![1], System::builder().build(|_, _, _| {}))
         .is_ok());
-    let result = executor.insert((0, vec![2], System::builder().build(|_, _, _| {})));
+    let result =
+        executor.insert_with_handle_and_deps(0, vec![2], System::builder().build(|_, _, _| {}));
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);
