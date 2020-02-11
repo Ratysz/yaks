@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, SystemBorrows};
+use crate::{query_bundle::access_of, ArchetypeAccess, SystemBorrows};
 
 macro_rules! impls_for_tuple {
     ($($letter:ident),*) => {
@@ -71,14 +71,14 @@ macro_rules! impls_for_tuple {
             }
 
             #[cfg(feature = "parallel")]
-            fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-                archetypes.extend(world.query_scope::<Self>());
+            fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+                archetypes.extend(access_of::<Self>(world));
             }
         }
 
         impl<$($letter),*> QueryBundle for ($($letter,)*)
         where
-            $($letter: QuerySingle + Send + Sync,)*
+            $($letter: Query + QuerySingle + Send + Sync,)*
         {
             type Effectors = ($($letter::Effector,)*);
 
@@ -92,8 +92,16 @@ macro_rules! impls_for_tuple {
             }
 
             #[cfg(feature = "parallel")]
-            fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-                $($letter::write_archetypes(world, archetypes);)*
+            fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+                archetypes.extend(world
+                    .archetypes()
+                    .enumerate()
+                    .filter_map(|(index, archetype)|
+                        None
+                            $( .or_else(|| archetype.access::<$letter>()) )*
+                            .map(|access| (index, access))
+                    )
+                );
             }
         }
     };

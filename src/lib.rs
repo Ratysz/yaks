@@ -107,7 +107,7 @@ mod system_context;
 #[cfg(feature = "parallel")]
 mod threadpool;
 
-pub use borrows::{ArchetypeSet, SystemBorrows};
+pub use borrows::{ArchetypeAccess, SystemBorrows};
 pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::{Executor, ExecutorBuilder};
 pub use mod_queue::{ModQueue, ModQueuePool};

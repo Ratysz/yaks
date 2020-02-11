@@ -12,7 +12,7 @@ impl<H> Executor<H>
 where
     H: Hash + Eq + PartialEq + Debug,
 {
-    fn maintain_parallelization_data(&mut self) {
+    pub(crate) fn condense_borrows(&mut self) {
         self.all_resources.clear();
         self.all_components.clear();
         for borrows_container in self.borrows.values() {
@@ -26,9 +26,15 @@ where
                 .extend(&borrows_container.borrows.components_immutable);
         }
         for borrows_container in self.borrows.values_mut() {
-            borrows_container.condensed = borrows_container
-                .borrows
-                .condense(&self.all_resources, &self.all_components);
+            borrows_container.condensed.clear();
+            borrows_container
+                .condensed
+                .grow(self.all_resources.len(), self.all_components.len());
+            borrows_container.condensed.fill(
+                &borrows_container.borrows,
+                &self.all_resources,
+                &self.all_components,
+            );
         }
     }
 
@@ -59,8 +65,7 @@ where
                 .are_components_compatible(&current_borrows.condensed)
                 && !borrows_container
                     .archetypes
-                    .as_bitset()
-                    .is_disjoint(&current_borrows.archetypes.as_bitset())
+                    .is_compatible(&current_borrows.archetypes)
             {
                 return false;
             }
@@ -75,24 +80,34 @@ where
         mod_queues: &'scope ModQueuePool,
         scope: &Scope<'scope>,
     ) {
-        if self.dirty {
-            self.maintain_parallelization_data();
-            self.dirty = false;
-        }
         self.systems_to_run.clear();
         self.current_systems.clear();
         self.finished_systems.clear();
-        for i in 0..self.systems_sorted.len() {
-            let index = self.systems_sorted[i];
-            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
-            if system_container.active {
-                let borrows_container = self.borrows.get_mut(&index).expect(INVALID_INDEX);
-                borrows_container.archetypes.clear();
-                system_container
-                    .system_mut()
-                    .inner()
-                    .write_archetypes(world, &mut borrows_container.archetypes);
-                self.systems_to_run.push(index);
+        let archetypes_generation = Some(world.archetypes_generation());
+        if self.archetypes_generation == archetypes_generation {
+            for i in 0..self.systems_sorted.len() {
+                let index = self.systems_sorted[i];
+                let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
+                if system_container.active {
+                    self.systems_to_run.push(index);
+                }
+            }
+        } else {
+            self.archetypes_generation = archetypes_generation;
+            let archetypes_len = world.archetypes().len();
+            for i in 0..self.systems_sorted.len() {
+                let index = self.systems_sorted[i];
+                let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
+                if system_container.active {
+                    let borrows_container = self.borrows.get_mut(&index).expect(INVALID_INDEX);
+                    borrows_container.archetypes.clear();
+                    borrows_container.archetypes.grow(archetypes_len);
+                    system_container
+                        .system_mut()
+                        .inner()
+                        .write_archetypes(world, &mut borrows_container.archetypes);
+                    self.systems_to_run.push(index);
+                }
             }
         }
         while !self.systems_to_run.is_empty() {

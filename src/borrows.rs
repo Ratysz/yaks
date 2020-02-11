@@ -1,40 +1,12 @@
 use fixedbitset::FixedBitSet;
 use fxhash::FxHasher64;
+use hecs::Access;
 use std::{any::TypeId, collections::HashSet, hash::BuildHasherDefault};
 
 #[cfg(feature = "parallel")]
 use crate::System;
 
 pub type TypeSet = HashSet<TypeId, BuildHasherDefault<FxHasher64>>;
-
-#[derive(Default)]
-pub struct ArchetypeSet {
-    bitset: FixedBitSet,
-}
-
-impl ArchetypeSet {
-    pub fn insert(&mut self, archetype: u32) {
-        assert!(archetype < std::usize::MAX as u32);
-        let archetype = archetype as usize;
-        self.bitset.grow(archetype + 1);
-        self.bitset.insert(archetype);
-    }
-
-    pub fn clear(&mut self) {
-        self.bitset.clear();
-    }
-
-    #[cfg(feature = "parallel")]
-    pub(crate) fn as_bitset(&self) -> &FixedBitSet {
-        &self.bitset
-    }
-}
-
-impl Extend<u32> for ArchetypeSet {
-    fn extend<T: IntoIterator<Item = u32>>(&mut self, iterator: T) {
-        iterator.into_iter().for_each(|value| self.insert(value));
-    }
-}
 
 #[derive(Default)]
 pub struct SystemBorrows {
@@ -45,39 +17,7 @@ pub struct SystemBorrows {
 }
 
 #[cfg(feature = "parallel")]
-impl SystemBorrows {
-    pub(crate) fn condense(
-        &self,
-        all_resources: &TypeSet,
-        all_components: &TypeSet,
-    ) -> CondensedBorrows {
-        let mut condensed =
-            CondensedBorrows::with_capacity(all_resources.len(), all_components.len());
-        all_resources.iter().enumerate().for_each(|(i, resource)| {
-            if self.resources_mutable.contains(resource) {
-                condensed.resources_mutable.insert(i);
-            }
-            if self.resources_immutable.contains(resource) {
-                condensed.resources_immutable.insert(i);
-            }
-        });
-        all_components
-            .iter()
-            .enumerate()
-            .for_each(|(i, component)| {
-                if self.components_mutable.contains(component) {
-                    condensed.components_mutable.insert(i);
-                }
-                if self.components_immutable.contains(component) {
-                    condensed.components_immutable.insert(i);
-                }
-            });
-        condensed
-    }
-}
-
-#[cfg(feature = "parallel")]
-#[derive(Clone)]
+#[derive(Default)]
 pub(crate) struct CondensedBorrows {
     pub resources_immutable: FixedBitSet,
     pub resources_mutable: FixedBitSet,
@@ -87,13 +27,31 @@ pub(crate) struct CondensedBorrows {
 
 #[cfg(feature = "parallel")]
 impl CondensedBorrows {
-    pub fn with_capacity(resources: usize, components: usize) -> Self {
-        Self {
-            resources_immutable: FixedBitSet::with_capacity(resources),
-            resources_mutable: FixedBitSet::with_capacity(resources),
-            components_immutable: FixedBitSet::with_capacity(components),
-            components_mutable: FixedBitSet::with_capacity(components),
-        }
+    pub fn fill(
+        &mut self,
+        borrows: &SystemBorrows,
+        all_resources: &TypeSet,
+        all_components: &TypeSet,
+    ) {
+        all_resources.iter().enumerate().for_each(|(i, resource)| {
+            if borrows.resources_mutable.contains(resource) {
+                self.resources_mutable.insert(i);
+            }
+            if borrows.resources_immutable.contains(resource) {
+                self.resources_immutable.insert(i);
+            }
+        });
+        all_components
+            .iter()
+            .enumerate()
+            .for_each(|(i, component)| {
+                if borrows.components_mutable.contains(component) {
+                    self.components_mutable.insert(i);
+                }
+                if borrows.components_immutable.contains(component) {
+                    self.components_immutable.insert(i);
+                }
+            });
     }
 
     pub fn are_resources_compatible(&self, other: &CondensedBorrows) -> bool {
@@ -116,13 +74,64 @@ impl CondensedBorrows {
                 .components_immutable
                 .is_disjoint(&other.components_mutable)
     }
+
+    pub fn clear(&mut self) {
+        self.resources_immutable.clear();
+        self.resources_mutable.clear();
+        self.components_immutable.clear();
+        self.components_mutable.clear();
+    }
+
+    pub fn grow(&mut self, resources: usize, components: usize) {
+        self.resources_immutable.grow(resources);
+        self.resources_mutable.grow(resources);
+        self.components_immutable.grow(components);
+        self.components_mutable.grow(components);
+    }
+}
+
+#[derive(Default)]
+pub struct ArchetypeAccess {
+    pub immutable: FixedBitSet,
+    pub mutable: FixedBitSet,
+}
+
+#[cfg(feature = "parallel")]
+impl ArchetypeAccess {
+    pub(crate) fn is_compatible(&self, other: &ArchetypeAccess) -> bool {
+        self.mutable.is_disjoint(&other.mutable)
+            && self.mutable.is_disjoint(&other.immutable)
+            && self.immutable.is_disjoint(&other.mutable)
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.immutable.clear();
+        self.mutable.clear();
+    }
+
+    pub(crate) fn grow(&mut self, bits: usize) {
+        self.immutable.grow(bits);
+        self.mutable.grow(bits);
+    }
+}
+
+impl Extend<(usize, Access)> for ArchetypeAccess {
+    fn extend<T: IntoIterator<Item = (usize, Access)>>(&mut self, iterator: T) {
+        iterator
+            .into_iter()
+            .for_each(|(archetype, access)| match access {
+                Access::Read => self.immutable.set(archetype, true),
+                Access::Write => self.mutable.set(archetype, true),
+                Access::Iterate => (),
+            })
+    }
 }
 
 #[cfg(feature = "parallel")]
 pub(crate) struct BorrowsContainer {
     pub borrows: SystemBorrows,
     pub condensed: CondensedBorrows,
-    pub archetypes: ArchetypeSet,
+    pub archetypes: ArchetypeAccess,
 }
 
 #[cfg(feature = "parallel")]
@@ -132,8 +141,8 @@ impl BorrowsContainer {
         system.inner().write_borrows(&mut borrows);
         Self {
             borrows,
-            condensed: CondensedBorrows::with_capacity(0, 0),
-            archetypes: ArchetypeSet::default(),
+            condensed: Default::default(),
+            archetypes: Default::default(),
         }
     }
 }

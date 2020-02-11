@@ -2,10 +2,12 @@ use hecs::{Component, Query, QueryBorrow, World};
 use std::marker::PhantomData;
 
 #[cfg(feature = "parallel")]
+use hecs::Access;
+#[cfg(feature = "parallel")]
 use std::any::TypeId;
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, SystemBorrows};
+use crate::{ArchetypeAccess, SystemBorrows};
 
 pub struct QueryEffector<Q>
 where
@@ -63,7 +65,7 @@ pub trait QuerySingle: Send + Sync {
     fn write_borrows(borrows: &mut SystemBorrows);
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess);
 }
 
 pub trait QueryBundle: Send + Sync {
@@ -75,7 +77,7 @@ pub trait QueryBundle: Send + Sync {
     fn write_borrows(borrows: &mut SystemBorrows);
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet);
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess);
 }
 
 impl<C> QueryUnit for &'_ C
@@ -117,7 +119,7 @@ impl QuerySingle for () {
     fn write_borrows(_: &mut SystemBorrows) {}
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
+    fn write_archetypes(_: &World, _: &mut ArchetypeAccess) {}
 }
 
 impl<C> QuerySingle for &'_ C
@@ -137,8 +139,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        archetypes.extend(world.query_scope::<Self>());
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
     }
 }
 
@@ -159,8 +161,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        archetypes.extend(world.query_scope::<Self>());
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
     }
 }
 
@@ -181,8 +183,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        archetypes.extend(world.query_scope::<Self>());
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
     }
 }
 
@@ -203,8 +205,8 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
-        archetypes.extend(world.query_scope::<Self>());
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
     }
 }
 
@@ -217,7 +219,7 @@ impl QueryBundle for () {
     fn write_borrows(_: &mut SystemBorrows) {}
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_: &World, _: &mut ArchetypeSet) {}
+    fn write_archetypes(_: &World, _: &mut ArchetypeAccess) {}
 }
 
 impl<Q> QueryBundle for (Q,)
@@ -236,7 +238,18 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeSet) {
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
         Q::write_archetypes(world, archetypes);
     }
+}
+
+#[cfg(feature = "parallel")]
+pub(crate) fn access_of<Q>(world: &World) -> impl Iterator<Item = (usize, Access)> + '_
+where
+    Q: Query,
+{
+    world
+        .archetypes()
+        .enumerate()
+        .filter_map(|(index, archetype)| archetype.access::<Q>().map(|access| (index, access)))
 }

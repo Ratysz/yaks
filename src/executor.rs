@@ -16,6 +16,8 @@ use crate::{
 #[cfg(feature = "parallel")]
 use crossbeam::channel::{self, Receiver, Sender};
 #[cfg(feature = "parallel")]
+use hecs::ArchetypesGeneration;
+#[cfg(feature = "parallel")]
 use std::collections::HashSet;
 
 #[cfg(feature = "parallel")]
@@ -39,7 +41,7 @@ where
     pub(crate) systems_sorted: Vec<SystemIndex>,
 
     #[cfg(feature = "parallel")]
-    pub(crate) dirty: bool,
+    pub(crate) archetypes_generation: Option<ArchetypesGeneration>,
     #[cfg(feature = "parallel")]
     pub(crate) borrows: HashMap<SystemIndex, BorrowsContainer, BuildHasherDefault<FxHasher64>>,
     #[cfg(feature = "parallel")]
@@ -72,7 +74,7 @@ where
             systems_sorted: Default::default(),
 
             #[cfg(feature = "parallel")]
-            dirty: true,
+            archetypes_generation: None,
             #[cfg(feature = "parallel")]
             borrows: Default::default(),
             #[cfg(feature = "parallel")]
@@ -206,9 +208,7 @@ where
             self.systems_sorted.push(new_index);
         }
         #[cfg(feature = "parallel")]
-        {
-            self.dirty = true;
-        }
+        self.condense_borrows();
 
         Ok(removed_system)
     }
@@ -243,15 +243,14 @@ where
     }
 
     pub fn remove(&mut self, handle: &H) -> Option<(Vec<H>, System)> {
-        #[cfg(feature = "parallel")]
-        {
-            self.dirty = true;
-        }
         self.system_handles
             .remove(handle)
             .and_then(|index| {
                 #[cfg(feature = "parallel")]
-                self.borrows.remove(&index);
+                {
+                    self.borrows.remove(&index);
+                    self.condense_borrows();
+                }
                 self.systems.remove(&index)
             })
             .map(|system_container| system_container.unwrap_container())

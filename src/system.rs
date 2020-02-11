@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use crate::{
     query_bundle::{QueryBundle, QuerySingle, QueryUnit},
     resource_bundle::{Fetch, ResourceBundle},
-    ArchetypeSet, ModQueuePool, SystemBorrows, SystemContext,
+    ArchetypeAccess, ModQueuePool, SystemBorrows, SystemContext,
 };
 
 #[cfg(feature = "parallel")]
@@ -16,7 +16,7 @@ pub trait Runnable {
 
     fn write_borrows(&self, borrows: &mut SystemBorrows);
 
-    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet);
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeAccess);
 }
 
 pub struct System {
@@ -88,7 +88,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeSet) {
+    fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeAccess) {
         Comps::write_archetypes(world, archetypes);
         Queries::write_archetypes(world, archetypes);
     }
@@ -97,7 +97,7 @@ where
     fn write_borrows(&self, _: &mut SystemBorrows) {}
 
     #[cfg(not(feature = "parallel"))]
-    fn write_archetypes(&self, _: &World, _: &mut ArchetypeSet) {}
+    fn write_archetypes(&self, _: &World, _: &mut ArchetypeAccess) {}
 }
 
 pub struct ThreadLocalSystem<'closure> {
@@ -154,7 +154,7 @@ where
 
     fn write_borrows(&self, _: &mut SystemBorrows) {}
 
-    fn write_archetypes(&self, _: &World, _: &mut ArchetypeSet) {}
+    fn write_archetypes(&self, _: &World, _: &mut ArchetypeAccess) {}
 }
 
 pub trait TupleAppend<T> {
