@@ -188,28 +188,6 @@ where
     }
 }
 
-impl<Q> QuerySingle for (Q,)
-where
-    Q: QueryUnit,
-    Self: Query,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
-}
-
 impl QueryBundle for () {
     type Effectors = ();
 
@@ -220,27 +198,6 @@ impl QueryBundle for () {
 
     #[cfg(feature = "parallel")]
     fn write_archetypes(_: &World, _: &mut ArchetypeAccess) {}
-}
-
-impl<Q> QueryBundle for (Q,)
-where
-    Q: QuerySingle,
-{
-    type Effectors = Q::Effector;
-
-    fn effectors() -> Self::Effectors {
-        Q::effector()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        Q::write_archetypes(world, archetypes);
-    }
 }
 
 #[cfg(feature = "parallel")]

@@ -165,10 +165,6 @@ impl<T0> TupleAppend<T0> for () {
     type Output = (T0,);
 }
 
-impl<T0, T1> TupleAppend<T1> for (T0,) {
-    type Output = (T0, T1);
-}
-
 pub struct SystemBuilder<Comps, Res, Queries>
 where
     Comps: QueryBundle + 'static,
