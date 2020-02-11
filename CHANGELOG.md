@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `error` module, errors are now in crate root.
 ### Added
 - `SystemContext`, bundles up state references in system closures.
-- `ModQueuePool`, `Runnable`, `ArchetypeSet`, and `SystemBorrows` are now in public API.
+- `ModQueuePool`, `Runnable`, `ArchetypeAccess`, and `SystemBorrows` are now in public API.
 - `ExecutorBuilder`, splits off builder-like methods from the `Executor`.
 - `parallel` feature: enables `System::run_with_scope()`, `Executor::run_with_scope()`, and
 `Executor::run_parallel()`, exposes `Threadpool` and `Scope` - a scoped threadpool
 implementation that can be used with those.
+- `FetchResources`, a helper trait implemented on `resources::Resources` - allows getting
+multiple resources via an API similar to `hecs` queries.
 ### Changed
 - Documentation pass (`NoSuchSystem`).
 - Refactored `Executor` system insertion methods, split off builder-like methods

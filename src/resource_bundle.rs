@@ -149,3 +149,20 @@ where
             .unwrap_or_else(|error| panic!("cannot fetch {}: {}", type_name::<R>(), error))
     }
 }
+
+pub trait FetchResources {
+    fn fetch<R>(&self) -> <R::Effectors as Fetch>::Refs
+    where
+        R: ResourceBundle,
+        for<'a> R::Effectors: Fetch<'a>;
+}
+
+impl FetchResources for Resources {
+    fn fetch<R>(&self) -> <<R as ResourceBundle>::Effectors as Fetch>::Refs
+    where
+        R: ResourceBundle,
+        for<'a> R::Effectors: Fetch<'a>,
+    {
+        R::effectors().fetch(self)
+    }
+}

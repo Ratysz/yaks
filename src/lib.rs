@@ -111,6 +111,7 @@ pub use borrows::{ArchetypeAccess, SystemBorrows};
 pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::{Executor, ExecutorBuilder};
 pub use mod_queue::{ModQueue, ModQueuePool};
+pub use resource_bundle::FetchResources;
 pub use system::{Runnable, System, SystemBuilder, ThreadLocalSystem};
 pub use system_context::SystemContext;
 #[cfg(feature = "parallel")]
