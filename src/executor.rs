@@ -121,9 +121,9 @@ where
 
     fn insert_inner(
         &mut self,
+        system: System,
         handle: Option<H>,
         dependencies: Vec<H>,
-        system: System,
     ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
         #[cfg(feature = "parallel")]
         let borrows_container = BorrowsContainer::new(&system);
@@ -214,32 +214,32 @@ where
     }
 
     pub fn insert(&mut self, system: System) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(None, vec![], system)
+        self.insert_inner(system, None, vec![])
     }
 
     pub fn insert_with_handle(
         &mut self,
-        handle: H,
         system: System,
+        handle: H,
     ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(Some(handle), vec![], system)
+        self.insert_inner(system, Some(handle), vec![])
     }
 
     pub fn insert_with_deps(
         &mut self,
-        dependencies: Vec<H>,
         system: System,
+        dependencies: Vec<H>,
     ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(None, dependencies, system)
+        self.insert_inner(system, None, dependencies)
     }
 
     pub fn insert_with_handle_and_deps(
         &mut self,
+        system: System,
         handle: H,
         dependencies: Vec<H>,
-        system: System,
     ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(Some(handle), dependencies, system)
+        self.insert_inner(system, Some(handle), dependencies)
     }
 
     pub fn remove(&mut self, handle: &H) -> Option<(Vec<H>, System)> {
@@ -348,26 +348,26 @@ where
         self
     }
 
-    pub fn system_with_handle(mut self, handle: H, system: System) -> Self {
-        self.executor.insert_with_handle(handle, system).unwrap();
+    pub fn system_with_handle(mut self, system: System, handle: H) -> Self {
+        self.executor.insert_with_handle(system, handle).unwrap();
         self
     }
 
-    pub fn system_with_deps(mut self, dependencies: Vec<H>, system: System) -> Self {
+    pub fn system_with_deps(mut self, system: System, dependencies: Vec<H>) -> Self {
         self.executor
-            .insert_with_deps(dependencies, system)
+            .insert_with_deps(system, dependencies)
             .unwrap();
         self
     }
 
     pub fn system_with_handle_and_deps(
         mut self,
+        system: System,
         handle: H,
         dependencies: Vec<H>,
-        system: System,
     ) -> Self {
         self.executor
-            .insert_with_handle_and_deps(handle, dependencies, system)
+            .insert_with_handle_and_deps(system, handle, dependencies)
             .unwrap();
         self
     }

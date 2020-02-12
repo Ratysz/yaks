@@ -36,17 +36,17 @@ fn hard_dependency() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<usize>::builder()
         .system_with_handle(
-            0,
             System::builder().build(|_, _, _| {
                 thread::sleep(Duration::from_millis(100));
             }),
+            0,
         )
         .system_with_handle_and_deps(
-            1,
-            vec![0],
             System::builder().build(|_, _, _| {
                 thread::sleep(Duration::from_millis(100));
             }),
+            1,
+            vec![0],
         )
         .build();
     let threadpool = Threadpool::new(4);

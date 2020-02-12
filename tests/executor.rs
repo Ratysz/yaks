@@ -44,11 +44,11 @@ fn single_no_handle() {
 fn non_unique_system_handle() {
     let mut executor = Executor::<usize>::new();
     let option = executor
-        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
+        .insert_with_handle(System::builder().build(|_, _, _| {}), 0)
         .unwrap();
     assert!(option.is_none());
     let option = executor
-        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
+        .insert_with_handle(System::builder().build(|_, _, _| {}), 0)
         .unwrap();
     assert!(option.is_some());
 }
@@ -58,12 +58,12 @@ fn single_handle() {
     let (world, resources, mod_queues) = setup();
     let mut executor = Executor::<usize>::builder()
         .system_with_handle(
-            0,
             System::builder()
                 .resources::<&mut Res1>()
                 .build(move |_, mut resource, _| {
                     resource.0 += 1;
                 }),
+            0,
         )
         .build();
     executor.run(&world, &resources, &mod_queues);
@@ -83,7 +83,7 @@ fn single_handle() {
 fn invalid_dependencies() {
     let mut executor = Executor::<usize>::new();
     let result =
-        executor.insert_with_handle_and_deps(0, vec![1], System::builder().build(|_, _, _| {}));
+        executor.insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 0, vec![1]);
     assert!(result.is_err());
     if let Err(error) = result {
         assert_ne!(error, CantInsertSystem::CyclicDependency);
@@ -94,10 +94,10 @@ fn invalid_dependencies() {
 fn cyclic_dependency_1() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
+        .insert_with_handle(System::builder().build(|_, _, _| {}), 0,)
         .is_ok());
     let result =
-        executor.insert_with_handle_and_deps(0, vec![0], System::builder().build(|_, _, _| {}));
+        executor.insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 0, vec![0]);
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);
@@ -108,13 +108,13 @@ fn cyclic_dependency_1() {
 fn cyclic_dependency_2() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
+        .insert_with_handle(System::builder().build(|_, _, _| {}), 0,)
         .is_ok());
     assert!(executor
-        .insert_with_handle_and_deps(1, vec![0], System::builder().build(|_, _, _| {}))
+        .insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 1, vec![0],)
         .is_ok());
     let result =
-        executor.insert_with_handle_and_deps(0, vec![1], System::builder().build(|_, _, _| {}));
+        executor.insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 0, vec![1]);
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);
@@ -125,16 +125,16 @@ fn cyclic_dependency_2() {
 fn cyclic_dependency_3() {
     let mut executor = Executor::<usize>::new();
     assert!(executor
-        .insert_with_handle(0, System::builder().build(|_, _, _| {}))
+        .insert_with_handle(System::builder().build(|_, _, _| {}), 0)
         .is_ok());
     assert!(executor
-        .insert_with_handle_and_deps(1, vec![0], System::builder().build(|_, _, _| {}))
+        .insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 1, vec![0],)
         .is_ok());
     assert!(executor
-        .insert_with_handle_and_deps(2, vec![1], System::builder().build(|_, _, _| {}))
+        .insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 2, vec![1],)
         .is_ok());
     let result =
-        executor.insert_with_handle_and_deps(0, vec![2], System::builder().build(|_, _, _| {}));
+        executor.insert_with_handle_and_deps(System::builder().build(|_, _, _| {}), 0, vec![2]);
     assert!(result.is_err());
     if let Err(error) = result {
         assert_eq!(error, CantInsertSystem::CyclicDependency);

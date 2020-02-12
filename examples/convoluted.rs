@@ -113,10 +113,10 @@ fn main() {
             });
 
     let mut executor = Executor::<&'static str>::builder()
-        .system_with_handle("racing", racing)
+        .system_with_handle(racing, "racing")
         .system(leave_track)
-        .system_with_handle("stopwatch", stopwatch)
-        .system_with_handle("confetti", spawn_confetti)
+        .system_with_handle(stopwatch, "stopwatch")
+        .system_with_handle(spawn_confetti, "confetti")
         .system(confetti_cleanup)
         .build();
 
