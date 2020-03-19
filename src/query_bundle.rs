@@ -1,4 +1,4 @@
-use hecs::{Component, Query, QueryBorrow, World};
+use hecs::{Component, Query, QueryBorrow, With, Without, World};
 use std::marker::PhantomData;
 
 #[cfg(feature = "parallel")]
@@ -180,6 +180,50 @@ where
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         <Self as QueryUnit>::write_borrows(borrows);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
+    }
+}
+
+impl<C, Q> QuerySingle for With<C, Q>
+where
+    C: Component,
+    Q: Query + QuerySingle,
+{
+    type Effector = QueryEffector<Self>;
+
+    fn effector() -> Self::Effector {
+        QueryEffector::new()
+    }
+
+    #[cfg(feature = "parallel")]
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        Q::write_borrows(borrows);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
+        archetypes.extend(access_of::<Self>(world));
+    }
+}
+
+impl<C, Q> QuerySingle for Without<C, Q>
+where
+    C: Component,
+    Q: Query + QuerySingle,
+{
+    type Effector = QueryEffector<Self>;
+
+    fn effector() -> Self::Effector {
+        QueryEffector::new()
+    }
+
+    #[cfg(feature = "parallel")]
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        Q::write_borrows(borrows);
     }
 
     #[cfg(feature = "parallel")]

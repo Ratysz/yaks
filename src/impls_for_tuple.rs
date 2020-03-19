@@ -17,6 +17,22 @@ impl<T0, T1> TupleAppend<T1> for (T0,) {
     type Output = (T0, T1);
 }
 
+impl<R> ResourceBundle for (R,)
+where
+    R: ResourceSingle,
+{
+    type Effectors = R::Effector;
+
+    fn effectors() -> Self::Effectors {
+        R::effector()
+    }
+
+    #[cfg(feature = "parallel")]
+    fn write_borrows(borrows: &mut SystemBorrows) {
+        R::write_borrows(borrows)
+    }
+}
+
 impl<Q> QuerySingle for (Q,)
 where
     Q: QueryUnit,
@@ -36,22 +52,6 @@ where
     #[cfg(feature = "parallel")]
     fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
         archetypes.extend(access_of::<Self>(world));
-    }
-}
-
-impl<R> ResourceBundle for (R,)
-where
-    R: ResourceSingle,
-{
-    type Effectors = R::Effector;
-
-    fn effectors() -> Self::Effectors {
-        R::effector()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        R::write_borrows(borrows)
     }
 }
 

@@ -24,4 +24,4 @@ fxhash = "0.2.1"
 hecs = { path = "../hecs" }
 #hecs = "0.2.7"
 paste = "0.1.6"
-resources = "0.2.1"
+resources = "1.0.0"
