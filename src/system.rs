@@ -42,6 +42,7 @@ impl System {
         &mut self,
         world: &World,
         resources: &Resources,
+        mod_queues: &ModQueuePool,
         scope: &Scope,
     ) {
         self.inner.run(SystemContext::new(
