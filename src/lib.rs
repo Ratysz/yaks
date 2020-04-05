@@ -112,7 +112,7 @@ pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::{Executor, ExecutorBuilder};
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use resource_bundle::FetchResources;
-pub use system::{Runnable, System, SystemBuilder, ThreadLocalSystem};
+pub use system::{Runnable, System, SystemBuilder};
 pub use system_context::SystemContext;
 #[cfg(feature = "parallel")]
 pub use threadpool::{Scope, Threadpool};

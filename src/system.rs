@@ -100,47 +100,6 @@ where
     fn write_archetypes(&self, _: &World, _: &mut ArchetypeAccess) {}
 }
 
-pub struct ThreadLocalSystem<'capture, T> {
-    #[allow(clippy::type_complexity)]
-    inner: Box<dyn for<'r> FnMut(SystemContext<'r>, &'r T) + 'capture>,
-}
-
-impl<'capture, T> ThreadLocalSystem<'capture, T> {
-    pub fn run(
-        &mut self,
-        world: &World,
-        resources: &Resources,
-        mod_queues: &ModQueuePool,
-        thread_local_resources: &mut T,
-    ) {
-        #[cfg(feature = "parallel")]
-        (self.inner)(
-            SystemContext::new(world, resources, mod_queues, None),
-            thread_local_resources,
-        );
-        #[cfg(not(feature = "parallel"))]
-        (self.inner)(
-            SystemContext::new(world, resources, mod_queues),
-            thread_local_resources,
-        );
-    }
-
-    #[cfg(feature = "parallel")]
-    pub fn run_with_scope(
-        &mut self,
-        world: &World,
-        resources: &Resources,
-        mod_queues: &ModQueuePool,
-        scope: &Scope,
-        thread_local_resources: &mut T,
-    ) {
-        (self.inner)(
-            SystemContext::new(world, resources, mod_queues, Some(scope)),
-            thread_local_resources,
-        );
-    }
-}
-
 pub trait TupleAppend<T> {
     type Output;
 }
@@ -251,34 +210,6 @@ where
         };
         System {
             inner: Box::new(system_box),
-        }
-    }
-
-    pub fn build_thread_local<'capture, 'run, F, T>(
-        self,
-        mut closure: F,
-    ) -> ThreadLocalSystem<'capture, T>
-    where
-        Res::Effectors: Fetch<'run>,
-        F: FnMut(
-                SystemContext<'run>,
-                <Res::Effectors as Fetch<'run>>::Refs,
-                Queries::Effectors,
-                &'run mut T,
-            ) + 'capture,
-        T: 'run,
-    {
-        let closure: Box<dyn FnMut(SystemContext<'run>, &'run mut T) + 'capture> = Box::new(
-            move |context: SystemContext<'run>, thread_local_resources| {
-                let fetch = Res::effectors().fetch(&context.resources);
-                closure(context, fetch, Queries::effectors(), thread_local_resources)
-            },
-        );
-        ThreadLocalSystem {
-            inner: unsafe {
-                // See note in `build()`.
-                std::mem::transmute(closure)
-            },
         }
     }
 }
