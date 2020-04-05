@@ -99,18 +99,29 @@ where
     fn write_archetypes(&self, _: &World, _: &mut ArchetypeAccess) {}
 }
 
-pub struct ThreadLocalSystem<'closure> {
-    inner: Box<dyn Runnable + 'closure>,
+pub struct ThreadLocalSystem<'capture, T> {
+    #[allow(clippy::type_complexity)]
+    inner: Box<dyn for<'r> FnMut(SystemContext<'r>, &'r T) + 'capture>,
 }
 
-impl<'closure> ThreadLocalSystem<'closure> {
-    pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
+impl<'capture, T> ThreadLocalSystem<'capture, T> {
+    pub fn run(
+        &mut self,
+        world: &World,
+        resources: &Resources,
+        mod_queues: &ModQueuePool,
+        thread_local_resources: &mut T,
+    ) {
         #[cfg(feature = "parallel")]
-        self.inner
-            .run(SystemContext::new(world, resources, mod_queues, None));
+        (self.inner)(
+            SystemContext::new(world, resources, mod_queues, None),
+            thread_local_resources,
+        );
         #[cfg(not(feature = "parallel"))]
-        self.inner
-            .run(SystemContext::new(world, resources, mod_queues));
+        (self.inner)(
+            SystemContext::new(world, resources, mod_queues),
+            thread_local_resources,
+        );
     }
 
     #[cfg(feature = "parallel")]
@@ -120,40 +131,13 @@ impl<'closure> ThreadLocalSystem<'closure> {
         resources: &Resources,
         mod_queues: &ModQueuePool,
         scope: &Scope,
+        thread_local_resources: &mut T,
     ) {
-        self.inner.run(SystemContext::new(
-            world,
-            resources,
-            mod_queues,
-            Some(scope),
-        ));
+        (self.inner)(
+            SystemContext::new(world, resources, mod_queues, Some(scope)),
+            thread_local_resources,
+        );
     }
-}
-
-struct ThreadLocalSystemBox<'closure, Comps, Res, Queries>
-where
-    Comps: QueryBundle,
-    Res: ResourceBundle,
-    Queries: QueryBundle,
-{
-    phantom_data: PhantomData<(Comps, Res, Queries)>,
-    #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(SystemContext, Res::Effectors, Queries::Effectors) + 'closure>,
-}
-
-impl<'a, Comps, Res, Queries> Runnable for ThreadLocalSystemBox<'a, Comps, Res, Queries>
-where
-    Comps: QueryBundle,
-    Res: ResourceBundle,
-    Queries: QueryBundle,
-{
-    fn run(&mut self, context: SystemContext) {
-        (self.closure)(context, Res::effectors(), Queries::effectors());
-    }
-
-    fn write_borrows(&self, _: &mut SystemBorrows) {}
-
-    fn write_archetypes(&self, _: &World, _: &mut ArchetypeAccess) {}
 }
 
 pub trait TupleAppend<T> {
@@ -269,31 +253,31 @@ where
         }
     }
 
-    pub fn build_thread_local<'a, 'closure, F>(self, mut closure: F) -> ThreadLocalSystem<'closure>
+    pub fn build_thread_local<'capture, 'run, F, T>(
+        self,
+        mut closure: F,
+    ) -> ThreadLocalSystem<'capture, T>
     where
-        Res::Effectors: Fetch<'a>,
-        F: FnMut(SystemContext<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
-            + 'closure,
+        Res::Effectors: Fetch<'run>,
+        F: FnMut(
+                SystemContext<'run>,
+                <Res::Effectors as Fetch<'run>>::Refs,
+                Queries::Effectors,
+                &'run mut T,
+            ) + 'capture,
+        T: 'run,
     {
-        let closure = Box::new(
-            move |context: SystemContext<'a>, resource_effectors: Res::Effectors, queries| {
-                let fetch = resource_effectors.fetch(&context.resources);
-                closure(context, fetch, queries)
+        let closure: Box<dyn FnMut(SystemContext<'run>, &'run mut T) + 'capture> = Box::new(
+            move |context: SystemContext<'run>, thread_local_resources| {
+                let fetch = Res::effectors().fetch(&context.resources);
+                closure(context, fetch, Queries::effectors(), thread_local_resources)
             },
         );
-        let closure = unsafe {
-            // See note in `build()`.
-            std::mem::transmute::<
-                Box<dyn FnMut(SystemContext<'a>, Res::Effectors, Queries::Effectors) + 'closure>,
-                Box<dyn FnMut(SystemContext, Res::Effectors, Queries::Effectors) + 'closure>,
-            >(closure)
-        };
-        let system_box = ThreadLocalSystemBox::<Comps, Res, Queries> {
-            phantom_data: PhantomData,
-            closure,
-        };
         ThreadLocalSystem {
-            inner: Box::new(system_box),
+            inner: unsafe {
+                // See note in `build()`.
+                std::mem::transmute(closure)
+            },
         }
     }
 }
