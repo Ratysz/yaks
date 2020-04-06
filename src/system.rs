@@ -3,7 +3,7 @@ use resources::Resources;
 use std::marker::PhantomData;
 
 use crate::{
-    query_bundle::{QueryBundle, QuerySingle, QueryUnit},
+    query_bundle::{QueryBundle, QuerySingle},
     resource_bundle::{Fetch, ResourceBundle},
     ArchetypeAccess, ModQueuePool, SystemBorrows, SystemContext,
 };
@@ -24,7 +24,7 @@ pub struct System {
 }
 
 impl System {
-    pub fn builder() -> SystemBuilder<(), (), ()> {
+    pub fn builder() -> SystemBuilder<(), ()> {
         SystemBuilder::new()
     }
 
@@ -59,20 +59,18 @@ impl System {
     }
 }
 
-struct SystemBox<Comps, Res, Queries>
+struct SystemBox<Res, Queries>
 where
-    Comps: QueryBundle,
     Res: ResourceBundle,
     Queries: QueryBundle,
 {
-    phantom_data: PhantomData<(Comps, Res, Queries)>,
+    phantom_data: PhantomData<(Res, Queries)>,
     #[allow(clippy::type_complexity)]
     closure: Box<dyn FnMut(SystemContext, Res::Effectors, Queries::Effectors) + Send>,
 }
 
-impl<Comps, Res, Queries> Runnable for SystemBox<Comps, Res, Queries>
+impl<Res, Queries> Runnable for SystemBox<Res, Queries>
 where
-    Comps: QueryBundle,
     Res: ResourceBundle,
     Queries: QueryBundle,
 {
@@ -82,14 +80,12 @@ where
 
     #[cfg(feature = "parallel")]
     fn write_borrows(&self, borrows: &mut SystemBorrows) {
-        Comps::write_borrows(borrows);
         Res::write_borrows(borrows);
         Queries::write_borrows(borrows);
     }
 
     #[cfg(feature = "parallel")]
     fn write_archetypes(&self, world: &World, archetypes: &mut ArchetypeAccess) {
-        Comps::write_archetypes(world, archetypes);
         Queries::write_archetypes(world, archetypes);
     }
 
@@ -108,16 +104,15 @@ impl<T0> TupleAppend<T0> for () {
     type Output = (T0,);
 }
 
-pub struct SystemBuilder<Comps, Res, Queries>
+pub struct SystemBuilder<Res, Queries>
 where
-    Comps: QueryBundle + 'static,
     Res: ResourceBundle + 'static,
     Queries: QueryBundle + 'static,
 {
-    phantom_data: PhantomData<(Comps, Res, Queries)>,
+    phantom_data: PhantomData<(Res, Queries)>,
 }
 
-impl SystemBuilder<(), (), ()> {
+impl SystemBuilder<(), ()> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         SystemBuilder {
@@ -126,12 +121,11 @@ impl SystemBuilder<(), (), ()> {
     }
 }
 
-impl<Comps, Queries> SystemBuilder<Comps, (), Queries>
+impl<Queries> SystemBuilder<(), Queries>
 where
-    Comps: QueryBundle + 'static,
     Queries: QueryBundle + 'static,
 {
-    pub fn resources<Res>(self) -> SystemBuilder<Comps, Res, Queries>
+    pub fn resources<Res>(self) -> SystemBuilder<Res, Queries>
     where
         Res: ResourceBundle,
     {
@@ -141,24 +135,12 @@ where
     }
 }
 
-impl<Comps, Res, Queries> SystemBuilder<Comps, Res, Queries>
+impl<Res, Queries> SystemBuilder<Res, Queries>
 where
-    Comps: QueryBundle + 'static,
     Res: ResourceBundle + 'static,
     Queries: QueryBundle + 'static,
 {
-    pub fn component<C>(self) -> SystemBuilder<Comps::Output, Res, Queries>
-    where
-        C: QueryUnit + QuerySingle,
-        Comps: TupleAppend<C>,
-        <Comps as TupleAppend<C>>::Output: QueryBundle,
-    {
-        SystemBuilder {
-            phantom_data: PhantomData,
-        }
-    }
-
-    pub fn query<Q>(self) -> SystemBuilder<Comps, Res, Queries::Output>
+    pub fn query<Q>(self) -> SystemBuilder<Res, Queries::Output>
     where
         Q: QuerySingle,
         Queries: TupleAppend<Q>,
@@ -204,7 +186,7 @@ where
                 >,
             >(closure)
         };
-        let system_box = SystemBox::<Comps, Res, Queries> {
+        let system_box = SystemBox::<Res, Queries> {
             phantom_data: PhantomData,
             closure,
         };
