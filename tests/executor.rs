@@ -1,28 +1,8 @@
-use yaks::{CantInsertSystem, Executor, ModQueuePool, Resources, System, World};
+use yaks::{CantInsertSystem, Executor, System};
 
-struct Res1(usize);
+mod setup;
 
-struct Res2(f32);
-
-struct Comp1(usize);
-
-struct Comp2(f32);
-
-struct Comp3(&'static str);
-
-fn setup() -> (World, Resources, ModQueuePool) {
-    let mut world = World::new();
-    world.spawn((Comp1(1), Comp2(0.0)));
-    world.spawn((Comp1(0), Comp2(1.0)));
-    world.spawn((Comp1(1), Comp2(2.0), Comp3("one")));
-    world.spawn((Comp1(2), Comp2(1.0), Comp3("two")));
-    world.spawn((Comp1(1), Comp3("one")));
-    world.spawn((Comp2(1.0), Comp3("two")));
-    let mut resources = Resources::new();
-    resources.insert(Res1(0));
-    resources.insert(Res2(0.0));
-    (world, resources, ModQueuePool::new())
-}
+use setup::*;
 
 #[test]
 fn single_no_handle() {

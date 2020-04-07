@@ -1,35 +1,16 @@
 #![cfg(feature = "parallel")]
 
 use std::{
+    f32::EPSILON,
     thread,
     time::{Duration, Instant},
 };
 
-use yaks::{Executor, ModQueuePool, Resources, System, Threadpool, World};
+use yaks::{Executor, System, Threadpool};
 
-struct Res1(usize);
+mod setup;
 
-struct Res2(f32);
-
-struct Comp1(usize);
-
-struct Comp2(f32);
-
-struct Comp3(&'static str);
-
-fn setup() -> (World, Resources, ModQueuePool) {
-    let mut world = World::new();
-    world.spawn((Comp1(1), Comp2(0.0)));
-    world.spawn((Comp1(0), Comp2(1.0)));
-    world.spawn((Comp1(1), Comp2(2.0), Comp3("one")));
-    world.spawn((Comp1(2), Comp2(1.0), Comp3("two")));
-    world.spawn((Comp1(1), Comp3("one")));
-    world.spawn((Comp2(1.0), Comp3("two")));
-    let mut resources = Resources::new();
-    resources.insert(Res1(0));
-    resources.insert(Res2(0.0));
-    (world, resources, ModQueuePool::new())
-}
+use setup::*;
 
 #[test]
 fn hard_dependency() {
@@ -77,7 +58,7 @@ fn valid_resource_borrows() {
     executor.run_parallel(&world, &resources, &mod_queues, &scope);
     drop(scope);
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
+    assert!(resources.get::<Res2>().unwrap().0 - 1.0 < EPSILON);
 }
 
 #[test]
@@ -160,7 +141,7 @@ fn disjoint_resource_borrows() {
     drop(scope);
     assert!(time.elapsed() < Duration::from_millis(200));
     assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert_eq!(resources.get::<Res2>().unwrap().0, 1.0);
+    assert!(resources.get::<Res2>().unwrap().0 - 1.0 < EPSILON);
 }
 
 #[test]
@@ -197,7 +178,7 @@ fn same_queries() {
     drop(scope);
     assert!(time.elapsed() > Duration::from_millis(200));
     for (_, (comp1, comp2)) in world.query::<(&Comp1, &Comp2)>().iter() {
-        assert_eq!(comp1.0 as f32, comp2.0);
+        assert!(comp1.0 as f32 - comp2.0 < EPSILON);
     }
 }
 

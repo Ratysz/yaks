@@ -1,4 +1,4 @@
-use hecs::{Component, Entity, MissingComponent, Query, Ref, RefMut, World};
+use hecs::{Component, Entity, EntityRef, MissingComponent, Query, Ref, RefMut, World};
 use std::marker::PhantomData;
 
 use crate::query_bundle::QuerySingle;
@@ -48,13 +48,13 @@ where
 pub trait Fetch<'a> {
     type Refs;
 
-    fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs;
+    fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs;
 }
 
 impl<'a> Fetch<'a> for () {
     type Refs = ();
 
-    fn fetch(&self, _: &'a World, _: Entity) -> Self::Refs {}
+    fn fetch(&self, _: EntityRef<'a>) -> Self::Refs {}
 }
 
 impl<'a, C> Fetch<'a> for ComponentEffector<Immutable, Mandatory, C>
@@ -63,10 +63,8 @@ where
 {
     type Refs = Ref<'a, C>;
 
-    fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs {
-        world
-            .entity(entity)
-            .unwrap_or_else(|error| panic!("cannot get entity {:?}: {}", entity, error))
+    fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
+        entity_ref
             .get::<C>()
             .unwrap_or_else(|| panic!("cannot fetch: {}", MissingComponent::new::<C>()))
     }
@@ -78,10 +76,8 @@ where
 {
     type Refs = RefMut<'a, C>;
 
-    fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs {
-        world
-            .entity(entity)
-            .unwrap_or_else(|error| panic!("cannot get entity {:?}: {}", entity, error))
+    fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
+        entity_ref
             .get_mut::<C>()
             .unwrap_or_else(|| panic!("cannot fetch: {}", MissingComponent::new::<C>()))
     }
@@ -93,11 +89,8 @@ where
 {
     type Refs = Option<Ref<'a, C>>;
 
-    fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs {
-        world
-            .entity(entity)
-            .unwrap_or_else(|error| panic!("cannot get entity {:?}: {}", entity, error))
-            .get::<C>()
+    fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
+        entity_ref.get::<C>()
     }
 }
 
@@ -107,11 +100,8 @@ where
 {
     type Refs = Option<RefMut<'a, C>>;
 
-    fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs {
-        world
-            .entity(entity)
-            .unwrap_or_else(|error| panic!("cannot get entity {:?}: {}", entity, error))
-            .get_mut::<C>()
+    fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
+        entity_ref.get_mut::<C>()
     }
 }
 
@@ -128,6 +118,9 @@ impl FetchComponents for World {
         Q: Query + QuerySingle,
         for<'a> Q::ComponentEffectors: Fetch<'a>,
     {
-        Q::component_effectors().fetch(self, entity)
+        Q::component_effectors().fetch(
+            self.entity(entity)
+                .unwrap_or_else(|error| panic!("cannot get entity {:?}: {}", entity, error)),
+        )
     }
 }

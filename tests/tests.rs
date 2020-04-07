@@ -1,28 +1,8 @@
-use yaks::{ModQueuePool, Resources, System, World};
+use yaks::System;
 
-struct Res1(usize);
+mod setup;
 
-struct Res2(f32);
-
-struct Comp1(usize);
-
-struct Comp2(f32);
-
-struct Comp3(&'static str);
-
-fn setup() -> (World, Resources, ModQueuePool) {
-    let mut world = World::new();
-    world.spawn((Comp1(1), Comp2(0.0)));
-    world.spawn((Comp1(0), Comp2(1.0)));
-    world.spawn((Comp1(1), Comp2(2.0), Comp3("one")));
-    world.spawn((Comp1(2), Comp2(1.0), Comp3("two")));
-    world.spawn((Comp1(1), Comp3("one")));
-    world.spawn((Comp2(1.0), Comp3("two")));
-    let mut resources = Resources::new();
-    resources.insert(Res1(0));
-    resources.insert(Res2(0.0));
-    (world, resources, ModQueuePool::new())
-}
+use setup::*;
 
 #[test]
 #[should_panic]
@@ -62,7 +42,7 @@ fn mod_queue_entity_spawn_despawn() {
     System::builder()
         .query::<Query>()
         .build(|context, _, query| {
-            assert_eq!(context.query(query).iter().collect::<Vec<_>>().len(), 2);
+            assert_eq!(context.query(query).iter().count(), 2);
             context.new_mod_queue().push(|world, _| {
                 world.spawn((Comp1(6), Comp2(3.0), Comp3("NaN")));
             });
@@ -79,14 +59,14 @@ fn mod_queue_entity_spawn_despawn() {
     System::builder()
         .query::<Query>()
         .build(move |context, _, query| {
-            assert_eq!(context.query(query).iter().collect::<Vec<_>>().len(), 3);
+            assert_eq!(context.query(query).iter().count(), 3);
             context.new_mod_queue().push(move |world, _| {
                 assert!(world.despawn(entity).is_ok());
             });
         })
         .run(&world, &resources, &mod_queues);
     mod_queues.apply_all(&mut world, &mut resources);
-    assert_eq!(world.query::<Query>().iter().collect::<Vec<_>>().len(), 2);
+    assert_eq!(world.query::<Query>().iter().count(), 2);
 }
 
 #[test]
@@ -195,4 +175,28 @@ fn batch_system() {
     for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
         assert_eq!(comp3.0, "test");
     }
+}
+
+#[test]
+fn fetch_components() {
+    use yaks::FetchComponents as _;
+    let (mut world, resources, mod_queues) = setup();
+    let entity = world.spawn((Comp1(2), Comp2(0.0)));
+    {
+        let (mut comp1, comp2, comp3) =
+            world.fetch::<(&mut Comp1, Option<&Comp2>, Option<&Comp3>)>(entity);
+        assert_eq!(comp1.0, 2);
+        assert!(comp2.is_some());
+        assert!(comp3.is_none());
+        comp1.0 = 4;
+    }
+    System::builder()
+        .query::<(&Comp1, Option<&Comp2>, Option<&Comp3>)>()
+        .build(move |context, _, query| {
+            let (comp1, comp2, comp3) = context.fetch(query, entity);
+            assert_eq!(comp1.0, 4);
+            assert!(comp2.is_some());
+            assert!(comp3.is_none());
+        })
+        .run(&world, &resources, &mod_queues);
 }

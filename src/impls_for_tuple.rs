@@ -1,7 +1,5 @@
-use hecs::{Component, Entity, Query};
+use hecs::{Component, EntityRef, Query, World};
 use resources::{Resource, Resources};
-
-use hecs::World;
 
 use crate::{
     fetch_components::{ComponentEffector, Fetch as ComponentFetch, Mutability, Optionality},
@@ -137,9 +135,9 @@ macro_rules! impls_for_tuple {
                         as ComponentFetch<'a>>::Refs,)*
                 );
 
-                fn fetch(&self, world: &'a World, entity: Entity) -> Self::Refs {
+                fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
                     ($(ComponentEffector::<[<M $letter>], [<O $letter>], [<C $letter>]>::new()
-                        .fetch(world, entity),)*)
+                        .fetch(entity_ref),)*)
                 }
             }
         }
