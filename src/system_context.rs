@@ -1,7 +1,11 @@
 use hecs::{Entity, Fetch, Query, QueryBorrow, World};
 use resources::Resources;
 
-use crate::{query_bundle::QueryEffector, ModQueue, ModQueuePool};
+use crate::{
+    fetch_components::{Fetch as ComponentFetch, FetchComponents as _},
+    query_bundle::{QueryEffector, QuerySingle},
+    ModQueue, ModQueuePool,
+};
 
 #[cfg(feature = "parallel")]
 use crate::Scope;
@@ -39,6 +43,18 @@ impl<'scope> SystemContext<'scope> {
         Q: Query + Send + Sync,
     {
         self.world.query()
+    }
+
+    pub fn fetch<Q>(
+        &self,
+        _: QueryEffector<Q>,
+        entity: Entity,
+    ) -> <Q::ComponentEffectors as ComponentFetch>::Refs
+    where
+        Q: Query + QuerySingle + Send + Sync,
+        for<'a> Q::ComponentEffectors: ComponentFetch<'a>,
+    {
+        self.world.fetch::<Q>(entity)
     }
 
     #[cfg(feature = "parallel")]

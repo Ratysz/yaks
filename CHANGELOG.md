@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 implementation that can be used with those.
 - `FetchResources`, a helper trait implemented on `resources::Resources` - allows getting
 multiple resources via an API similar to `hecs` queries.
+- `FetchComponents`, a helper trait implemented on `hecs::World` - allows getting
+multiple components from an entity via an API similar to `hecs` queries.
 ### Changed
 - Documentation pass (`NoSuchSystem`).
 - Refactored `Executor` system insertion methods, split off builder-like methods

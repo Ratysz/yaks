@@ -66,7 +66,7 @@ where
 {
     phantom_data: PhantomData<(Res, Queries)>,
     #[allow(clippy::type_complexity)]
-    closure: Box<dyn FnMut(SystemContext, Res::Effectors, Queries::Effectors) + Send>,
+    closure: Box<dyn FnMut(SystemContext, Res::Effectors, Queries::QueryEffectors) + Send>,
 }
 
 impl<Res, Queries> Runnable for SystemBox<Res, Queries>
@@ -75,7 +75,7 @@ where
     Queries: QueryBundle,
 {
     fn run(&mut self, context: SystemContext) {
-        (self.closure)(context, Res::effectors(), Queries::effectors());
+        (self.closure)(context, Res::effectors(), Queries::query_effectors());
     }
 
     #[cfg(feature = "parallel")]
@@ -154,7 +154,7 @@ where
     pub fn build<'a, F>(self, mut closure: F) -> System
     where
         Res::Effectors: Fetch<'a>,
-        F: FnMut(SystemContext<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::Effectors)
+        F: FnMut(SystemContext<'a>, <Res::Effectors as Fetch<'a>>::Refs, Queries::QueryEffectors)
             + Send
             + 'static,
     {
@@ -175,12 +175,12 @@ where
             // (see link above), I've opted for this workaround.
             std::mem::transmute::<
                 Box<
-                    dyn FnMut(SystemContext<'a>, Res::Effectors, Queries::Effectors)
+                    dyn FnMut(SystemContext<'a>, Res::Effectors, Queries::QueryEffectors)
                         + Send
                         + 'static,
                 >,
                 Box<
-                    dyn FnMut(SystemContext, Res::Effectors, Queries::Effectors)
+                    dyn FnMut(SystemContext, Res::Effectors, Queries::QueryEffectors)
                         + Send
                         + 'static,
                 >,
