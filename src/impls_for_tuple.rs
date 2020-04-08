@@ -1,5 +1,8 @@
-use hecs::{Component, EntityRef, Query, World};
+use hecs::{Component, EntityRef, Query};
 use resources::{Resource, Resources};
+
+#[cfg(feature = "parallel")]
+use hecs::World;
 
 use crate::{
     fetch_components::{ComponentEffector, Fetch as ComponentFetch, Mutability, Optionality},
