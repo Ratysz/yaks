@@ -1,13 +1,12 @@
-use hecs::{Component, EntityRef, Query};
+use hecs::Query;
 use resources::{Resource, Resources};
 
 #[cfg(feature = "parallel")]
 use hecs::World;
 
 use crate::{
-    fetch_components::{ComponentEffector, Fetch as ComponentFetch, Mutability, Optionality},
     query_bundle::{QueryBundle, QueryEffector, QuerySingle, QueryUnit},
-    resource_bundle::{Fetch as ResourceFetch, ResourceBundle, ResourceEffector, ResourceSingle},
+    resource_bundle::{Fetch, Mutability, ResourceBundle, ResourceEffector, ResourceSingle},
     system::TupleAppend,
 };
 
@@ -39,15 +38,10 @@ where
     Q: QueryUnit,
     Self: Query,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = Q::ComponentEffector;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Q::component_effector()
     }
 
     #[cfg(feature = "parallel")]
@@ -65,10 +59,10 @@ impl<Q> QueryBundle for (Q,)
 where
     Q: QuerySingle,
 {
-    type QueryEffectors = Q::QueryEffector;
+    type Effectors = Q::Effector;
 
-    fn query_effectors() -> Self::QueryEffectors {
-        Q::query_effector()
+    fn effectors() -> Self::Effectors {
+        Q::effector()
     }
 
     #[cfg(feature = "parallel")]
@@ -106,41 +100,19 @@ macro_rules! impls_for_tuple {
         }
 
         paste::item! {
-            impl<'a, $([<M $letter>]),*, $([<R $letter>]),*> ResourceFetch<'a>
+            impl<'a, $([<M $letter>]),*, $([<R $letter>]),*> Fetch<'a>
                 for ($(ResourceEffector<[<M $letter>], [<R $letter>]>,)*)
             where
                 $([<M $letter>]: Mutability,)*
                 $([<R $letter>]: Resource,)*
-                $(ResourceEffector<[<M $letter>], [<R $letter>]>: ResourceFetch<'a>,)*
+                $(ResourceEffector<[<M $letter>], [<R $letter>]>: Fetch<'a>,)*
             {
                 type Refs = (
-                    $(<ResourceEffector<[<M $letter>], [<R $letter>]> as ResourceFetch<'a>>::Refs,)*
+                    $(<ResourceEffector<[<M $letter>], [<R $letter>]> as Fetch<'a>>::Refs,)*
                 );
 
                 fn fetch(&self, resources: &'a Resources) -> Self::Refs {
                     ($(ResourceEffector::<[<M $letter>], [<R $letter>]>::new().fetch(resources),)*)
-                }
-            }
-        }
-
-        paste::item! {
-            impl<'a, $([<M $letter>]),*, $([<O $letter>]),*, $([<C $letter>]),*> ComponentFetch<'a>
-                for ($(ComponentEffector<[<M $letter>], [<O $letter>], [<C $letter>]>,)*)
-            where
-                $([<M $letter>]: Mutability,)*
-                $([<O $letter>]: Optionality,)*
-                $([<C $letter>]: Component,)*
-                $(ComponentEffector<[<M $letter>], [<O $letter>], [<C $letter>]>:
-                    ComponentFetch<'a>,)*
-            {
-                type Refs = (
-                    $(<ComponentEffector<[<M $letter>], [<O $letter>], [<C $letter>]>
-                        as ComponentFetch<'a>>::Refs,)*
-                );
-
-                fn fetch(&self, entity_ref: EntityRef<'a>) -> Self::Refs {
-                    ($(ComponentEffector::<[<M $letter>], [<O $letter>], [<C $letter>]>::new()
-                        .fetch(entity_ref),)*)
                 }
             }
         }
@@ -150,15 +122,10 @@ macro_rules! impls_for_tuple {
             $($letter: QueryUnit,)*
             Self: Query,
         {
-            type QueryEffector = QueryEffector<Self>;
-            type ComponentEffectors = ($($letter::ComponentEffector,)*);
+            type Effector = QueryEffector<Self>;
 
-            fn query_effector() -> Self::QueryEffector {
+            fn effector() -> Self::Effector {
                 QueryEffector::new()
-            }
-
-            fn component_effectors() -> Self::ComponentEffectors {
-                ($($letter::component_effector(),)*)
             }
 
             #[cfg(feature = "parallel")]
@@ -176,10 +143,10 @@ macro_rules! impls_for_tuple {
         where
             $($letter: Query + QuerySingle + Send + Sync,)*
         {
-            type QueryEffectors = ($($letter::QueryEffector,)*);
+            type Effectors = ($($letter::Effector,)*);
 
-            fn query_effectors() -> Self::QueryEffectors {
-                ($($letter::query_effector(),)*)
+            fn effectors() -> Self::Effectors {
+                ($($letter::effector(),)*)
             }
 
             #[cfg(feature = "parallel")]

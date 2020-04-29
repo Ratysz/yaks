@@ -1,12 +1,10 @@
-use hecs::{Component, Query, With, Without};
+use hecs::{Component, Query, QueryBorrow, With, Without, World};
 use std::marker::PhantomData;
 
 #[cfg(feature = "parallel")]
-use hecs::{Access, World};
+use hecs::Access;
 #[cfg(feature = "parallel")]
 use std::any::TypeId;
-
-use crate::fetch_components::{ComponentEffector, Immutable, Mandatory, Mutable, Optional};
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeAccess, SystemBorrows};
@@ -22,10 +20,23 @@ impl<Q> QueryEffector<Q>
 where
     Q: Query + Send + Sync,
 {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             phantom_data: PhantomData,
         }
+    }
+
+    pub fn query<'a>(&self, world: &'a World) -> QueryBorrow<'a, Q> {
+        world.query::<Q>()
+    }
+}
+
+impl<Q> Default for QueryEffector<Q>
+where
+    Q: Query + Send + Sync,
+{
+    fn default() -> Self {
+        QueryEffector::new()
     }
 }
 
@@ -41,21 +52,14 @@ where
 impl<Q> Copy for QueryEffector<Q> where Q: Query + Send + Sync {}
 
 pub trait QueryUnit: Send + Sync {
-    type ComponentEffector;
-
-    fn component_effector() -> Self::ComponentEffector;
-
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
 }
 
 pub trait QuerySingle: Send + Sync {
-    type QueryEffector;
-    type ComponentEffectors;
+    type Effector;
 
-    fn query_effector() -> Self::QueryEffector;
-
-    fn component_effectors() -> Self::ComponentEffectors;
+    fn effector() -> Self::Effector;
 
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
@@ -65,9 +69,9 @@ pub trait QuerySingle: Send + Sync {
 }
 
 pub trait QueryBundle: Send + Sync {
-    type QueryEffectors;
+    type Effectors;
 
-    fn query_effectors() -> Self::QueryEffectors;
+    fn effectors() -> Self::Effectors;
 
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows);
@@ -80,12 +84,6 @@ impl<C> QueryUnit for &'_ C
 where
     C: Component,
 {
-    type ComponentEffector = ComponentEffector<Immutable, Mandatory, C>;
-
-    fn component_effector() -> Self::ComponentEffector {
-        ComponentEffector::new()
-    }
-
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.components_immutable.insert(TypeId::of::<C>());
@@ -96,57 +94,26 @@ impl<C> QueryUnit for &'_ mut C
 where
     C: Component,
 {
-    type ComponentEffector = ComponentEffector<Mutable, Mandatory, C>;
-
-    fn component_effector() -> Self::ComponentEffector {
-        ComponentEffector::new()
-    }
-
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
         borrows.components_mutable.insert(TypeId::of::<C>());
     }
 }
 
-impl<C> QueryUnit for Option<&'_ C>
+impl<Q> QueryUnit for Option<Q>
 where
-    C: Component,
+    Q: QueryUnit,
 {
-    type ComponentEffector = ComponentEffector<Immutable, Optional, C>;
-
-    fn component_effector() -> Self::ComponentEffector {
-        ComponentEffector::new()
-    }
-
     #[cfg(feature = "parallel")]
     fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_immutable.insert(TypeId::of::<C>());
-    }
-}
-
-impl<C> QueryUnit for Option<&'_ mut C>
-where
-    C: Component,
-{
-    type ComponentEffector = ComponentEffector<Mutable, Optional, C>;
-
-    fn component_effector() -> Self::ComponentEffector {
-        ComponentEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_mutable.insert(TypeId::of::<C>());
+        Q::write_borrows(borrows);
     }
 }
 
 impl QuerySingle for () {
-    type QueryEffector = ();
-    type ComponentEffectors = ();
+    type Effector = ();
 
-    fn query_effector() -> Self::QueryEffector {}
-
-    fn component_effectors() -> Self::ComponentEffectors {}
+    fn effector() -> Self::Effector {}
 
     #[cfg(feature = "parallel")]
     fn write_borrows(_: &mut SystemBorrows) {}
@@ -160,15 +127,10 @@ where
     C: Component,
     Self: Query + QueryUnit,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = <Self as QueryUnit>::ComponentEffector;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Self::component_effector()
     }
 
     #[cfg(feature = "parallel")]
@@ -187,15 +149,10 @@ where
     C: Component,
     Self: Query + QueryUnit,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = <Self as QueryUnit>::ComponentEffector;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Self::component_effector()
     }
 
     #[cfg(feature = "parallel")]
@@ -214,15 +171,10 @@ where
     Q: QueryUnit,
     Self: Query + QueryUnit,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = <Self as QueryUnit>::ComponentEffector;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Self::component_effector()
     }
 
     #[cfg(feature = "parallel")]
@@ -241,15 +193,10 @@ where
     C: Component,
     Q: Query + QuerySingle,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = Q::ComponentEffectors;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Q::component_effectors()
     }
 
     #[cfg(feature = "parallel")]
@@ -268,15 +215,10 @@ where
     C: Component,
     Q: Query + QuerySingle,
 {
-    type QueryEffector = QueryEffector<Self>;
-    type ComponentEffectors = Q::ComponentEffectors;
+    type Effector = QueryEffector<Self>;
 
-    fn query_effector() -> Self::QueryEffector {
+    fn effector() -> Self::Effector {
         QueryEffector::new()
-    }
-
-    fn component_effectors() -> Self::ComponentEffectors {
-        Q::component_effectors()
     }
 
     #[cfg(feature = "parallel")]
@@ -291,9 +233,9 @@ where
 }
 
 impl QueryBundle for () {
-    type QueryEffectors = ();
+    type Effectors = ();
 
-    fn query_effectors() -> Self::QueryEffectors {}
+    fn effectors() -> Self::Effectors {}
 
     #[cfg(feature = "parallel")]
     fn write_borrows(_: &mut SystemBorrows) {}

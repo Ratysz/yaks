@@ -7,7 +7,15 @@ use std::any::TypeId;
 #[cfg(feature = "parallel")]
 use crate::borrows::SystemBorrows;
 
-use crate::fetch_components::{Immutable, Mutability, Mutable};
+pub struct Immutable;
+
+pub struct Mutable;
+
+pub trait Mutability: Send + Sync {}
+
+impl Mutability for Immutable {}
+
+impl Mutability for Mutable {}
 
 pub struct ResourceEffector<M, R>
 where

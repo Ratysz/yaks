@@ -176,27 +176,3 @@ fn batch_system() {
         assert_eq!(comp3.0, "test");
     }
 }
-
-#[test]
-fn fetch_components() {
-    use yaks::FetchComponents as _;
-    let (mut world, resources, mod_queues) = setup();
-    let entity = world.spawn((Comp1(2), Comp2(0.0)));
-    {
-        let (mut comp1, comp2, comp3) =
-            world.fetch::<(&mut Comp1, Option<&Comp2>, Option<&Comp3>)>(entity);
-        assert_eq!(comp1.0, 2);
-        assert!(comp2.is_some());
-        assert!(comp3.is_none());
-        comp1.0 = 4;
-    }
-    System::builder()
-        .query::<(&Comp1, Option<&Comp2>, Option<&Comp3>)>()
-        .build(move |context, _, query| {
-            let (comp1, comp2, comp3) = context.fetch(query, entity);
-            assert_eq!(comp1.0, 4);
-            assert!(comp2.is_some());
-            assert!(comp3.is_none());
-        })
-        .run(&world, &resources, &mod_queues);
-}

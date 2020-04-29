@@ -97,7 +97,6 @@ mod error;
 mod executor;
 #[cfg(feature = "parallel")]
 mod executor_parallel_impls;
-mod fetch_components;
 mod impls_for_tuple;
 mod mod_queue;
 mod query_bundle;
@@ -111,7 +110,6 @@ mod threadpool;
 pub use borrows::{ArchetypeAccess, SystemBorrows};
 pub use error::{CantInsertSystem, NoSuchSystem};
 pub use executor::{Executor, ExecutorBuilder};
-pub use fetch_components::FetchComponents;
 pub use mod_queue::{ModQueue, ModQueuePool};
 pub use resource_bundle::FetchResources;
 pub use system::{Runnable, System, SystemBuilder};
