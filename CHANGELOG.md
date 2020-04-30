@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `resources::Resources`, and `ModQueuePool`.
 - `error` module, errors are now in crate root.
 ### Added
-- `SystemContext`, bundles up state references in system closures.
+- `SystemContext`, bundles up state references in system closures and provides several
+convenience methods.
 - `ModQueuePool`, `Runnable`, `ArchetypeAccess`, and `SystemBorrows` are now in public API.
 - `ExecutorBuilder`, splits off builder-like methods from the `Executor`.
 - `parallel` feature: enables `System::run_with_scope()`, `Executor::run_with_scope()`, and

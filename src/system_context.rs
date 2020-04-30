@@ -1,4 +1,4 @@
-use hecs::{Entity, Fetch, Query, QueryBorrow, World};
+use hecs::{Entity, Fetch, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
 use resources::Resources;
 
 use crate::{query_bundle::QueryEffector, ModQueue, ModQueuePool};
@@ -39,6 +39,17 @@ impl<'scope> SystemContext<'scope> {
         Q: Query + Send + Sync,
     {
         self.world.query()
+    }
+
+    pub fn query_one<Q>(
+        &self,
+        _: QueryEffector<Q>,
+        entity: Entity,
+    ) -> Result<QueryOne<Q>, NoSuchEntity>
+    where
+        Q: Query + Send + Sync,
+    {
+        self.world.query_one(entity)
     }
 
     #[cfg(feature = "parallel")]
