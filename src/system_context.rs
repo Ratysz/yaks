@@ -34,7 +34,7 @@ impl<'scope> SystemContext<'scope> {
         self.mod_queues.new_mod_queue()
     }
 
-    pub fn query<Q>(&self, _: QueryEffector<Q>) -> QueryBorrow<Q>
+    pub fn query<Q>(&self, _: QueryEffector<Q>) -> QueryBorrow<'_, Q>
     where
         Q: Query + Send + Sync,
     {
@@ -45,7 +45,7 @@ impl<'scope> SystemContext<'scope> {
         &self,
         _: QueryEffector<Q>,
         entity: Entity,
-    ) -> Result<QueryOne<Q>, NoSuchEntity>
+    ) -> Result<QueryOne<'_, Q>, NoSuchEntity>
     where
         Q: Query + Send + Sync,
     {
