@@ -103,11 +103,11 @@ impl<'scope> Scope<'scope> {
         batch_size: u32,
         for_each: F,
     ) where
-        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        F: Fn(Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item) + Send + Sync,
         Q: Query + Send + Sync + 'q,
     {
         query_borrow.iter_batched(batch_size).for_each(|batch| {
-            self.execute(|| batch.for_each(|item| for_each(item)));
+            self.execute(|| batch.for_each(|(entity, components)| for_each(entity, components)));
         });
     }
 }

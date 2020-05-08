@@ -285,7 +285,7 @@ fn batched() {
                 .query::<(&Comp1, &Comp2)>()
                 .build(|context, _, query| {
                     let mut borrow = context.query(query);
-                    context.batch(&mut borrow, 1, |(_, (comp1, comp2))| {
+                    context.batch(&mut borrow, 1, |_, (comp1, comp2)| {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32 + comp2.0;
                     });
@@ -296,7 +296,7 @@ fn batched() {
                 .query::<(&Comp1, &mut Comp3)>()
                 .build(|context, _, query| {
                     let mut borrow = context.query(query);
-                    context.batch(&mut borrow, 1, |(_, (comp1, mut comp3))| {
+                    context.batch(&mut borrow, 1, |_, (comp1, mut comp3)| {
                         thread::sleep(Duration::from_millis(25));
                         let _value = comp1.0 as f32;
                         comp3.0 = "test";

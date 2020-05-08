@@ -62,24 +62,28 @@ impl<'scope> SystemContext<'scope> {
         &self,
         query_borrow: &'q mut QueryBorrow<'w, Q>,
         batch_size: u32,
-        closure: F,
+        for_each: F,
     ) where
-        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        F: Fn(Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item) + Send + Sync,
         Q: Query + Send + Sync + 'q,
     {
         if let Some(scope) = self.scope {
-            scope.scope().batch(query_borrow, batch_size, closure);
+            scope.scope().batch(query_borrow, batch_size, for_each);
         } else {
-            query_borrow.iter().for_each(|item| closure(item));
+            query_borrow
+                .iter()
+                .for_each(|(entity, components)| for_each(entity, components));
         }
     }
 
     #[cfg(not(feature = "parallel"))]
-    pub fn batch<'q, 'w, F, Q>(&self, query_borrow: &'q mut QueryBorrow<'w, Q>, _: u32, closure: F)
+    pub fn batch<'q, 'w, F, Q>(&self, query_borrow: &'q mut QueryBorrow<'w, Q>, _: u32, for_each: F)
     where
-        F: Fn((Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item)) + Send + Sync,
+        F: Fn(Entity, <<Q as Query>::Fetch as Fetch<'q>>::Item) + Send + Sync,
         Q: Query + Send + Sync + 'q,
     {
-        query_borrow.iter().for_each(|item| closure(item));
+        query_borrow
+            .iter()
+            .for_each(|(entity, components)| for_each(entity, components));
     }
 }

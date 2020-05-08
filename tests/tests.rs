@@ -120,7 +120,7 @@ fn batch() {
     scope.batch(
         &mut world.query::<(&Comp1, &mut Comp3)>(),
         1,
-        |(_, (comp1, mut comp3))| {
+        |_, (comp1, mut comp3)| {
             thread::sleep(Duration::from_millis(25));
             let _value = comp1.0 as f32;
             comp3.0 = "test";
@@ -143,7 +143,7 @@ fn batch_system() {
         System::builder()
             .query::<(&Comp1, &mut Comp3)>()
             .build(|context, _, query| {
-                context.batch(&mut context.query(query), 1, |(_, (comp1, mut comp3))| {
+                context.batch(&mut context.query(query), 1, |_, (comp1, mut comp3)| {
                     thread::sleep(Duration::from_millis(25));
                     let _value = comp1.0 as f32;
                     comp3.0 = "test";
