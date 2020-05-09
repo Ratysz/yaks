@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[cfg(feature = "parallel")]
-use crossbeam::channel::{self, Receiver, Sender};
+use crossbeam_channel::{self, Receiver, Sender};
 #[cfg(feature = "parallel")]
 use hecs::ArchetypesGeneration;
 #[cfg(feature = "parallel")]
@@ -66,7 +66,7 @@ where
 {
     fn default() -> Self {
         #[cfg(feature = "parallel")]
-        let (sender, receiver) = channel::unbounded();
+        let (sender, receiver) = crossbeam_channel::unbounded();
         Self {
             systems: Default::default(),
             system_handles: Default::default(),

@@ -1,4 +1,4 @@
-use crossbeam::channel::{self, Receiver, Sender};
+use crossbeam_channel::{self, Receiver, Sender};
 use hecs::{Entity, Fetch, Query, QueryBorrow};
 use std::{
     mem,
@@ -20,7 +20,7 @@ pub struct Threadpool {
 
 impl Threadpool {
     pub fn new(thread_count: usize) -> Self {
-        let (sender, thread_receiver) = channel::unbounded();
+        let (sender, thread_receiver) = crossbeam_channel::unbounded();
         let mut threads = Vec::with_capacity(thread_count);
 
         threads.extend((0..thread_count).map(|_| {
@@ -66,7 +66,7 @@ pub struct Scope<'scope> {
 
 impl<'scope> Scope<'scope> {
     fn new(pool: &'scope Threadpool) -> Self {
-        let (sender, receiver) = channel::unbounded();
+        let (sender, receiver) = crossbeam_channel::unbounded();
         Self {
             pool,
             tasks: AtomicU32::new(0),
