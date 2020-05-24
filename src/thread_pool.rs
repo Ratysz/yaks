@@ -44,20 +44,18 @@ impl ThreadPool for &'_ () {
 
 #[cfg(not(feature = "parallel"))]
 impl ThreadPool for () {
-    fn scope<'scope, F>(self, closure: F)
+    fn scope<'scope, F>(self, _: F)
     where
         F: for<'s> FnOnce(&'s Scope<'scope>) + Send + 'scope,
     {
-        closure(&PhantomData);
     }
 }
 
 #[cfg(not(feature = "parallel"))]
 impl ThreadPool for &'_ () {
-    fn scope<'scope, F>(self, closure: F)
+    fn scope<'scope, F>(self, _: F)
     where
         F: for<'s> FnOnce(&'s Scope<'scope>) + Send + 'scope,
     {
-        closure(&PhantomData);
     }
 }
