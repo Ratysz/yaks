@@ -3,13 +3,13 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 #[cfg(feature = "parallel")]
 use hecs::World;
 
-use super::{
+use crate::{
     DerefTuple, Executor, Fetch, QueryBundle, ResourceTuple, SystemClosure, SystemContext,
     WrappedResources,
 };
 
 #[cfg(feature = "parallel")]
-use super::{ArchetypeSet, ComponentTypeSet, ResourceSet, TypeSet};
+use crate::{ArchetypeSet, ComponentTypeSet, ResourceSet, TypeSet};
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(usize);

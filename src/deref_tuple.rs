@@ -1,4 +1,4 @@
-use super::{Ref, RefMut};
+use crate::{Ref, RefMut};
 
 pub trait DerefTuple<'a> {
     type Output;

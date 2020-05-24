@@ -7,7 +7,7 @@ use hecs::World;
 use std::any::TypeId;
 
 #[cfg(feature = "parallel")]
-use super::{ArchetypeSet, ComponentTypeSet};
+use crate::{ArchetypeSet, ComponentTypeSet};
 
 pub struct QueryMarker<Q0>(PhantomData<Q0>)
 where

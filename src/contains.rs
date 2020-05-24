@@ -1,7 +1,7 @@
 #[cfg(feature = "parallel")]
 use fixedbitset::FixedBitSet;
 
-use super::{Ref, RefMut, ResourceCell, WrappedResources};
+use crate::{Ref, RefMut, ResourceCell, WrappedResources};
 
 pub trait Contains<R0, M0> {
     fn borrow(&self) -> Ref<R0>;

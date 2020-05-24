@@ -1,5 +1,9 @@
 use hecs::World;
-use yaks::Executor;
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
+use yaks::{Executor, QueryMarker};
 
 struct A(usize);
 
@@ -7,337 +11,167 @@ struct B(usize);
 
 struct C(usize);
 
-/*#![cfg(feature = "parallel")]
+#[cfg(feature = "parallel")]
+fn thread_pool() -> rayon::ThreadPool {
+    rayon::ThreadPoolBuilder::new().build().unwrap()
+}
 
-use std::{
-    f32::EPSILON,
-    thread,
-    time::{Duration, Instant},
-};
-
-use yaks::{Executor, System, Threadpool};
+#[cfg(not(feature = "parallel"))]
+fn thread_pool() -> () {}
 
 #[test]
-fn hard_dependency() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<usize>::builder()
+fn dependencies_single() {
+    let world = World::new();
+    let mut executor = Executor::<()>::builder()
         .system_with_handle(
-            System::builder().build(|_, _, _| {
+            |_, _: (), _: ()| {
                 thread::sleep(Duration::from_millis(100));
-            }),
+            },
             0,
         )
         .system_with_handle_and_deps(
-            System::builder().build(|_, _, _| {
+            |_, _: (), _: ()| {
                 thread::sleep(Duration::from_millis(100));
-            }),
+            },
             1,
             vec![0],
         )
         .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
     let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
+    executor.run(&thread_pool(), &world, ());
     assert!(time.elapsed() > Duration::from_millis(200));
 }
 
 #[test]
-fn valid_resource_borrows() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
+fn resources_incompatible() {
+    let world = World::new();
+    let mut a = A(0);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|_, a: &mut A, _: ()| {
+            a.0 += 1;
             thread::sleep(Duration::from_millis(100));
-            borrow.0 += 1;
-        }))
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.resources.get_mut::<Res2>().unwrap();
-            thread::sleep(Duration::from_millis(100));
-            borrow.0 += 1.0;
-        }))
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert!(resources.get::<Res2>().unwrap().0 - 1.0 < EPSILON);
-}
-
-#[test]
-#[should_panic(expected = "a worker thread has panicked")]
-fn invalid_resource_borrows() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
-            thread::sleep(Duration::from_millis(100));
-            borrow.0 += 1;
-        }))
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.resources.get_mut::<Res1>().unwrap();
-            thread::sleep(Duration::from_millis(100));
-            borrow.0 += 1;
-        }))
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-}
-
-#[test]
-fn same_resource_borrows() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .system(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert!(time.elapsed() > Duration::from_millis(200));
-    assert_eq!(resources.get::<Res1>().unwrap().0, 2);
-}
-
-#[test]
-fn disjoint_resource_borrows() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(
-            System::builder()
-                .resources::<&mut Res1>()
-                .build(|_, mut res, _| {
-                    res.0 += 1;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .system(
-            System::builder()
-                .resources::<&mut Res2>()
-                .build(|_, mut res, _| {
-                    res.0 += 1.0;
-                    thread::sleep(Duration::from_millis(100));
-                }),
-        )
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert!(time.elapsed() < Duration::from_millis(200));
-    assert_eq!(resources.get::<Res1>().unwrap().0, 1);
-    assert!(resources.get::<Res2>().unwrap().0 - 1.0 < EPSILON);
-}
-
-#[test]
-fn same_queries() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(
-            System::builder()
-                .query::<(&Comp1, &Comp2)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    for (_, (comp1, comp2)) in borrow.iter() {
-                        thread::sleep(Duration::from_millis(25));
-                        let _value = comp1.0 as f32 + comp2.0;
-                    }
-                }),
-        )
-        .system(
-            System::builder()
-                .query::<(&Comp1, &mut Comp2)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    for (_, (comp1, mut comp2)) in borrow.iter() {
-                        thread::sleep(Duration::from_millis(25));
-                        comp2.0 = comp1.0 as f32;
-                    }
-                }),
-        )
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert!(time.elapsed() > Duration::from_millis(200));
-    for (_, (comp1, comp2)) in world.query::<(&Comp1, &Comp2)>().iter() {
-        assert!(comp1.0 as f32 - comp2.0 < EPSILON);
-    }
-}
-
-#[test]
-fn disjoint_queries() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(
-            System::builder()
-                .query::<(&Comp1, &Comp2)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    for (_, (comp1, comp2)) in borrow.iter() {
-                        thread::sleep(Duration::from_millis(25));
-                        let _value = comp1.0 as f32 + comp2.0;
-                    }
-                }),
-        )
-        .system(
-            System::builder()
-                .query::<(&Comp1, &mut Comp3)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    for (_, (comp1, mut comp3)) in borrow.iter() {
-                        thread::sleep(Duration::from_millis(25));
-                        let _value = comp1.0 as f32;
-                        comp3.0 = "test";
-                    }
-                }),
-        )
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert!(time.elapsed() < Duration::from_millis(175));
-    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
-        assert_eq!(comp3.0, "test");
-    }
-}
-
-#[test]
-fn valid_queries() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.world.query::<(&Comp1, &Comp2)>();
-            for (_, (comp1, comp2)) in borrow.iter() {
-                thread::sleep(Duration::from_millis(25));
-                let _value = comp1.0 as f32 + comp2.0;
-            }
-        }))
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.world.query::<(&Comp1, &mut Comp3)>();
-            for (_, (comp1, mut comp3)) in borrow.iter() {
-                thread::sleep(Duration::from_millis(25));
-                let _value = comp1.0 as f32;
-                comp3.0 = "test";
-            }
-        }))
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
-        assert_eq!(comp3.0, "test");
-    }
-}
-
-#[test]
-#[should_panic(expected = "a worker thread has panicked")]
-fn invalid_queries() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.world.query::<(&Comp1, &Comp2)>();
-            for (_, (comp1, comp2)) in borrow.iter() {
-                thread::sleep(Duration::from_millis(25));
-                let _value = comp1.0 as f32 + comp2.0;
-            }
-        }))
-        .system(System::builder().build(|context, _, _| {
-            let mut borrow = context.world.query::<(&Comp1, &mut Comp2)>();
-            for (_, (comp1, mut comp2)) in borrow.iter() {
-                thread::sleep(Duration::from_millis(25));
-                comp2.0 = comp1.0 as f32;
-            }
-        }))
-        .build();
-    let threadpool = Threadpool::new(4);
-    let scope = threadpool.scope();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-}
-
-#[test]
-fn batched() {
-    let (world, resources, mod_queues) = setup();
-    let mut executor = Executor::<()>::builder()
-        .system(
-            System::builder()
-                .query::<(&Comp1, &Comp2)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    context.batch(&mut borrow, 1, |_, (comp1, comp2)| {
-                        thread::sleep(Duration::from_millis(25));
-                        let _value = comp1.0 as f32 + comp2.0;
-                    });
-                }),
-        )
-        .system(
-            System::builder()
-                .query::<(&Comp1, &mut Comp3)>()
-                .build(|context, _, query| {
-                    let mut borrow = context.query(query);
-                    context.batch(&mut borrow, 1, |_, (comp1, mut comp3)| {
-                        thread::sleep(Duration::from_millis(25));
-                        let _value = comp1.0 as f32;
-                        comp3.0 = "test";
-                    });
-                }),
-        )
-        .build();
-    let threadpool = Threadpool::new(8);
-    let scope = threadpool.scope();
-    let time = Instant::now();
-    executor.run_parallel(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    assert!(time.elapsed() < Duration::from_millis(100));
-    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
-        assert_eq!(comp3.0, "test");
-    }
-    System::builder()
-        .query::<(&Comp1, &mut Comp3)>()
-        .build(|context, _, query| {
-            for (_, (_, mut comp3)) in context.query(query).iter() {
-                comp3.0 = "_";
-            }
         })
-        .run(&world, &resources, &mod_queues);
-    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
-        assert_eq!(comp3.0, "_");
-    }
-    let scope = threadpool.scope();
+        .system(|_, a: &mut A, _: ()| {
+            a.0 += 1;
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
     let time = Instant::now();
-    executor.run_with_scope(&world, &resources, &mod_queues, &scope);
-    drop(scope);
-    let elapsed = time.elapsed();
-    assert!(elapsed > Duration::from_millis(50));
-    assert!(elapsed < Duration::from_millis(175));
-    for (_, (_, comp3)) in world.query::<(&Comp1, &Comp3)>().iter() {
-        assert_eq!(comp3.0, "test");
+    executor.run(&thread_pool(), &world, &mut a);
+    assert!(time.elapsed() > Duration::from_millis(200));
+    assert_eq!(a.0, 2);
+}
+
+#[test]
+fn resources_disjoint() {
+    let world = World::new();
+    let mut a = A(0);
+    let mut b = B(1);
+    let mut executor = Executor::<(A, B)>::builder()
+        .system(|_, a: &mut A, _: ()| {
+            a.0 += 1;
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|_, b: &mut B, _: ()| {
+            b.0 += 1;
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run(&thread_pool(), &world, (&mut a, &mut b));
+    #[cfg(not(feature = "parallel"))]
+    assert!(time.elapsed() > Duration::from_millis(200));
+    #[cfg(feature = "parallel")]
+    assert!(time.elapsed() < Duration::from_millis(200));
+    assert_eq!(a.0, 1);
+    assert_eq!(b.0, 2);
+}
+
+#[test]
+fn queries_incompatible() {
+    let mut world = World::new();
+    world.spawn_batch((0..10).map(|_| (B(0),))).last();
+    let mut a = A(1);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            for (_, b) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            for (_, b) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run(&thread_pool(), &world, &mut a);
+    assert!(time.elapsed() > Duration::from_millis(200));
+    for (_, b) in world.query::<&B>().iter() {
+        assert_eq!(b.0, 2);
     }
 }
-*/
+
+#[test]
+fn queries_disjoint_by_components() {
+    let mut world = World::new();
+    world.spawn_batch((0..10).map(|_| (B(0), C(0)))).last();
+    let mut a = A(1);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            for (_, b) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|context, a: &A, q: QueryMarker<&mut C>| {
+            for (_, c) in context.query(q).iter() {
+                c.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run(&thread_pool(), &world, &mut a);
+    #[cfg(not(feature = "parallel"))]
+    assert!(time.elapsed() > Duration::from_millis(200));
+    #[cfg(feature = "parallel")]
+    assert!(time.elapsed() < Duration::from_millis(200));
+    for (_, (b, c)) in world.query::<(&B, &C)>().iter() {
+        assert_eq!(b.0, 1);
+        assert_eq!(c.0, 1);
+    }
+}
+
+#[test]
+fn queries_disjoint_by_archetypes() {
+    let mut world = World::new();
+    world.spawn_batch((0..10).map(|_| (A(0), B(0)))).last();
+    world.spawn_batch((0..10).map(|_| (B(0), C(0)))).last();
+    let mut a = A(1);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, a: &A, q: QueryMarker<(&A, &mut B)>| {
+            for (_, (_, b)) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|context, a: &A, q: QueryMarker<(&mut B, &C)>| {
+            for (_, (b, _)) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run(&thread_pool(), &world, &mut a);
+    #[cfg(not(feature = "parallel"))]
+    assert!(time.elapsed() > Duration::from_millis(200));
+    #[cfg(feature = "parallel")]
+    assert!(time.elapsed() < Duration::from_millis(200));
+    for (_, b) in world.query::<&B>().iter() {
+        assert_eq!(b.0, 1);
+    }
+}

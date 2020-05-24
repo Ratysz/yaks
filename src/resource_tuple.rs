@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{AtomicBorrow, ResourceCell};
+use crate::{AtomicBorrow, ResourceCell};
 
 pub struct WrappedResources<'a, Wrapped> {
     phantom_data: PhantomData<&'a ()>,

@@ -8,7 +8,7 @@ struct B(usize);
 struct C(usize);
 
 #[test]
-fn one_system() {
+fn systems_single() {
     let world = World::new();
     let mut a = A(0);
     let mut b = B(1);
@@ -18,12 +18,12 @@ fn one_system() {
             a.0 = b.0 + c.0;
         })
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 3);
 }
 
 #[test]
-fn two_systems() {
+fn systems_two() {
     let world = World::new();
     let mut a = A(0);
     let mut b = B(1);
@@ -36,12 +36,12 @@ fn two_systems() {
             a.0 += c.0;
         })
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 3);
 }
 
 #[test]
-fn single_resource_decoding() {
+fn resources_decoding_single() {
     let world = World::new();
     let mut a = A(0);
     let mut b = B(1);
@@ -51,12 +51,12 @@ fn single_resource_decoding() {
             a.0 = 1;
         })
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 1);
 }
 
 #[test]
-fn single_resource_wrapping() {
+fn resources_wrap_single() {
     let world = World::new();
     let mut a = A(0);
     let mut executor = Executor::<(A,)>::builder()
@@ -64,19 +64,19 @@ fn single_resource_wrapping() {
             a.0 = 1;
         })
         .build();
-    executor.run(&world, (&mut a,));
+    executor.run((), &world, (&mut a,));
     assert_eq!(a.0, 1);
     let mut executor = Executor::<(A,)>::builder()
         .system(|_, a: &mut A, _: ()| {
             a.0 = 2;
         })
         .build();
-    executor.run(&world, &mut a);
+    executor.run((), &world, &mut a);
     assert_eq!(a.0, 2);
 }
 
 #[test]
-fn single_query_decoding() {
+fn queries_decoding_single() {
     let mut world = World::new();
     world.spawn((B(1),));
     world.spawn((B(2),));
@@ -88,12 +88,12 @@ fn single_query_decoding() {
             }
         })
         .build();
-    executor.run(&world, &mut a);
+    executor.run((), &world, &mut a);
     assert_eq!(a.0, 3);
 }
 
 #[test]
-fn four_queries_decoding() {
+fn queries_decoding_four() {
     let mut world = World::new();
     world.spawn((B(1),));
     world.spawn((B(1),));
@@ -134,12 +134,12 @@ fn four_queries_decoding() {
             },
         )
         .build();
-    executor.run(&world, &mut a);
+    executor.run((), &world, &mut a);
 }
 
 #[cfg(not(feature = "parallel"))]
 #[test]
-#[should_panic(expected = "cannot borrow tests::A immutably: already borrowed mutably")]
+#[should_panic(expected = "cannot borrow executor::A immutably: already borrowed mutably")]
 fn invalid_resources_mutable_immutable() {
     let world = World::new();
     let mut a = A(0);
@@ -148,12 +148,12 @@ fn invalid_resources_mutable_immutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&mut A, &A), _: ()| {})
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
 }
 
 #[cfg(not(feature = "parallel"))]
 #[test]
-#[should_panic(expected = "cannot borrow tests::A mutably: already borrowed")]
+#[should_panic(expected = "cannot borrow executor::A mutably: already borrowed")]
 fn invalid_resources_immutable_mutable() {
     let world = World::new();
     let mut a = A(0);
@@ -162,12 +162,12 @@ fn invalid_resources_immutable_mutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&A, &mut A), _: ()| {})
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
 }
 
 #[cfg(not(feature = "parallel"))]
 #[test]
-#[should_panic(expected = "cannot borrow tests::A mutably: already borrowed")]
+#[should_panic(expected = "cannot borrow executor::A mutably: already borrowed")]
 fn invalid_resources_mutable_mutable() {
     let world = World::new();
     let mut a = A(0);
@@ -176,5 +176,5 @@ fn invalid_resources_mutable_mutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&mut A, &mut A), _: ()| {})
         .build();
-    executor.run(&world, (&mut a, &mut b, &mut c));
+    executor.run((), &world, (&mut a, &mut b, &mut c));
 }

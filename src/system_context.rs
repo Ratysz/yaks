@@ -1,6 +1,6 @@
 use hecs::{Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
 
-use super::{QueryMarker, SystemId};
+use crate::{QueryMarker, SystemId};
 
 pub struct SystemContext<'scope> {
     pub system_id: SystemId,

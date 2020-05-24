@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use super::AtomicBorrow;
+use crate::AtomicBorrow;
 
 pub struct ResourceCell<R0> {
     cell: NonNull<R0>,

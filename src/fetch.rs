@@ -1,7 +1,7 @@
-use super::{Contains, DerefTuple, Ref, RefMut};
+use crate::{Contains, DerefTuple, Ref, RefMut};
 
 #[cfg(feature = "parallel")]
-use super::ResourceSet;
+use crate::ResourceSet;
 
 pub trait Fetch<'a, T, M0>: Sized {
     type Fetched: DerefTuple<'a, Output = Self>;
