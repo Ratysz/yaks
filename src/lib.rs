@@ -99,6 +99,7 @@ mod executor;
 mod executor_parallel_impls;
 mod impls_for_tuple;
 mod mod_queue;
+pub mod next;
 mod query_bundle;
 mod resource_bundle;
 mod system;

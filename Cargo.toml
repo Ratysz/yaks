@@ -17,11 +17,14 @@ maintenance = { status = "actively-developed" }
 parallel = ["crossbeam-channel"]
 
 [dependencies]
+#crossbeam = "0.7.3"
 crossbeam-channel = { version = "0.4.2", optional = true }
 fixedbitset = "0.2.0"
 fxhash = "0.2.1"
 #hecs = { git = "https://github.com/Ralith/hecs.git", rev = "a09e023359718a4028dc8539aa7c823005b0ff5b" }
 #hecs = { path = "../hecs" }
 hecs = "0.2.12"
+parking_lot = "0.10.2"
 paste = "0.1.6"
+rayon = "1.3.0"
 resources = "1.0.0"
