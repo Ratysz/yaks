@@ -9,7 +9,6 @@ use parking_lot::Mutex;
 #[cfg(feature = "parallel")]
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Debug,
     sync::Arc,
 };
 
@@ -41,40 +40,6 @@ where
     dependants: Vec<SystemId>,
     dependencies: usize,
     unsatisfied_dependencies: usize,
-}
-
-#[cfg(feature = "parallel")]
-impl<'closure, Resources> Debug for System<'closure, Resources>
-where
-    Resources: ResourceTuple + 'closure,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("System")
-            .field(
-                "resources",
-                &(
-                    self.resource_set.immutable.as_slice(),
-                    self.resource_set.mutable.as_slice(),
-                ),
-            )
-            .field(
-                "components",
-                &(
-                    self.component_set.immutable.as_slice(),
-                    self.component_set.mutable.as_slice(),
-                ),
-            )
-            .field(
-                "archetypes",
-                &(
-                    self.archetype_set.immutable.as_slice(),
-                    self.archetype_set.mutable.as_slice(),
-                ),
-            )
-            .field("dependants", &self.dependants)
-            .field("dependencies", &self.dependencies)
-            .finish()
-    }
 }
 
 #[cfg(feature = "parallel")]
@@ -265,7 +230,6 @@ where
                         let sender = self.sender.clone();
                         let id = *id;
                         scope.spawn(move |_| {
-                            println!("{:?} start", id);
                             let system = &mut *system
                                 .try_lock() // TODO should this be .lock() instead?
                                 .expect("systems should only be ran once per despatch");
@@ -276,7 +240,6 @@ where
                                 },
                                 wrapped,
                             );
-                            println!("{:?} finish", id);
                             // Notify dispatching thread than this system has finished running.
                             sender.send(id).expect(DISCONNECTED);
                         });

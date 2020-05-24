@@ -14,7 +14,9 @@ categories = ["data-structures", "game-engines"]
 maintenance = { status = "actively-developed" }
 
 [features]
+default = ["parallel"]
 parallel = ["crossbeam-channel", "fixedbitset"]
+test = []
 
 [dependencies]
 crossbeam-channel = { version = "0.4.2", optional = true }

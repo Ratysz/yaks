@@ -1,4 +1,13 @@
-#![cfg(feature = "parallel")]
+use hecs::World;
+use yaks::Executor;
+
+struct A(usize);
+
+struct B(usize);
+
+struct C(usize);
+
+/*#![cfg(feature = "parallel")]
 
 use std::{
     f32::EPSILON,
@@ -7,10 +16,6 @@ use std::{
 };
 
 use yaks::{Executor, System, Threadpool};
-
-mod setup;
-
-use setup::*;
 
 #[test]
 fn hard_dependency() {
@@ -335,3 +340,4 @@ fn batched() {
         assert_eq!(comp3.0, "test");
     }
 }
+*/

@@ -1,6 +1,8 @@
 //! An intentionally convoluted (and inefficient) example, simulating a race between
 //! three entities, complete with celebratory confetti.
 
+fn main() {}
+/*
 use hecs::{Entity, World};
 use resources::Resources;
 use yaks::{Executor, ModQueuePool, System};
@@ -163,3 +165,4 @@ fn main() {
         }
     }
 }
+*/

@@ -1,5 +1,7 @@
 //! Duplication of the crate level documentation example, for ease of editing.
 
+fn main() {}
+/*
 use hecs::World;
 use resources::Resources;
 use yaks::{Executor, ModQueuePool, System};
@@ -52,3 +54,4 @@ fn main() {
     executor.run(&world, &resources, &mod_queues);
     assert_eq!(resources.get::<HighestVelocity>().unwrap().0, 4.0);
 }
+*/

@@ -47,6 +47,7 @@ impl<R0> ResourceCell<R0> {
 
 impl<R0> Drop for ResourceCell<R0> {
     fn drop(&mut self) {
+        #[cfg(not(feature = "test"))]
         debug_assert!(
             unsafe { self.borrow.as_ref().is_free() },
             "borrows of {} were not released properly",
