@@ -86,34 +86,35 @@
 
 // TODO uncomment #![warn(missing_docs)]
 
-pub use hecs;
-pub use resources;
+#[macro_use]
+mod tuple_macro;
 
-pub use hecs::{Entity, World};
-pub use resources::Resources;
-
-mod borrows;
-mod error;
+mod atomic_borrow;
+#[cfg(feature = "parallel")]
+mod borrow_set;
+mod contains;
+mod deref_tuple;
 mod executor;
-#[cfg(feature = "parallel")]
-mod executor_parallel_impls;
-mod impls_for_tuple;
-mod mod_queue;
-pub mod next;
+mod executor_builder;
+mod fetch;
 mod query_bundle;
-mod resource_bundle;
-mod system;
-mod system_container;
+mod resource_cell;
+mod resource_tuple;
 mod system_context;
-#[cfg(feature = "parallel")]
-mod threadpool;
 
-pub use borrows::{ArchetypeAccess, SystemBorrows};
-pub use error::{CantInsertSystem, NoSuchSystem};
-pub use executor::{Executor, ExecutorBuilder};
-pub use mod_queue::{ModQueue, ModQueuePool};
-pub use resource_bundle::FetchResources;
-pub use system::{Runnable, System, SystemBuilder};
-pub use system_context::SystemContext;
+use atomic_borrow::AtomicBorrow;
 #[cfg(feature = "parallel")]
-pub use threadpool::{Scope, Threadpool};
+use borrow_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
+use contains::Contains;
+use deref_tuple::DerefTuple;
+use executor::SystemClosure;
+use executor_builder::SystemId;
+use fetch::Fetch;
+use query_bundle::QueryBundle;
+use resource_cell::{Ref, RefMut, ResourceCell};
+use resource_tuple::{ResourceTuple, ResourceWrap, WrappedResources};
+
+pub use executor::Executor;
+pub use executor_builder::ExecutorBuilder;
+pub use query_bundle::QueryMarker;
+pub use system_context::SystemContext;

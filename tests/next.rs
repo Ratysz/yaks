@@ -1,4 +1,4 @@
-use yaks::next::{Executor, QueryMarker, SystemContext};
+use yaks::{Executor, QueryMarker, SystemContext};
 
 #[derive(Debug)]
 struct A(usize);

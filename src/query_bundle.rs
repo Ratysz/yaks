@@ -1,256 +1,255 @@
-use hecs::{Component, Query, QueryBorrow, With, Without, World};
+use hecs::{Component, Query, With, Without};
 use std::marker::PhantomData;
 
 #[cfg(feature = "parallel")]
-use hecs::Access;
+use hecs::World;
 #[cfg(feature = "parallel")]
 use std::any::TypeId;
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeAccess, SystemBorrows};
+use super::{ArchetypeSet, ComponentTypeSet};
 
-pub struct QueryEffector<Q>
+pub struct QueryMarker<Q0>(PhantomData<Q0>)
 where
-    Q: Query + Send + Sync,
-{
-    phantom_data: PhantomData<Q>,
-}
+    Q0: Query;
 
-impl<Q> QueryEffector<Q>
+impl<Q0> QueryMarker<Q0>
 where
-    Q: Query + Send + Sync,
+    Q0: Query,
 {
-    pub fn new() -> Self {
-        Self {
-            phantom_data: PhantomData,
-        }
-    }
-
-    pub fn query<'a>(&self, world: &'a World) -> QueryBorrow<'a, Q> {
-        world.query::<Q>()
+    pub(crate) fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl<Q> Default for QueryEffector<Q>
+impl<Q0> Clone for QueryMarker<Q0>
 where
-    Q: Query + Send + Sync,
-{
-    fn default() -> Self {
-        QueryEffector::new()
-    }
-}
-
-impl<Q> Clone for QueryEffector<Q>
-where
-    Q: Query + Send + Sync,
+    Q0: Query,
 {
     fn clone(&self) -> Self {
-        QueryEffector::new()
+        QueryMarker::new()
     }
 }
 
-impl<Q> Copy for QueryEffector<Q> where Q: Query + Send + Sync {}
+impl<Q0> Copy for QueryMarker<Q0> where Q0: Query {}
 
-pub trait QueryUnit: Send + Sync {
+pub trait QueryExt: Query {
     #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows);
-}
-
-pub trait QuerySingle: Send + Sync {
-    type Effector;
-
-    fn effector() -> Self::Effector;
+    const COMPONENT_TYPE_SET_LENGTH: usize;
 
     #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows);
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet);
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess);
-}
-
-pub trait QueryBundle: Send + Sync {
-    type Effectors;
-
-    fn effectors() -> Self::Effectors;
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows);
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess);
-}
-
-impl<C> QueryUnit for &'_ C
-where
-    C: Component,
-{
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_immutable.insert(TypeId::of::<C>());
+    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet)
+    where
+        Self: Sized,
+    {
+        archetype_set.set_bits_for_query::<Self>(world);
     }
 }
 
-impl<C> QueryUnit for &'_ mut C
-where
-    C: Component,
-{
+pub trait QueryBundle {
     #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        borrows.components_mutable.insert(TypeId::of::<C>());
-    }
+    const COMPONENT_TYPE_SET_LENGTH: usize;
+
+    fn markers() -> Self;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet);
+
+    #[cfg(feature = "parallel")]
+    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet);
 }
 
-impl<Q> QueryUnit for Option<Q>
-where
-    Q: QueryUnit,
-{
+impl QueryExt for () {
     #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
-    }
-}
-
-impl QuerySingle for () {
-    type Effector = ();
-
-    fn effector() -> Self::Effector {}
+    const COMPONENT_TYPE_SET_LENGTH: usize = 0;
 
     #[cfg(feature = "parallel")]
-    fn write_borrows(_: &mut SystemBorrows) {}
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(_: &World, _: &mut ArchetypeAccess) {}
-}
-
-impl<C> QuerySingle for &'_ C
-where
-    C: Component,
-    Self: Query + QueryUnit,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QueryUnit>::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
-}
-
-impl<C> QuerySingle for &'_ mut C
-where
-    C: Component,
-    Self: Query + QueryUnit,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QueryUnit>::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
-}
-
-impl<Q> QuerySingle for Option<Q>
-where
-    Q: QueryUnit,
-    Self: Query + QueryUnit,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        <Self as QueryUnit>::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
-}
-
-impl<C, Q> QuerySingle for With<C, Q>
-where
-    C: Component,
-    Q: Query + QuerySingle,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
-}
-
-impl<C, Q> QuerySingle for Without<C, Q>
-where
-    C: Component,
-    Q: Query + QuerySingle,
-{
-    type Effector = QueryEffector<Self>;
-
-    fn effector() -> Self::Effector {
-        QueryEffector::new()
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_borrows(borrows: &mut SystemBorrows) {
-        Q::write_borrows(borrows);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn write_archetypes(world: &World, archetypes: &mut ArchetypeAccess) {
-        archetypes.extend(access_of::<Self>(world));
-    }
+    fn insert_component_types(_: &mut ComponentTypeSet) {}
 }
 
 impl QueryBundle for () {
-    type Effectors = ();
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = 0;
 
-    fn effectors() -> Self::Effectors {}
+    fn markers() -> Self {}
 
     #[cfg(feature = "parallel")]
-    fn write_borrows(_: &mut SystemBorrows) {}
+    fn insert_component_types(_: &mut ComponentTypeSet) {}
 
     #[cfg(feature = "parallel")]
-    fn write_archetypes(_: &World, _: &mut ArchetypeAccess) {}
+    fn set_archetype_bits(_: &World, _: &mut ArchetypeSet) {}
 }
 
-#[cfg(feature = "parallel")]
-pub(crate) fn access_of<Q>(world: &World) -> impl Iterator<Item = (usize, Access)> + '_
+impl<C0> QueryExt for &'_ C0
 where
-    Q: Query,
+    C0: Component,
 {
-    world
-        .archetypes()
-        .enumerate()
-        .filter_map(|(index, archetype)| archetype.access::<Q>().map(|access| (index, access)))
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = 1;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        component_type_set.immutable.insert(TypeId::of::<C0>());
+    }
 }
+
+impl<C0> QueryExt for &'_ mut C0
+where
+    C0: Component,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = 1;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        component_type_set.mutable.insert(TypeId::of::<C0>());
+    }
+}
+
+impl<Q0> QueryExt for Option<Q0>
+where
+    Q0: QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+}
+
+impl<C0, Q0> QueryExt for With<C0, Q0>
+where
+    C0: Component,
+    Q0: QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+}
+
+impl<C0, Q0> QueryExt for Without<C0, Q0>
+where
+    C0: Component,
+    Q0: QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+}
+
+impl<Q0> QueryBundle for QueryMarker<Q0>
+where
+    Q0: QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    fn markers() -> Self {
+        QueryMarker::new()
+    }
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+        Q0::set_archetype_bits(world, archetype_set);
+    }
+}
+
+impl<Q0> QueryExt for (Q0,)
+where
+    Q0: QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+}
+
+impl<Q0> QueryBundle for (QueryMarker<Q0>,)
+where
+    Q0: Query + QueryExt,
+{
+    #[cfg(feature = "parallel")]
+    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
+
+    fn markers() -> Self {
+        (QueryMarker::new(),)
+    }
+
+    #[cfg(feature = "parallel")]
+    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+        Q0::insert_component_types(component_type_set);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+        Q0::set_archetype_bits(world, archetype_set);
+    }
+}
+
+macro_rules! impl_query_single {
+    ($($letter:ident),*) => {
+        impl<$($letter),*> QueryExt for ($($letter,)*)
+        where
+            $($letter: QueryExt,)*
+        {
+            #[cfg(feature = "parallel")]
+            const COMPONENT_TYPE_SET_LENGTH: usize = 0 $(+ $letter::COMPONENT_TYPE_SET_LENGTH)*;
+
+            #[cfg(feature = "parallel")]
+            fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+                $($letter::insert_component_types(component_type_set);)*
+            }
+        }
+    }
+}
+
+impl_for_tuples!(impl_query_single);
+
+macro_rules! impl_query_bundle {
+    ($($letter:ident),*) => {
+        impl<$($letter),*> QueryBundle for ($(QueryMarker<$letter>,)*)
+        where
+            $($letter: Query + QueryExt,)*
+        {
+            #[cfg(feature = "parallel")]
+            const COMPONENT_TYPE_SET_LENGTH: usize = 0 $(+ $letter::COMPONENT_TYPE_SET_LENGTH)*;
+
+            fn markers() -> Self {
+                ($(QueryMarker::<$letter>::new(),)*)
+            }
+
+            #[cfg(feature = "parallel")]
+            fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+                $($letter::insert_component_types(component_type_set);)*
+            }
+
+            #[cfg(feature = "parallel")]
+            fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+                $($letter::set_archetype_bits(world, archetype_set);)*
+            }
+        }
+    }
+}
+
+impl_for_tuples!(impl_query_bundle);

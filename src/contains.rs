@@ -1,3 +1,4 @@
+#[cfg(feature = "parallel")]
 use fixedbitset::FixedBitSet;
 
 use super::{Ref, RefMut, ResourceCell, WrappedResources};
@@ -11,6 +12,7 @@ pub trait Contains<R0, M0> {
 
     fn release_mut(&self, borrowed: RefMut<R0>);
 
+    #[cfg(feature = "parallel")]
     fn set_resource_bit(bitset: &mut FixedBitSet);
 }
 
@@ -31,6 +33,7 @@ impl<R0> Contains<R0, ()> for WrappedResources<'_, (ResourceCell<R0>,)> {
         self.tuple.0.release_mut(borrowed);
     }
 
+    #[cfg(feature = "parallel")]
     fn set_resource_bit(bitset: &mut FixedBitSet) {
         bitset.insert(0);
     }
@@ -78,6 +81,7 @@ macro_rules! impl_contains {
                 $letter.release_mut(borrowed);
             }
 
+            #[cfg(feature = "parallel")]
             fn set_resource_bit(bitset: &mut FixedBitSet) {
                 bitset.insert(count!($($all)*) - (1usize + count!($($tail)*)));
             }
@@ -110,6 +114,7 @@ macro_rules! impl_contains {
                 $letter.release_mut(borrowed);
             }
 
+            #[cfg(feature = "parallel")]
             fn set_resource_bit(bitset: &mut FixedBitSet) {
                 bitset.insert(count!($($all)*) - 1usize);
             }

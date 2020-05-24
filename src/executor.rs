@@ -1,378 +1,382 @@
-use fxhash::FxHasher64;
 use hecs::World;
-use resources::Resources;
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    hash::{BuildHasherDefault, Hash},
-};
-
-use crate::{
-    error::{CantInsertSystem, NoSuchSystem},
-    system_container::SystemContainer,
-    ModQueuePool, System,
-};
 
 #[cfg(feature = "parallel")]
-use crossbeam_channel::{self, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 #[cfg(feature = "parallel")]
 use hecs::ArchetypesGeneration;
 #[cfg(feature = "parallel")]
-use std::collections::HashSet;
-
+use parking_lot::Mutex;
 #[cfg(feature = "parallel")]
-use crate::{
-    borrows::{BorrowsContainer, TypeSet},
-    Scope,
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::Arc,
 };
 
-pub(crate) const INVALID_INDEX: &str = "system handles should always map to valid system indices";
+use super::{
+    ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, SystemId, WrappedResources,
+};
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) struct SystemIndex(usize);
+#[cfg(feature = "parallel")]
+use super::{ArchetypeSet, ComponentSet, ResourceSet};
 
-pub struct Executor<H>
+pub type SystemClosure<'closure, Cells> =
+    dyn FnMut(SystemContext, &WrappedResources<Cells>) + Send + Sync + 'closure;
+
+#[cfg(feature = "parallel")]
+static DISCONNECTED: &str = "channel should not be disconnected at this point";
+#[cfg(feature = "parallel")]
+static INVALID_ID: &str = "system IDs should always be valid";
+
+#[cfg(feature = "parallel")]
+struct System<'closure, Resources>
 where
-    H: Hash + Eq + PartialEq + Debug,
+    Resources: ResourceTuple + 'closure,
 {
-    pub(crate) systems: HashMap<SystemIndex, SystemContainer<H>, BuildHasherDefault<FxHasher64>>,
-    pub(crate) system_handles: HashMap<H, SystemIndex>,
-    pub(crate) free_indices: Vec<SystemIndex>,
-    pub(crate) systems_sorted: Vec<SystemIndex>,
-
-    #[cfg(feature = "parallel")]
-    pub(crate) archetypes_generation: Option<ArchetypesGeneration>,
-    #[cfg(feature = "parallel")]
-    pub(crate) borrows: HashMap<SystemIndex, BorrowsContainer, BuildHasherDefault<FxHasher64>>,
-    #[cfg(feature = "parallel")]
-    pub(crate) all_resources: TypeSet,
-    #[cfg(feature = "parallel")]
-    pub(crate) all_components: TypeSet,
-    #[cfg(feature = "parallel")]
-    pub(crate) systems_to_run: Vec<SystemIndex>,
-    #[cfg(feature = "parallel")]
-    pub(crate) current_systems: HashSet<SystemIndex, BuildHasherDefault<FxHasher64>>,
-    #[cfg(feature = "parallel")]
-    pub(crate) finished_systems: HashSet<SystemIndex, BuildHasherDefault<FxHasher64>>,
-    #[cfg(feature = "parallel")]
-    pub(crate) sender: Sender<SystemIndex>,
-    #[cfg(feature = "parallel")]
-    pub(crate) receiver: Receiver<SystemIndex>,
+    closure: Arc<Mutex<SystemClosure<'closure, Resources::Cells>>>,
+    resource_set: ResourceSet,
+    component_set: ComponentSet,
+    archetype_set: ArchetypeSet,
+    archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    dependants: Vec<SystemId>,
+    dependencies: usize,
+    unsatisfied_dependencies: usize,
 }
 
-impl<H> Default for Executor<H>
+#[cfg(feature = "parallel")]
+impl<'closure, Resources> Debug for System<'closure, Resources>
 where
-    H: Hash + Eq + PartialEq + Debug,
+    Resources: ResourceTuple + 'closure,
 {
-    fn default() -> Self {
-        #[cfg(feature = "parallel")]
-        let (sender, receiver) = crossbeam_channel::unbounded();
-        Self {
-            systems: Default::default(),
-            system_handles: Default::default(),
-            free_indices: Default::default(),
-            systems_sorted: Default::default(),
-
-            #[cfg(feature = "parallel")]
-            archetypes_generation: None,
-            #[cfg(feature = "parallel")]
-            borrows: Default::default(),
-            #[cfg(feature = "parallel")]
-            all_resources: Default::default(),
-            #[cfg(feature = "parallel")]
-            all_components: Default::default(),
-            #[cfg(feature = "parallel")]
-            systems_to_run: Default::default(),
-            #[cfg(feature = "parallel")]
-            current_systems: Default::default(),
-            #[cfg(feature = "parallel")]
-            finished_systems: Default::default(),
-            #[cfg(feature = "parallel")]
-            sender,
-            #[cfg(feature = "parallel")]
-            receiver,
-        }
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("System")
+            .field(
+                "resources",
+                &(
+                    self.resource_set.immutable.as_slice(),
+                    self.resource_set.mutable.as_slice(),
+                ),
+            )
+            .field(
+                "components",
+                &(
+                    self.component_set.immutable.as_slice(),
+                    self.component_set.mutable.as_slice(),
+                ),
+            )
+            .field(
+                "archetypes",
+                &(
+                    self.archetype_set.immutable.as_slice(),
+                    self.archetype_set.mutable.as_slice(),
+                ),
+            )
+            .field("dependants", &self.dependants)
+            .field("dependencies", &self.dependencies)
+            .finish()
     }
 }
 
-impl<H> Executor<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    pub fn new() -> Self {
-        Default::default()
-    }
+#[cfg(feature = "parallel")]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+struct DependantsLength(usize);
 
-    pub fn builder() -> ExecutorBuilder<H> {
+#[cfg(feature = "parallel")]
+pub struct Executor<'closures, Resources>
+where
+    Resources: ResourceTuple + 'closures,
+{
+    borrows: Resources::Borrows,
+    systems: HashMap<SystemId, System<'closures, Resources>>,
+    archetypes_generation: Option<ArchetypesGeneration>,
+    systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
+    systems_to_run_now: Vec<(SystemId, DependantsLength)>,
+    systems_running: HashSet<SystemId>,
+    systems_just_finished: Vec<SystemId>,
+    systems_to_decrement_dependencies: Vec<SystemId>,
+    sender: Sender<SystemId>,
+    receiver: Receiver<SystemId>,
+}
+
+#[cfg(not(feature = "parallel"))]
+pub struct Executor<'closures, Resources>
+where
+    Resources: ResourceTuple + 'closures,
+{
+    borrows: Resources::Borrows,
+    systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Cells>>)>,
+}
+
+impl<'closures, Resources> Executor<'closures, Resources>
+where
+    Resources: ResourceTuple + 'closures,
+{
+    pub fn builder() -> ExecutorBuilder<'closures, Resources> {
         ExecutorBuilder::new()
     }
 
-    fn new_system_index(&mut self) -> SystemIndex {
-        if let Some(index) = self.free_indices.pop() {
-            index
-        } else {
-            SystemIndex(self.systems.len())
-        }
-    }
-
-    pub(crate) fn resolve_handle(&self, handle: &H) -> Result<SystemIndex, NoSuchSystem> {
-        self.system_handles.get(handle).copied().ok_or(NoSuchSystem)
-    }
-
-    fn insert_inner(
-        &mut self,
-        system: System,
-        handle: Option<H>,
-        dependencies: Vec<H>,
-    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        #[cfg(feature = "parallel")]
-        let borrows_container = BorrowsContainer::new(&system);
-        let system_container = SystemContainer::new(system, dependencies);
-        let new_index = match handle {
-            Some(handle) => self
-                .system_handles
-                .get(&handle)
-                .copied()
-                .unwrap_or_else(|| {
-                    let index = self.new_system_index();
-                    self.system_handles.insert(handle, index);
-                    index
-                }),
-            None => self.new_system_index(),
-        };
-
-        let has_dependencies = !system_container.dependencies.is_empty();
-
-        #[cfg(feature = "parallel")]
-        let removed_borrows = self.borrows.insert(new_index, borrows_container);
-        let removed_system = self
-            .systems
-            .insert(new_index, system_container)
-            .map(|system_container| system_container.unwrap_container());
-
-        if has_dependencies {
-            // TODO test thoroughly
-            self.systems_sorted.clear();
-            while self.systems_sorted.len() != self.systems.len() {
-                let mut cycles = true;
-                let mut invalid_dependency = None;
-                for index in self
-                    .systems
-                    .keys()
-                    .filter(|index| !self.systems_sorted.contains(index))
-                {
-                    let mut dependencies_satisfied = true;
-                    for dependency in &self.systems.get(index).expect(INVALID_INDEX).dependencies {
-                        match self.resolve_handle(dependency) {
-                            Ok(dependency_index) => {
-                                if !self.systems_sorted.contains(&dependency_index) {
-                                    dependencies_satisfied = false;
-                                    break;
-                                }
-                            }
-                            Err(_) => {
-                                invalid_dependency = Some(format!("{:?}", dependency));
-                                break;
-                            }
-                        }
-                    }
-                    if invalid_dependency.is_some() {
-                        break;
-                    }
-                    if dependencies_satisfied {
-                        cycles = false;
-                        self.systems_sorted.push(*index);
-                        break;
-                    }
+    #[cfg(feature = "parallel")]
+    pub(crate) fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {
+        // This will cache dependencies for later conversion into dependants.
+        let mut all_dependencies = Vec::new();
+        let mut systems_without_dependencies = Vec::new();
+        let ExecutorBuilder {
+            mut systems,
+            mut all_component_types,
+            ..
+        } = builder;
+        // This guarantees iteration order; TODO probably not necessary?..
+        let all_component_types = all_component_types.drain().collect::<Vec<_>>();
+        let mut systems: HashMap<SystemId, System<'closures, Resources>> = systems
+            .drain()
+            .map(|(id, system)| {
+                let dependencies = system.dependencies.len();
+                // Remember systems with no dependencies, these will be queued first on run.
+                if dependencies == 0 {
+                    systems_without_dependencies.push(id);
                 }
-                if cycles || invalid_dependency.is_some() {
-                    #[cfg(feature = "parallel")]
-                    {
-                        if let Some(borrows_container) = removed_borrows {
-                            self.borrows.insert(new_index, borrows_container);
-                        }
-                    }
-                    if let Some(system_container) = removed_system {
-                        self.systems.insert(
-                            new_index,
-                            SystemContainer::new(system_container.1, system_container.0),
-                        );
-                    }
-                    if let Some(dependency) = invalid_dependency {
-                        return Err(CantInsertSystem::DependencyNotFound(dependency));
-                    }
-                    return Err(CantInsertSystem::CyclicDependency);
-                }
-            }
-        } else {
-            self.systems_sorted.push(new_index);
-        }
-        #[cfg(feature = "parallel")]
-        self.condense_borrows();
-
-        Ok(removed_system)
-    }
-
-    pub fn insert(&mut self, system: System) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(system, None, vec![])
-    }
-
-    pub fn insert_with_handle(
-        &mut self,
-        system: System,
-        handle: H,
-    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(system, Some(handle), vec![])
-    }
-
-    pub fn insert_with_deps(
-        &mut self,
-        system: System,
-        dependencies: Vec<H>,
-    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(system, None, dependencies)
-    }
-
-    pub fn insert_with_handle_and_deps(
-        &mut self,
-        system: System,
-        handle: H,
-        dependencies: Vec<H>,
-    ) -> Result<Option<(Vec<H>, System)>, CantInsertSystem> {
-        self.insert_inner(system, Some(handle), dependencies)
-    }
-
-    pub fn remove(&mut self, handle: &H) -> Option<(Vec<H>, System)> {
-        self.system_handles
-            .remove(handle)
-            .and_then(|index| {
-                #[cfg(feature = "parallel")]
-                {
-                    self.borrows.remove(&index);
-                    self.condense_borrows();
-                }
-                self.systems.remove(&index)
+                all_dependencies.push((id, system.dependencies));
+                (
+                    id,
+                    System {
+                        closure: Arc::new(Mutex::new(system.closure)),
+                        resource_set: system.resource_set,
+                        component_set: system.component_type_set.condense(&all_component_types),
+                        archetype_set: ArchetypeSet::default(),
+                        archetype_writer: system.archetype_writer,
+                        dependants: vec![],
+                        dependencies,
+                        unsatisfied_dependencies: 0,
+                    },
+                )
             })
-            .map(|system_container| system_container.unwrap_container())
-    }
-
-    pub fn contains(&mut self, handle: &H) -> bool {
-        self.system_handles.contains_key(handle)
-    }
-
-    pub fn get_mut(
-        &mut self,
-        handle: &H,
-    ) -> Result<impl std::ops::DerefMut<Target = System> + '_, NoSuchSystem> {
-        Ok(self
-            .systems
-            .get_mut(&self.resolve_handle(handle)?)
-            .expect(INVALID_INDEX)
-            .system_mut())
-    }
-
-    pub fn is_active(&self, handle: &H) -> Result<bool, NoSuchSystem> {
-        Ok(self
-            .systems
-            .get(&self.resolve_handle(handle)?)
-            .expect(INVALID_INDEX)
-            .active)
-    }
-
-    pub fn set_active(&mut self, handle: &H, active: bool) -> Result<(), NoSuchSystem> {
-        self.systems
-            .get_mut(&self.resolve_handle(handle)?)
-            .expect(INVALID_INDEX)
-            .active = active;
-        Ok(())
-    }
-
-    pub fn run(&mut self, world: &World, resources: &Resources, mod_queues: &ModQueuePool) {
-        for index in &self.systems_sorted {
-            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
-            if system_container.active {
-                system_container
-                    .system_mut()
-                    .run(world, resources, mod_queues)
+            .collect();
+        // Convert system-dependencies mapping to system-dependants mapping.
+        for (dependant_id, mut dependencies) in all_dependencies.drain(..) {
+            for dependee_id in dependencies.drain(..) {
+                systems
+                    .get_mut(&dependee_id)
+                    .expect(INVALID_ID)
+                    .dependants
+                    .push(dependant_id);
             }
         }
+        // Cache amount of dependants the system has.
+        let mut systems_without_dependencies: Vec<_> = systems_without_dependencies
+            .drain(..)
+            .map(|id| {
+                (
+                    id,
+                    DependantsLength(systems.get(&id).expect(INVALID_ID).dependants.len()),
+                )
+            })
+            .collect();
+        // Sort independent systems so that those with most dependants are queued first.
+        systems_without_dependencies.sort_by(|(_, a), (_, b)| b.cmp(a));
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        // This should be guaranteed by the builder's logic anyway.
+        debug_assert!(!systems_without_dependencies.is_empty());
+        Self {
+            borrows: Resources::instantiate_borrows(),
+            systems,
+            archetypes_generation: None,
+            systems_without_dependencies,
+            systems_to_run_now: Vec::new(),
+            systems_running: HashSet::new(),
+            systems_just_finished: Vec::new(),
+            systems_to_decrement_dependencies: Vec::new(),
+            sender,
+            receiver,
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub(crate) fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {
+        let ExecutorBuilder { mut systems, .. } = builder;
+        let mut systems: Vec<_> = systems
+            .drain()
+            .map(|(id, system)| (id, system.closure))
+            .collect();
+        systems.sort_by(|(a, _), (b, _)| a.cmp(b));
+        Executor {
+            borrows: Resources::instantiate_borrows(),
+            systems,
+        }
+    }
+
+    pub fn force_archetype_recalculation(&mut self) {
+        #[cfg(feature = "parallel")]
+        {
+            self.archetypes_generation = None;
+        }
+    }
+
+    pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        self.run_inner(world, resources);
     }
 
     #[cfg(feature = "parallel")]
-    pub fn run_with_scope(
-        &mut self,
-        world: &World,
-        resources: &Resources,
-        mod_queues: &ModQueuePool,
-        scope: &Scope,
-    ) {
-        for index in &self.systems_sorted {
-            let system_container = self.systems.get_mut(&index).expect(INVALID_INDEX);
-            if system_container.active {
-                system_container
-                    .system_mut()
-                    .run_with_scope(world, resources, mod_queues, scope)
+    fn run_inner<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        if Some(world.archetypes_generation()) == self.archetypes_generation {
+            // If archetypes haven't changed since last run, reset dependency counters.
+            for system in self.systems.values_mut() {
+                debug_assert!(system.unsatisfied_dependencies == 0);
+                system.unsatisfied_dependencies = system.dependencies;
+            }
+        } else {
+            // If archetypes have changed, recalculate archetype sets for all systems,
+            // and reset dependency counters.
+            self.archetypes_generation = Some(world.archetypes_generation());
+            for system in self.systems.values_mut() {
+                system.archetype_set.clear();
+                system.archetype_set.grow(world.archetypes().len());
+                (system.archetype_writer)(world, &mut system.archetype_set);
+                debug_assert!(system.unsatisfied_dependencies == 0);
+                system.unsatisfied_dependencies = system.dependencies;
             }
         }
+        // Queue systems that don't have any dependencies to run first.
+        self.systems_to_run_now
+            .extend(&self.systems_without_dependencies);
+        // Wrap resources for disjoint fetching.
+        let wrapped = resources.wrap(&mut self.borrows);
+        let wrapped = &wrapped;
+        rayon::scope(|scope| {
+            // All systems have been ran if there are no queued or currently running systems.
+            while !(self.systems_to_run_now.is_empty() && self.systems_running.is_empty()) {
+                for (id, _) in &self.systems_to_run_now {
+                    // Check if a queued system can run concurrently with
+                    // other systems already running.
+                    if self.can_run_now(*id) {
+                        // Add it to the currently running systems set.
+                        self.systems_running.insert(*id);
+                        // Pointers and data sent over to a worker thread.
+                        let system = self.systems.get_mut(id).expect(INVALID_ID).closure.clone();
+                        let sender = self.sender.clone();
+                        let id = *id;
+                        scope.spawn(move |_| {
+                            println!("{:?} start", id);
+                            let system = &mut *system
+                                .try_lock() // TODO should this be .lock() instead?
+                                .expect("systems should only be ran once per despatch");
+                            system(
+                                SystemContext {
+                                    system_id: id,
+                                    world,
+                                },
+                                wrapped,
+                            );
+                            println!("{:?} finish", id);
+                            // Notify dispatching thread than this system has finished running.
+                            sender.send(id).expect(DISCONNECTED);
+                        });
+                    }
+                }
+                {
+                    // Remove newly running systems from systems-to-run-now set.
+                    // TODO replace with `.drain_filter()` once stable
+                    //  https://github.com/rust-lang/rust/issues/43244
+                    let mut i = 0;
+                    while i != self.systems_to_run_now.len() {
+                        if self.systems_running.contains(&self.systems_to_run_now[i].0) {
+                            self.systems_to_run_now.remove(i);
+                        } else {
+                            i += 1;
+                        }
+                    }
+                }
+                // Wait until at least one system is finished.
+                let id = self.receiver.recv().expect(DISCONNECTED);
+                self.systems_just_finished.push(id);
+                // Handle any other systems that may have finished.
+                self.systems_just_finished.extend(self.receiver.try_iter());
+                // Remove finished systems from set of running systems.
+                for id in &self.systems_just_finished {
+                    self.systems_running.remove(id);
+                }
+                // Gather dependants of finished systems.
+                for finished in &self.systems_just_finished {
+                    for dependant in &self.systems.get(finished).expect(INVALID_ID).dependants {
+                        self.systems_to_decrement_dependencies.push(*dependant);
+                    }
+                }
+                self.systems_just_finished.clear();
+                // Figure out which of the gathered dependants have had all their dependencies
+                // satisfied and queue them to run.
+                for id in &self.systems_to_decrement_dependencies {
+                    let system = &mut self.systems.get_mut(id).expect(INVALID_ID);
+                    let dependants = DependantsLength(system.dependants.len());
+                    let unsatisfied_dependencies = &mut system.unsatisfied_dependencies;
+                    *unsatisfied_dependencies -= 1;
+                    if *unsatisfied_dependencies == 0 {
+                        self.systems_to_run_now.push((*id, dependants));
+                    }
+                }
+                self.systems_to_decrement_dependencies.clear();
+                // Sort queued systems so that those with most dependants run first.
+                self.systems_to_run_now.sort_by(|(_, a), (_, b)| b.cmp(a));
+            }
+        });
+        debug_assert!(self.systems_to_run_now.is_empty());
+        debug_assert!(self.systems_running.is_empty());
+        debug_assert!(self.systems_just_finished.is_empty());
+        debug_assert!(self.systems_to_decrement_dependencies.is_empty());
     }
-}
 
-pub struct ExecutorBuilder<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    executor: Executor<H>,
-}
-
-impl<H> Default for ExecutorBuilder<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    fn default() -> Self {
-        Self {
-            executor: Default::default(),
+    #[cfg(feature = "parallel")]
+    fn can_run_now(&self, id: SystemId) -> bool {
+        let system = self.systems.get(&id).expect(INVALID_ID);
+        for id in &self.systems_running {
+            let running_system = self.systems.get(id).expect(INVALID_ID);
+            // A system can't run if the resources it needs are already borrowed incompatibly.
+            if !system
+                .resource_set
+                .is_compatible(&running_system.resource_set)
+            {
+                return false;
+            }
+            // A system can't run if it could borrow incompatibly any components.
+            // This can only happen if the system could incompatibly access the same components
+            // from the same archetype that another system may be using.
+            if !system
+                .component_set
+                .is_compatible(&running_system.component_set)
+                && !system
+                    .archetype_set
+                    .is_compatible(&running_system.archetype_set)
+            {
+                return false;
+            }
         }
-    }
-}
-
-impl<H> ExecutorBuilder<H>
-where
-    H: Hash + Eq + PartialEq + Debug,
-{
-    pub fn new() -> Self {
-        Default::default()
+        true
     }
 
-    pub fn system(mut self, system: System) -> Self {
-        self.executor.insert(system).unwrap();
-        self
-    }
-
-    pub fn system_with_handle(mut self, system: System, handle: H) -> Self {
-        self.executor.insert_with_handle(system, handle).unwrap();
-        self
-    }
-
-    pub fn system_with_deps(mut self, system: System, dependencies: Vec<H>) -> Self {
-        self.executor
-            .insert_with_deps(system, dependencies)
-            .unwrap();
-        self
-    }
-
-    pub fn system_with_handle_and_deps(
-        mut self,
-        system: System,
-        handle: H,
-        dependencies: Vec<H>,
-    ) -> Self {
-        self.executor
-            .insert_with_handle_and_deps(system, handle, dependencies)
-            .unwrap();
-        self
-    }
-
-    pub fn build(self) -> Executor<H> {
-        self.executor
+    #[cfg(not(feature = "parallel"))]
+    fn run_inner<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        let wrapped = resources.wrap(&mut self.borrows);
+        for (id, closure) in &mut self.systems {
+            closure(
+                SystemContext {
+                    system_id: *id,
+                    world,
+                },
+                &wrapped,
+            );
+        }
     }
 }
