@@ -102,7 +102,6 @@ mod query_bundle;
 mod resource_cell;
 mod resource_tuple;
 mod system_context;
-mod thread_pool;
 
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
@@ -115,7 +114,6 @@ use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::{Ref, RefMut, ResourceCell};
 use resource_tuple::{ResourceTuple, ResourceWrap, WrappedResources};
-use thread_pool::ThreadPool;
 
 pub use batch_helper::batch;
 pub use executor::Executor;

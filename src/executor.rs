@@ -13,8 +13,7 @@ use std::{
 };
 
 use crate::{
-    ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, SystemId, ThreadPool,
-    WrappedResources,
+    ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, SystemId, WrappedResources,
 };
 
 #[cfg(feature = "parallel")]
@@ -183,31 +182,12 @@ where
         Resources::Borrows: Send,
         Resources::Cells: Send + Sync,
     {
-        self.run_inner((), world, resources);
-    }
-
-    pub fn run_on_thread_pool<TPool, ResourceTuple>(
-        &mut self,
-        thread_pool: TPool,
-        world: &World,
-        resources: ResourceTuple,
-    ) where
-        TPool: ThreadPool,
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
-    {
-        self.run_inner(thread_pool, world, resources);
+        self.run_inner(world, resources);
     }
 
     #[cfg(feature = "parallel")]
-    fn run_inner<TPool, ResourceTuple>(
-        &mut self,
-        thread_pool: TPool,
-        world: &World,
-        mut resources: ResourceTuple,
-    ) where
-        TPool: ThreadPool,
+    fn run_inner<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    where
         ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
         Resources::Borrows: Send,
         Resources::Cells: Send + Sync,
@@ -234,7 +214,7 @@ where
         // Wrap resources for disjoint fetching.
         let wrapped = resources.wrap(&mut self.borrows);
         let wrapped = &wrapped;
-        thread_pool.scope(|scope| {
+        rayon::scope(|scope| {
             // All systems have been ran if there are no queued or currently running systems.
             while !(self.systems_to_run_now.is_empty() && self.systems_running.is_empty()) {
                 for (id, _) in &self.systems_to_run_now {
@@ -343,13 +323,8 @@ where
     }
 
     #[cfg(not(feature = "parallel"))]
-    fn run_inner<TPool, ResourceTuple>(
-        &mut self,
-        _: TPool,
-        world: &World,
-        mut resources: ResourceTuple,
-    ) where
-        TPool: ThreadPool,
+    fn run_inner<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    where
         ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
         Resources::Borrows: Send,
         Resources::Cells: Send + Sync,

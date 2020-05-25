@@ -6,18 +6,21 @@ use std::{
 use yaks::{Executor, QueryMarker};
 
 struct A(usize);
-
 struct B(usize);
-
 struct C(usize);
 
-#[cfg(feature = "parallel")]
-fn thread_pool() -> rayon::ThreadPool {
-    rayon::ThreadPoolBuilder::new().build().unwrap()
+fn execute<F>(closure: F)
+where
+    F: FnOnce() + Send,
+{
+    #[cfg(feature = "parallel")]
+    rayon::ThreadPoolBuilder::new()
+        .build()
+        .unwrap()
+        .install(closure);
+    #[cfg(not(feature = "parallel"))]
+    closure();
 }
-
-#[cfg(not(feature = "parallel"))]
-fn thread_pool() -> () {}
 
 #[test]
 fn dependencies_single() {
@@ -38,7 +41,7 @@ fn dependencies_single() {
         )
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, ());
+    execute(|| executor.run(&world, ()));
     assert!(time.elapsed() > Duration::from_millis(200));
 }
 
@@ -56,7 +59,7 @@ fn resources_incompatible_mutable_immutable() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     assert!(time.elapsed() > Duration::from_millis(200));
     assert_eq!(a.0, 1);
 }
@@ -76,7 +79,7 @@ fn resources_incompatible_mutable_mutable() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     assert!(time.elapsed() > Duration::from_millis(200));
     assert_eq!(a.0, 2);
 }
@@ -98,7 +101,7 @@ fn resources_disjoint() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, (&mut a, &mut b, &mut c));
+    execute(|| executor.run(&world, (&mut a, &mut b, &mut c)));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
@@ -125,7 +128,7 @@ fn queries_incompatible_mutable_immutable() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     assert!(time.elapsed() > Duration::from_millis(200));
     for (_, b) in world.query::<&B>().iter() {
         assert_eq!(b.0, 1);
@@ -152,7 +155,7 @@ fn queries_incompatible_mutable_mutable() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     assert!(time.elapsed() > Duration::from_millis(200));
     for (_, b) in world.query::<&B>().iter() {
         assert_eq!(b.0, 2);
@@ -179,7 +182,7 @@ fn queries_disjoint_by_components() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
@@ -211,7 +214,7 @@ fn queries_disjoint_by_archetypes() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
@@ -224,7 +227,6 @@ fn queries_disjoint_by_archetypes() {
 #[test]
 fn batching() {
     let mut world = World::new();
-    let thread_pool = thread_pool();
     world.spawn_batch((0..20).map(|_| (B(0),))).last();
     let mut a = A(1);
     let mut executor = Executor::<(A,)>::builder()
@@ -236,7 +238,7 @@ fn batching() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool, &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
@@ -253,7 +255,7 @@ fn batching() {
         })
         .build();
     let time = Instant::now();
-    executor.run_on_thread_pool(&thread_pool, &world, &mut a);
+    execute(|| executor.run(&world, &mut a));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]

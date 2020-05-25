@@ -12,8 +12,6 @@ pub fn batch<'query, 'world, Q, F>(
     #[cfg(feature = "parallel")]
     {
         let iterator = query_borrow.iter_batched(batch_size);
-        // Due to how rayon works, this will automatically run on either the global
-        // or a local thread pool, depending on in scope of which batch() is called.
         rayon::scope(|scope| {
             iterator.for_each(|batch| {
                 scope.spawn(|_| {
