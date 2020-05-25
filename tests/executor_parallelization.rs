@@ -220,3 +220,45 @@ fn queries_disjoint_by_archetypes() {
         assert_eq!(b.0, 1);
     }
 }
+
+#[test]
+fn batching() {
+    let mut world = World::new();
+    let thread_pool = thread_pool();
+    world.spawn_batch((0..20).map(|_| (B(0),))).last();
+    let mut a = A(1);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            context.batch(&mut context.query(q), 4, |_, b| {
+                b.0 += a.0;
+                thread::sleep(Duration::from_millis(10));
+            });
+        })
+        .build();
+    let time = Instant::now();
+    executor.run_on_thread_pool(&thread_pool, &world, &mut a);
+    #[cfg(not(feature = "parallel"))]
+    assert!(time.elapsed() > Duration::from_millis(200));
+    #[cfg(feature = "parallel")]
+    assert!(time.elapsed() < Duration::from_millis(200));
+    for (_, b) in world.query::<&B>().iter() {
+        assert_eq!(b.0, 1);
+    }
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            yaks::batch(&mut context.query(q), 4, |_, b| {
+                b.0 += a.0;
+                thread::sleep(Duration::from_millis(10));
+            });
+        })
+        .build();
+    let time = Instant::now();
+    executor.run_on_thread_pool(&thread_pool, &world, &mut a);
+    #[cfg(not(feature = "parallel"))]
+    assert!(time.elapsed() > Duration::from_millis(200));
+    #[cfg(feature = "parallel")]
+    assert!(time.elapsed() < Duration::from_millis(200));
+    for (_, b) in world.query::<&B>().iter() {
+        assert_eq!(b.0, 2);
+    }
+}

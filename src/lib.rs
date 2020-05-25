@@ -92,6 +92,7 @@ mod tuple_macro;
 #[cfg(feature = "parallel")]
 mod access_set;
 mod atomic_borrow;
+mod batch_helper;
 mod contains;
 mod deref_tuple;
 mod executor;
@@ -116,6 +117,7 @@ use resource_cell::{Ref, RefMut, ResourceCell};
 use resource_tuple::{ResourceTuple, ResourceWrap, WrappedResources};
 use thread_pool::ThreadPool;
 
+pub use batch_helper::batch;
 pub use executor::Executor;
 pub use executor_builder::ExecutorBuilder;
 pub use query_bundle::QueryMarker;
