@@ -89,9 +89,9 @@
 #[macro_use]
 mod tuple_macro;
 
-mod atomic_borrow;
 #[cfg(feature = "parallel")]
-mod borrow_set;
+mod access_set;
+mod atomic_borrow;
 mod contains;
 mod deref_tuple;
 mod executor;
@@ -103,9 +103,9 @@ mod resource_tuple;
 mod system_context;
 mod thread_pool;
 
-use atomic_borrow::AtomicBorrow;
 #[cfg(feature = "parallel")]
-use borrow_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
+use access_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
+use atomic_borrow::AtomicBorrow;
 use contains::Contains;
 use deref_tuple::DerefTuple;
 use executor::SystemClosure;

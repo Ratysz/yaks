@@ -177,7 +177,16 @@ where
         }
     }
 
-    pub fn run<TPool, ResourceTuple>(
+    pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        self.run_inner((), world, resources);
+    }
+
+    pub fn run_on_thread_pool<TPool, ResourceTuple>(
         &mut self,
         thread_pool: TPool,
         world: &World,
@@ -214,8 +223,6 @@ where
             // and reset dependency counters.
             self.archetypes_generation = Some(world.archetypes_generation());
             for system in self.systems.values_mut() {
-                system.archetype_set.clear();
-                system.archetype_set.grow(world.archetypes().len());
                 (system.archetype_writer)(world, &mut system.archetype_set);
                 debug_assert!(system.unsatisfied_dependencies == 0);
                 system.unsatisfied_dependencies = system.dependencies;

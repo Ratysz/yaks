@@ -38,12 +38,31 @@ fn dependencies_single() {
         )
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, ());
+    executor.run_on_thread_pool(&thread_pool(), &world, ());
     assert!(time.elapsed() > Duration::from_millis(200));
 }
 
 #[test]
-fn resources_incompatible() {
+fn resources_incompatible_mutable_immutable() {
+    let world = World::new();
+    let mut a = A(0);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|_, _: &A, _: ()| {
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|_, a: &mut A, _: ()| {
+            a.0 += 1;
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    assert!(time.elapsed() > Duration::from_millis(200));
+    assert_eq!(a.0, 1);
+}
+
+#[test]
+fn resources_incompatible_mutable_mutable() {
     let world = World::new();
     let mut a = A(0);
     let mut executor = Executor::<(A,)>::builder()
@@ -57,7 +76,7 @@ fn resources_incompatible() {
         })
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, &mut a);
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
     assert!(time.elapsed() > Duration::from_millis(200));
     assert_eq!(a.0, 2);
 }
@@ -67,28 +86,54 @@ fn resources_disjoint() {
     let world = World::new();
     let mut a = A(0);
     let mut b = B(1);
-    let mut executor = Executor::<(A, B)>::builder()
-        .system(|_, a: &mut A, _: ()| {
-            a.0 += 1;
+    let mut c = C(2);
+    let mut executor = Executor::<(A, B, C)>::builder()
+        .system(|_, (a, c): (&mut A, &C), _: ()| {
+            a.0 += c.0;
             thread::sleep(Duration::from_millis(100));
         })
-        .system(|_, b: &mut B, _: ()| {
-            b.0 += 1;
+        .system(|_, (b, c): (&mut B, &C), _: ()| {
+            b.0 += c.0;
             thread::sleep(Duration::from_millis(100));
         })
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, (&mut a, &mut b));
+    executor.run_on_thread_pool(&thread_pool(), &world, (&mut a, &mut b, &mut c));
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
     assert!(time.elapsed() < Duration::from_millis(200));
-    assert_eq!(a.0, 1);
-    assert_eq!(b.0, 2);
+    assert_eq!(a.0, 2);
+    assert_eq!(b.0, 3);
 }
 
 #[test]
-fn queries_incompatible() {
+fn queries_incompatible_mutable_immutable() {
+    let mut world = World::new();
+    world.spawn_batch((0..10).map(|_| (B(0),))).last();
+    let mut a = A(1);
+    let mut executor = Executor::<(A,)>::builder()
+        .system(|context, _: &A, q: QueryMarker<&B>| {
+            for (_, _) in context.query(q).iter() {}
+            thread::sleep(Duration::from_millis(100));
+        })
+        .system(|context, a: &A, q: QueryMarker<&mut B>| {
+            for (_, b) in context.query(q).iter() {
+                b.0 += a.0;
+            }
+            thread::sleep(Duration::from_millis(100));
+        })
+        .build();
+    let time = Instant::now();
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
+    assert!(time.elapsed() > Duration::from_millis(200));
+    for (_, b) in world.query::<&B>().iter() {
+        assert_eq!(b.0, 1);
+    }
+}
+
+#[test]
+fn queries_incompatible_mutable_mutable() {
     let mut world = World::new();
     world.spawn_batch((0..10).map(|_| (B(0),))).last();
     let mut a = A(1);
@@ -107,7 +152,7 @@ fn queries_incompatible() {
         })
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, &mut a);
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
     assert!(time.elapsed() > Duration::from_millis(200));
     for (_, b) in world.query::<&B>().iter() {
         assert_eq!(b.0, 2);
@@ -134,7 +179,7 @@ fn queries_disjoint_by_components() {
         })
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, &mut a);
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
@@ -166,7 +211,7 @@ fn queries_disjoint_by_archetypes() {
         })
         .build();
     let time = Instant::now();
-    executor.run(&thread_pool(), &world, &mut a);
+    executor.run_on_thread_pool(&thread_pool(), &world, &mut a);
     #[cfg(not(feature = "parallel"))]
     assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]

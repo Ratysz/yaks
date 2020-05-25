@@ -18,7 +18,7 @@ fn systems_single() {
             a.0 = b.0 + c.0;
         })
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 3);
 }
 
@@ -36,7 +36,7 @@ fn systems_two() {
             a.0 += c.0;
         })
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 3);
 }
 
@@ -51,7 +51,7 @@ fn resources_decoding_single() {
             a.0 = 1;
         })
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
     assert_eq!(a.0, 1);
 }
 
@@ -64,14 +64,14 @@ fn resources_wrap_single() {
             a.0 = 1;
         })
         .build();
-    executor.run((), &world, (&mut a,));
+    executor.run(&world, (&mut a,));
     assert_eq!(a.0, 1);
     let mut executor = Executor::<(A,)>::builder()
         .system(|_, a: &mut A, _: ()| {
             a.0 = 2;
         })
         .build();
-    executor.run((), &world, &mut a);
+    executor.run(&world, &mut a);
     assert_eq!(a.0, 2);
 }
 
@@ -88,7 +88,7 @@ fn queries_decoding_single() {
             }
         })
         .build();
-    executor.run((), &world, &mut a);
+    executor.run(&world, &mut a);
     assert_eq!(a.0, 3);
 }
 
@@ -134,7 +134,7 @@ fn queries_decoding_four() {
             },
         )
         .build();
-    executor.run((), &world, &mut a);
+    executor.run(&world, &mut a);
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -148,7 +148,7 @@ fn invalid_resources_mutable_immutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&mut A, &A), _: ()| {})
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -162,7 +162,7 @@ fn invalid_resources_immutable_mutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&A, &mut A), _: ()| {})
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -176,5 +176,5 @@ fn invalid_resources_mutable_mutable() {
     let mut executor = Executor::<(A, B, C)>::builder()
         .system(|_, _: (&mut A, &mut A), _: ()| {})
         .build();
-    executor.run((), &world, (&mut a, &mut b, &mut c));
+    executor.run(&world, (&mut a, &mut b, &mut c));
 }

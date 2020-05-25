@@ -80,7 +80,6 @@ pub struct ArchetypeSet {
     pub mutable: FixedBitSet,
 }
 
-//#[cfg(feature = "parallel")]
 impl ArchetypeSet {
     pub fn is_compatible(&self, other: &ArchetypeSet) -> bool {
         self.mutable.is_disjoint(&other.mutable)
@@ -88,22 +87,17 @@ impl ArchetypeSet {
             && self.immutable.is_disjoint(&other.mutable)
     }
 
-    pub fn clear(&mut self) {
-        self.immutable.clear();
-        self.mutable.clear();
-    }
-
-    pub fn grow(&mut self, bits: usize) {
-        self.immutable.grow(bits);
-        self.mutable.grow(bits);
-    }
-
     pub fn set_bits_for_query<Q>(&mut self, world: &World)
     where
         Q: Query,
     {
-        world
-            .archetypes()
+        self.immutable.clear();
+        self.mutable.clear();
+        let iterator = world.archetypes();
+        let bits = iterator.len();
+        self.immutable.grow(bits);
+        self.mutable.grow(bits);
+        iterator
             .enumerate()
             .filter_map(|(index, archetype)| archetype.access::<Q>().map(|access| (index, access)))
             .for_each(|(archetype, access)| match access {
