@@ -11,14 +11,11 @@ pub fn batch<'query, 'world, Q, F>(
 {
     #[cfg(feature = "parallel")]
     {
-        let iterator = query_borrow.iter_batched(batch_size);
-        rayon::scope(|scope| {
-            iterator.for_each(|batch| {
-                scope.spawn(|_| {
-                    batch.for_each(|(entity, components)| for_each(entity, components));
-                });
-            });
-        });
+        use rayon::prelude::{ParallelBridge, ParallelIterator};
+        query_borrow
+            .iter_batched(batch_size)
+            .par_bridge()
+            .for_each(|batch| batch.for_each(|(entity, components)| for_each(entity, components)));
     }
     #[cfg(not(feature = "parallel"))]
     {

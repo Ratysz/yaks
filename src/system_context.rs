@@ -1,13 +1,24 @@
-use hecs::{Entity, Fetch, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
+use hecs::{Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
 
-use crate::{batch, QueryMarker, SystemId};
+use crate::{QueryMarker, SystemId};
 
 pub struct SystemContext<'scope> {
-    pub system_id: SystemId,
+    pub(crate) system_id: Option<SystemId>,
     pub(crate) world: &'scope World,
 }
 
 impl<'scope> SystemContext<'scope> {
+    pub fn new(world: &'scope World) -> Self {
+        Self {
+            system_id: None,
+            world,
+        }
+    }
+
+    pub fn id(&self) -> Option<SystemId> {
+        self.system_id
+    }
+
     pub fn query<Q>(&self, _: QueryMarker<Q>) -> QueryBorrow<'_, Q>
     where
         Q: Query + Send + Sync,
@@ -24,17 +35,5 @@ impl<'scope> SystemContext<'scope> {
         Q: Query + Send + Sync,
     {
         self.world.query_one(entity)
-    }
-
-    pub fn batch<'query, 'world, Q, F>(
-        &self,
-        query_borrow: &'query mut QueryBorrow<'world, Q>,
-        batch_size: u32,
-        for_each: F,
-    ) where
-        Q: Query + Send + Sync + 'query,
-        F: Fn(Entity, <<Q as Query>::Fetch as Fetch<'query>>::Item) + Send + Sync,
-    {
-        batch(query_borrow, batch_size, for_each);
     }
 }

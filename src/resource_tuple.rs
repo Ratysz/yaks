@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<'a, R0> ResourceWrap for (&'a mut R0,)
+impl<R0> ResourceWrap for (&'_ mut R0,)
 where
     R0: Send + Sync,
 {
@@ -120,7 +120,7 @@ impl_for_tuples!(impl_resource_tuple);
 macro_rules! impl_resource_wrap {
     ($($letter:ident),*) => {
         paste::item! {
-            impl<'a, $($letter),*> ResourceWrap for ($(&'a mut $letter,)*)
+            impl<$($letter),*> ResourceWrap for ($(&'_ mut $letter,)*)
             where
                 $($letter: Send + Sync,)*
             {

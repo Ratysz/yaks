@@ -30,7 +30,7 @@ static INVALID_ID: &str = "system IDs should always be valid";
 #[cfg(feature = "parallel")]
 struct System<'closure, Resources>
 where
-    Resources: ResourceTuple + 'closure,
+    Resources: ResourceTuple,
 {
     closure: Arc<Mutex<SystemClosure<'closure, Resources::Cells>>>,
     resource_set: ResourceSet,
@@ -49,7 +49,7 @@ struct DependantsLength(usize);
 #[cfg(feature = "parallel")]
 pub struct Executor<'closures, Resources>
 where
-    Resources: ResourceTuple + 'closures,
+    Resources: ResourceTuple,
 {
     borrows: Resources::Borrows,
     systems: HashMap<SystemId, System<'closures, Resources>>,
@@ -66,7 +66,7 @@ where
 #[cfg(not(feature = "parallel"))]
 pub struct Executor<'closures, Resources>
 where
-    Resources: ResourceTuple + 'closures,
+    Resources: ResourceTuple,
 {
     borrows: Resources::Borrows,
     systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Cells>>)>,
@@ -74,7 +74,7 @@ where
 
 impl<'closures, Resources> Executor<'closures, Resources>
 where
-    Resources: ResourceTuple + 'closures,
+    Resources: ResourceTuple,
 {
     pub fn builder() -> ExecutorBuilder<'closures, Resources> {
         ExecutorBuilder::new()
@@ -233,7 +233,7 @@ where
                                 .expect("systems should only be ran once per despatch");
                             system(
                                 SystemContext {
-                                    system_id: id,
+                                    system_id: Some(id),
                                     world,
                                 },
                                 wrapped,
@@ -333,7 +333,7 @@ where
         for (id, closure) in &mut self.systems {
             closure(
                 SystemContext {
-                    system_id: *id,
+                    system_id: Some(*id),
                     world,
                 },
                 &wrapped,
