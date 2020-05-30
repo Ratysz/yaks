@@ -97,6 +97,8 @@ mod contains;
 mod deref_tuple;
 mod executor;
 mod executor_builder;
+#[cfg(feature = "parallel")]
+mod executor_parallel;
 mod fetch;
 mod query_bundle;
 mod resource_cell;
@@ -110,6 +112,8 @@ use contains::Contains;
 use deref_tuple::DerefTuple;
 use executor::SystemClosure;
 use executor_builder::SystemId;
+#[cfg(feature = "parallel")]
+use executor_parallel::ExecutorInner;
 use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::{Ref, RefMut, ResourceCell};
