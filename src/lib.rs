@@ -113,7 +113,7 @@ use deref_tuple::DerefTuple;
 use executor::SystemClosure;
 use executor_builder::SystemId;
 #[cfg(feature = "parallel")]
-use executor_parallel::ExecutorInner;
+use executor_parallel::ExecutorParallel;
 use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::{Ref, RefMut, ResourceCell};

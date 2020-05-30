@@ -2,6 +2,7 @@ use crossbeam_channel::{Receiver, Sender};
 use hecs::ArchetypesGeneration;
 use hecs::World;
 use parking_lot::Mutex;
+use rayon::prelude::*;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -15,40 +16,15 @@ use crate::{
 static DISCONNECTED: &str = "channel should not be disconnected at this point";
 static INVALID_ID: &str = "system IDs should always be valid";
 
-struct System<'closure, Resources>
+pub enum ExecutorParallel<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    closure: Arc<Mutex<SystemClosure<'closure, Resources::Cells>>>,
-    resource_set: ResourceSet,
-    component_set: ComponentSet,
-    archetype_set: ArchetypeSet,
-    archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
-    dependants: Vec<SystemId>,
-    dependencies: usize,
-    unsatisfied_dependencies: usize,
+    Dispatching(Dispatcher<'closures, Resources>),
+    Scheduling(Scheduler<'closures, Resources>),
 }
 
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-struct DependantsLength(usize);
-
-pub struct ExecutorInner<'closures, Resources>
-where
-    Resources: ResourceTuple,
-{
-    borrows: Resources::Borrows,
-    systems: HashMap<SystemId, System<'closures, Resources>>,
-    archetypes_generation: Option<ArchetypesGeneration>,
-    systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
-    systems_to_run_now: Vec<(SystemId, DependantsLength)>,
-    systems_running: HashSet<SystemId>,
-    systems_just_finished: Vec<SystemId>,
-    systems_to_decrement_dependencies: Vec<SystemId>,
-    sender: Sender<SystemId>,
-    receiver: Receiver<SystemId>,
-}
-
-impl<'closures, Resources> ExecutorInner<'closures, Resources>
+impl<'closures, Resources> ExecutorParallel<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
@@ -87,6 +63,32 @@ where
                 )
             })
             .collect();
+        // If all systems are independent, it might be possible to use dispatching heuristic.
+        if systems.len() == systems_without_dependencies.len() {
+            let mut tested_ids = Vec::new();
+            let mut all_disjoint = true;
+            'outer: for (id, system) in &systems {
+                tested_ids.push(*id);
+                for (id, other) in &systems {
+                    if !tested_ids.contains(id)
+                        && (!system.resource_set.is_compatible(&other.resource_set)
+                            || !system.component_set.is_compatible(&other.component_set))
+                    {
+                        all_disjoint = false;
+                        break 'outer;
+                    }
+                }
+            }
+            if all_disjoint {
+                return ExecutorParallel::Dispatching(Dispatcher {
+                    borrows: Resources::instantiate_borrows(),
+                    systems: systems
+                        .drain()
+                        .map(|(id, system)| (id, system.closure))
+                        .collect(),
+                });
+            }
+        }
         // Convert system-dependencies mapping to system-dependants mapping.
         for (dependant_id, mut dependencies) in all_dependencies.drain(..) {
             for dependee_id in dependencies.drain(..) {
@@ -109,10 +111,10 @@ where
             .collect();
         // Sort independent systems so that those with most dependants are queued first.
         systems_without_dependencies.sort_by(|(_, a), (_, b)| b.cmp(a));
-        let (sender, receiver) = crossbeam_channel::unbounded();
         // This should be guaranteed by the builder's logic anyway.
         debug_assert!(!systems_without_dependencies.is_empty());
-        Self {
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        ExecutorParallel::Scheduling(Scheduler {
             borrows: Resources::instantiate_borrows(),
             systems,
             archetypes_generation: None,
@@ -123,14 +125,101 @@ where
             systems_to_decrement_dependencies: Vec::new(),
             sender,
             receiver,
-        }
+        })
     }
 
     pub fn force_archetype_recalculation(&mut self) {
-        self.archetypes_generation = None;
+        match self {
+            ExecutorParallel::Dispatching(_) => (),
+            ExecutorParallel::Scheduling(scheduler) => scheduler.archetypes_generation = None,
+        }
     }
 
-    pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        match self {
+            ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, resources),
+            ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, resources),
+        }
+    }
+}
+
+pub struct Dispatcher<'closures, Resources>
+where
+    Resources: ResourceTuple,
+{
+    borrows: Resources::Borrows,
+    systems: HashMap<SystemId, Arc<Mutex<SystemClosure<'closures, Resources::Cells>>>>,
+}
+
+impl<'closures, Resources> Dispatcher<'closures, Resources>
+where
+    Resources: ResourceTuple,
+{
+    fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    where
+        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
+        Resources::Borrows: Send,
+        Resources::Cells: Send + Sync,
+    {
+        let wrapped = resources.wrap(&mut self.borrows);
+        self.systems.par_iter().for_each(|(id, system)| {
+            let system = &mut *system
+                .try_lock() // TODO should this be .lock() instead?
+                .expect("systems should only be ran once per execution");
+            system(
+                SystemContext {
+                    system_id: Some(*id),
+                    world,
+                },
+                &wrapped,
+            );
+        });
+    }
+}
+
+struct System<'closure, Resources>
+where
+    Resources: ResourceTuple,
+{
+    closure: Arc<Mutex<SystemClosure<'closure, Resources::Cells>>>,
+    resource_set: ResourceSet,
+    component_set: ComponentSet,
+    archetype_set: ArchetypeSet,
+    archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    dependants: Vec<SystemId>,
+    dependencies: usize,
+    unsatisfied_dependencies: usize,
+}
+
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+struct DependantsLength(usize);
+
+pub struct Scheduler<'closures, Resources>
+where
+    Resources: ResourceTuple,
+{
+    borrows: Resources::Borrows,
+    systems: HashMap<SystemId, System<'closures, Resources>>,
+    archetypes_generation: Option<ArchetypesGeneration>,
+    systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
+    systems_to_run_now: Vec<(SystemId, DependantsLength)>,
+    systems_running: HashSet<SystemId>,
+    systems_just_finished: Vec<SystemId>,
+    systems_to_decrement_dependencies: Vec<SystemId>,
+    sender: Sender<SystemId>,
+    receiver: Receiver<SystemId>,
+}
+
+impl<'closures, Resources> Scheduler<'closures, Resources>
+where
+    Resources: ResourceTuple,
+{
+    fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
     where
         ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
         Resources::Borrows: Send,
@@ -174,7 +263,7 @@ where
                         scope.spawn(move |_| {
                             let system = &mut *system
                                 .try_lock() // TODO should this be .lock() instead?
-                                .expect("systems should only be ran once per despatch");
+                                .expect("systems should only be ran once per execution");
                             system(
                                 SystemContext {
                                     system_id: Some(id),
@@ -263,5 +352,93 @@ where
             }
         }
         true
+    }
+}
+
+#[test]
+fn dispatch_heuristic_trivial() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: (), _: ()| {})
+            .system(|_, _: (), _: ()| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_trivial_with_resources() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: (), _: ()| {})
+            .system(|_, _: (), _: ()| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_resources_incompatible() {
+    if let ExecutorParallel::Dispatching(_) = ExecutorParallel::<(usize, f32)>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: &f32, _: ()| {})
+            .system(|_, _: &mut f32, _: ()| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_resources_disjoint() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: &mut usize, _: ()| {})
+            .system(|_, _: &mut f32, _: ()| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_resources_immutable() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: &f32, _: ()| {})
+            .system(|_, _: &f32, _: ()| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_queries_incompatible() {
+    if let ExecutorParallel::Dispatching(_) = ExecutorParallel::<()>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: (), _: crate::QueryMarker<&mut f32>| {})
+            .system(|_, _: (), _: crate::QueryMarker<&f32>| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_queries_disjoint() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: (), _: crate::QueryMarker<&mut usize>| {})
+            .system(|_, _: (), _: crate::QueryMarker<&mut f32>| {}),
+    ) {
+        panic!();
+    }
+}
+
+#[test]
+fn dispatch_heuristic_queries_immutable() {
+    if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
+        ExecutorBuilder::new()
+            .system(|_, _: (), _: crate::QueryMarker<&f32>| {})
+            .system(|_, _: (), _: crate::QueryMarker<&f32>| {}),
+    ) {
+        panic!();
     }
 }

@@ -3,16 +3,22 @@ use hecs::World;
 use crate::{ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, WrappedResources};
 
 #[cfg(feature = "parallel")]
-use crate::ExecutorInner;
+use crate::ExecutorParallel;
 
 #[cfg(not(feature = "parallel"))]
 use crate::SystemId;
+
+pub type SystemClosure<'closure, Cells> =
+    dyn FnMut(SystemContext, &WrappedResources<Cells>) + Send + Sync + 'closure;
 
 pub struct Executor<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    inner: ExecutorInner<'closures, Resources>,
+    #[cfg(feature = "parallel")]
+    inner: ExecutorParallel<'closures, Resources>,
+    #[cfg(not(feature = "parallel"))]
+    inner: ExecutorSequential<'closures, Resources>,
 }
 
 impl<'closures, Resources> Executor<'closures, Resources>
@@ -25,7 +31,10 @@ where
 
     pub(crate) fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {
         Self {
-            inner: ExecutorInner::build(builder),
+            #[cfg(feature = "parallel")]
+            inner: ExecutorParallel::build(builder),
+            #[cfg(not(feature = "parallel"))]
+            inner: ExecutorSequential::build(builder),
         }
     }
 
@@ -43,11 +52,8 @@ where
     }
 }
 
-pub type SystemClosure<'closure, Cells> =
-    dyn FnMut(SystemContext, &WrappedResources<Cells>) + Send + Sync + 'closure;
-
 #[cfg(not(feature = "parallel"))]
-struct ExecutorInner<'closures, Resources>
+struct ExecutorSequential<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
@@ -56,7 +62,7 @@ where
 }
 
 #[cfg(not(feature = "parallel"))]
-impl<'closures, Resources> ExecutorInner<'closures, Resources>
+impl<'closures, Resources> ExecutorSequential<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
@@ -67,7 +73,7 @@ where
             .map(|(id, system)| (id, system.closure))
             .collect();
         systems.sort_by(|(a, _), (b, _)| a.cmp(b));
-        ExecutorInner {
+        ExecutorSequential {
             borrows: Resources::instantiate_borrows(),
             systems,
         }
