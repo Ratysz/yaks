@@ -37,3 +37,21 @@ impl<'scope> SystemContext<'scope> {
         self.world.query_one(entity)
     }
 }
+
+impl<'scope> From<&'scope World> for SystemContext<'scope> {
+    fn from(world: &'scope World) -> Self {
+        Self {
+            system_id: None,
+            world,
+        }
+    }
+}
+
+impl<'scope> From<&'scope mut World> for SystemContext<'scope> {
+    fn from(world: &'scope mut World) -> Self {
+        Self {
+            system_id: None,
+            world,
+        }
+    }
+}

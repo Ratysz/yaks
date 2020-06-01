@@ -1,168 +1,271 @@
-//! An intentionally convoluted (and inefficient) example, simulating a race between
-//! three entities, complete with celebratory confetti.
+//! An annotated non-trivial example. Runs with or without the `parallel` feature.
 
-fn main() {}
-/*
-use hecs::{Entity, World};
-use resources::Resources;
-use yaks::{Executor, ModQueuePool, System};
+use hecs::World;
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::time::{Duration, Instant};
+use yaks::{Executor, QueryMarker, SystemContext};
 
-struct Position(f32);
+// Each of the tests will be ran this many times.
+const ITERATIONS: u32 = 100;
 
-struct Velocity(f32);
+// A resource used to inform systems of how many entities they're working with,
+// without explicitly counting them each time.
+struct SpawnedEntities {
+    no_acceleration: u32,
+    with_acceleration: u32,
+}
 
-struct HasFinished(bool);
+impl SpawnedEntities {
+    // How many batches will a query be split into with `yaks::batch()`.
+    const BATCH_TASKS: u32 = 32;
 
-struct FinishLine(f32);
-
-struct Iteration(usize);
-
-struct Winner(Entity);
-
-struct ConfettiTimer(i32);
-
-fn main() {
-    let mut world = World::new();
-    let mut resources = Resources::new();
-    let mod_queues = ModQueuePool::new();
-    world.spawn((Position(0.0), Velocity(3.0), HasFinished(false)));
-    world.spawn((Position(5.0), Velocity(2.0), HasFinished(false)));
-    world.spawn((Position(10.0), Velocity(1.0), HasFinished(false)));
-    resources.insert(Iteration(0));
-    resources.insert(FinishLine(50.0));
-
-    let racing = System::builder()
-        .resources::<&FinishLine>()
-        .query::<(&mut Position, &Velocity)>()
-        .query::<(&Position, &mut HasFinished)>()
-        .build(|facade, finish_line, (query_1, query_2)| {
-            for (_, (mut position, velocity)) in facade.query(query_1).iter() {
-                position.0 += velocity.0;
-            }
-            for (entity, (position, mut finished)) in facade.query(query_2).iter() {
-                if position.0 >= finish_line.0 {
-                    finished.0 = true;
-                    if !facade.resources.contains::<Winner>() {
-                        facade.new_mod_queue().push(move |_, resources| {
-                            resources.insert(Winner(entity));
-                        });
-                    }
-                }
-            }
-        });
-
-    let leave_track =
-        System::builder()
-            .query::<&HasFinished>()
-            .build(|facade, _, query| {
-                let mut queue = facade.new_mod_queue();
-                for entity in facade.query(query).iter().filter_map(|(entity, finished)| {
-                    if finished.0 {
-                        Some(entity)
-                    } else {
-                        None
-                    }
-                }) {
-                    queue.push(move |world, _| {
-                        world.despawn(entity).unwrap();
-                    });
-                }
-            });
-
-    let stopwatch = System::builder()
-        .resources::<&mut Iteration>()
-        .build(|_, mut iteration, _| {
-            iteration.0 += 1;
-        });
-
-    let spawn_confetti = System::builder()
-        .query::<&ConfettiTimer>()
-        .build(|facade, _, query| {
-            if facade.query(query).iter().len() < 20 {
-                facade.new_mod_queue().push(|world, _| {
-                    world.spawn((ConfettiTimer(50),));
-                    world.spawn((ConfettiTimer(40),));
-                    world.spawn((ConfettiTimer(30),));
-                })
-            }
-        });
-
-    let confetti_cleanup =
-        System::builder()
-            .query::<&mut ConfettiTimer>()
-            .build(|facade, _, query| {
-                for (_, mut timer) in facade.query(query).iter() {
-                    timer.0 -= 1;
-                }
-                let decayed_confetti = facade
-                    .query(query)
-                    .iter()
-                    .filter_map(
-                        |(entity, timer)| {
-                            if timer.0 < 0 {
-                                Some(entity)
-                            } else {
-                                None
-                            }
-                        },
-                    )
-                    .collect::<Vec<_>>();
-                facade.new_mod_queue().push(move |world, _| {
-                    for entity in &decayed_confetti {
-                        world.despawn(*entity).unwrap();
-                    }
-                });
-            });
-
-    let mut executor = Executor::<&'static str>::builder()
-        .system_with_handle(racing, "racing")
-        .system(leave_track)
-        .system_with_handle(stopwatch, "stopwatch")
-        .system_with_handle(spawn_confetti, "confetti")
-        .system(confetti_cleanup)
-        .build();
-
-    executor.set_active(&"confetti", false).unwrap();
-
-    print!("Turn |");
-    for entity in world.query::<&Position>().iter().map(|(entity, _)| entity) {
-        print!("{:?}|", entity);
-    }
-    println!();
-    while !resources.contains::<Winner>() {
-        let stopwatch = resources.get::<Iteration>().unwrap().0;
-        print!("  {:2} |", stopwatch);
-        for (_, position) in world.query::<&Position>().iter() {
-            print!("{:3}|", position.0);
-        }
-        println!();
-        executor.run(&world, &resources, &mod_queues);
-        mod_queues.apply_all(&mut world, &mut resources);
+    // Determines how many entities will be in a batch.
+    pub const fn batch_size_all(&self) -> u32 {
+        (self.no_acceleration + self.with_acceleration) / Self::BATCH_TASKS
     }
 
-    println!();
-    println!("The winner is {:?}!", resources.get::<Winner>().unwrap().0);
+    pub const fn batch_size_no_acceleration(&self) -> u32 {
+        self.no_acceleration / Self::BATCH_TASKS
+    }
 
-    executor.set_active(&"confetti", true).unwrap();
-    executor.set_active(&"stopwatch", false).unwrap();
-    executor.set_active(&"racing", false).unwrap();
+    pub const fn batch_size_with_acceleration(&self) -> u32 {
+        self.with_acceleration / Self::BATCH_TASKS
+    }
+}
 
-    for i in 0..60 {
-        executor.run(&world, &resources, &mod_queues);
-        mod_queues.apply_all(&mut world, &mut resources);
-        for (_, timer) in world.query::<&ConfettiTimer>().iter() {
-            if timer.0 > 30 {
-                print!("'");
-            } else if timer.0 > 15 {
-                print!("*");
-            } else {
-                print!(".");
-            }
-        }
-        println!();
-        if i == 30 {
-            executor.set_active(&"confetti", false).unwrap();
+// Example components and/or resources.
+struct Position(f32, f32);
+struct Velocity(f32, f32);
+struct Acceleration(f32, f32);
+struct Color(f32, f32, f32, f32);
+
+// A system that simulates 2D kinematic motion.
+fn motion(
+    // Thin wrapper over `&hecs::World`.
+    context: SystemContext,
+    // A resource this system requires. Can be a single one, or any tuple up to 16.
+    spawned: &SpawnedEntities,
+    // Queries this system will execute. Can be a single one, or any tuple up to 16.
+    (no_acceleration, with_acceleration): (
+        // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
+        QueryMarker<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
+        QueryMarker<(&mut Position, &mut Velocity, &Acceleration)>,
+    ),
+) {
+    // A helper function that automatically spreads the batches across threads of a
+    // `rayon::ThreadPool` - either the global one if called standalone, or a specific one
+    // when used with a `rayon::ThreadPool::install()`.
+    yaks::batch(
+        &mut context.query(no_acceleration),
+        spawned.batch_size_no_acceleration(),
+        |_, (mut pos, vel)| {
+            pos.0 += vel.0;
+            pos.1 += vel.1;
+        },
+    );
+    // If the default `parallel` feature is disabled this simply iterates in a single thread.
+    yaks::batch(
+        &mut context.query(with_acceleration),
+        spawned.batch_size_with_acceleration(),
+        |_, (mut pos, mut vel, acc)| {
+            vel.0 += acc.0;
+            vel.1 += acc.1;
+            pos.0 += vel.0;
+            pos.1 += vel.1;
+        },
+    );
+}
+
+// A system that tracks the highest velocity among all entities.
+fn find_highest_velocity(
+    context: SystemContext,
+    highest: &mut Velocity,
+    query: QueryMarker<&Velocity>,
+) {
+    // This cannot be batched as is because it needs mutable access to `highest`;
+    // however, it's possible to work around that by using channels and/or `RwLock`.
+    for (_, vel) in context.query(query).iter() {
+        if vel.0 * vel.0 + vel.1 * vel.1 > highest.0 * highest.0 + highest.1 * highest.1 {
+            highest.0 = vel.0;
+            highest.1 = vel.1;
         }
     }
 }
-*/
+
+// A system that recolors entities based on their kinematic properties.
+fn color(
+    context: SystemContext,
+    (spawned, rng): (&SpawnedEntities, &mut StdRng),
+    query: QueryMarker<(&Position, &Velocity, &mut Color)>,
+) {
+    // Of course, it's possible to use resources mutably and still batch queries if
+    // mutation happens outside batching.
+    let blue = rng.gen_range(0.0, 1.0);
+    yaks::batch(
+        &mut context.query(query),
+        spawned.batch_size_all(),
+        |_, (pos, vel, mut col)| {
+            col.0 = pos.0.abs() / 1000.0;
+            col.1 = vel.1.abs() / 100.0;
+            col.2 = blue;
+        },
+    );
+}
+
+// A system that tracks the average color of entities.
+fn find_average_color(
+    context: SystemContext,
+    (average_color, spawned): (&mut Color, &SpawnedEntities),
+    query: QueryMarker<&Color>,
+) {
+    *average_color = Color(0.0, 0.0, 0.0, 0.0);
+    for (_, color) in context.query(query).iter() {
+        average_color.0 += color.0;
+        average_color.1 += color.1;
+        average_color.2 += color.2;
+        average_color.3 += color.3;
+    }
+    let entities = (spawned.no_acceleration + spawned.with_acceleration) as f32;
+    average_color.0 /= entities;
+    average_color.1 /= entities;
+    average_color.2 /= entities;
+    average_color.3 /= entities;
+}
+
+fn main() {
+    // Trying to parse a passed argument, if any.
+    let to_spawn: u32 = std::env::args()
+        .skip(1)
+        .next()
+        .ok_or(())
+        .and_then(|arg| arg.parse::<u32>().map_err(|_| ()))
+        .unwrap_or(100_000);
+    // Initializing resources.
+    let mut rng = StdRng::from_entropy();
+    let mut world = World::new();
+    let mut average_color = Color(0.0, 0.0, 0.0, 0.0);
+    let mut highest_velocity = Velocity(0.0, 0.0);
+    let mut spawned = SpawnedEntities {
+        no_acceleration: 0,
+        with_acceleration: 0,
+    };
+
+    // Spawning entities.
+    world.spawn_batch((0..(to_spawn / 2)).map(|_| {
+        spawned.no_acceleration += 1;
+        (
+            Position(rng.gen_range(-100.0, 100.0), rng.gen_range(-100.0, 100.0)),
+            Velocity(rng.gen_range(-1.0, 1.0), rng.gen_range(-1.0, 1.0)),
+            Color(0.0, 0.0, 0.0, 1.0),
+        )
+    }));
+    assert!(spawned.no_acceleration >= SpawnedEntities::BATCH_TASKS);
+    world.spawn_batch((0..(to_spawn / 2)).map(|_| {
+        spawned.with_acceleration += 1;
+        (
+            Position(rng.gen_range(-100.0, 100.0), rng.gen_range(-100.0, 100.0)),
+            Velocity(rng.gen_range(-10.0, 10.0), rng.gen_range(-10.0, 10.0)),
+            Acceleration(rng.gen_range(-1.0, 1.0), rng.gen_range(-1.0, 1.0)),
+            Color(0.0, 0.0, 0.0, 1.0),
+        )
+    }));
+    assert!(spawned.with_acceleration >= SpawnedEntities::BATCH_TASKS);
+    println!(
+        "spawned {} entities",
+        spawned.no_acceleration + spawned.with_acceleration
+    );
+    let world = &world;
+
+    let mut iterations = 0u32;
+
+    // The `Executor` is the main abstraction provided by `yaks`; it tries to execute
+    // as much of it's systems at the same time as their borrows allow, while preserving
+    // given order of execution, if any.
+    // The generic parameter is the superset of resource sets of all of it's systems.
+    let mut executor = Executor::<'_, (SpawnedEntities, StdRng, Color, Velocity)>::builder()
+        // Handles and dependencies are optional,
+        // can be of any type that is `Eq + Hash + Debug`,
+        // and are discarded on `build()`.
+        .system_with_handle(motion, "motion")
+        // Systems can be defined by either a function or a closure of same signature.
+        // The closures can also mutably borrow from their environment,
+        // for the lifetime of the executor.
+        .system(|_, _: (), _: ()| iterations += 1)
+        // The builder will panic if given a system with a handle it already contains,
+        // a list of dependencies with a system it doesn't contain yet,
+        // or a system that depends on itself.
+        .system_with_deps(find_highest_velocity, vec!["motion"])
+        // Order of execution is only guaranteed for systems with explicit dependencies.
+        // If the default `parallel` feature is disabled, systems are ran in order of insertion.
+        .system_with_handle_and_deps(color, "color", vec!["motion"])
+        .system_with_deps(find_average_color, vec!["color"])
+        // Building is allocating, so executors should be cached whenever possible.
+        .build();
+
+    print!("running {} iterations of executor...  ", ITERATIONS);
+    let mut elapsed = Duration::from_millis(0);
+    for _ in 0..ITERATIONS {
+        let time = Instant::now();
+        // Running the executor requires a tuple of exclusive references to the resources
+        // specified in it's generic parameter.
+        // To use a specific `rayon` thread pool rather than the global one this function
+        // should be called within `rayon::ThreadPool::install()` (which will have
+        // any `yaks::batch()` calls in systems also use that thread pool).
+        executor.run(
+            world,
+            (
+                &mut spawned,
+                &mut rng,
+                &mut average_color,
+                &mut highest_velocity,
+            ),
+        );
+        elapsed += time.elapsed();
+    }
+    println!("average time: {:?}", elapsed / ITERATIONS);
+    drop(executor); // Dropping the executor releases the borrow of `iterations`.
+    assert_eq!(ITERATIONS, iterations);
+
+    // The types appearing in system signatures have convenience constructors
+    // to allow easily using systems as plain functions.
+    print!("running {} iterations of functions... ", ITERATIONS);
+    let mut elapsed = Duration::from_millis(0);
+    for _ in 0..ITERATIONS {
+        let time = Instant::now();
+        // `SystemContext` can be constructed from `&hecs::World` or `&mut hecs::World`,
+        // or via `SystemContext::new()`.
+        motion(world.into(), &spawned, Default::default());
+        // The zero-sized `QueryMarker` can be constructed by `QueryMarker::new()`; singles
+        // or tuples of them can also be constructed via `Default::default()` (up to 10).
+        find_highest_velocity(
+            SystemContext::new(world),
+            &mut highest_velocity,
+            QueryMarker::new(),
+        );
+        color(world.into(), (&spawned, &mut rng), Default::default());
+        find_average_color(
+            world.into(),
+            (&mut average_color, &spawned),
+            Default::default(),
+        );
+        elapsed += time.elapsed();
+    }
+    println!("average time: {:?}", elapsed / ITERATIONS);
+
+    // The `batch()` helper function can also be used outside of systems,
+    // since the first argument is simply a `QueryBorrow`.
+    // Again, calling this within `rayon::ThreadPool::install()` will use that thread pool.
+    yaks::batch(
+        &mut world.query::<&mut Color>(),
+        spawned.batch_size_all(),
+        |_, color| {
+            color.3 = 0.5;
+        },
+    );
+    find_average_color(
+        world.into(),
+        (&mut average_color, &spawned),
+        Default::default(),
+    );
+    assert!((average_color.3 - 0.5).abs() < std::f32::EPSILON);
+}

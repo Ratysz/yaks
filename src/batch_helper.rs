@@ -37,7 +37,7 @@ fn thread_pool_installation() {
     struct B(usize);
 
     let mut world = World::new();
-    world.spawn_batch((0..20).map(|_| (B(0),))).last();
+    world.spawn_batch((0..20).map(|_| (B(0),)));
     let a = A(1);
     let thread_pool = rayon::ThreadPoolBuilder::new().build().unwrap();
     let time = Instant::now();

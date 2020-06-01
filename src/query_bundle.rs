@@ -17,7 +17,7 @@ impl<Q0> QueryMarker<Q0>
 where
     Q0: Query,
 {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(PhantomData)
     }
 }
@@ -32,6 +32,15 @@ where
 }
 
 impl<Q0> Copy for QueryMarker<Q0> where Q0: Query {}
+
+impl<Q0> Default for QueryMarker<Q0>
+where
+    Q0: Query,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub trait QueryExt: Query {
     #[cfg(feature = "parallel")]
