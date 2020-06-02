@@ -1,7 +1,8 @@
 use hecs::{Entity, Fetch, Query, QueryBorrow};
 
 #[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
-/// Distributes the work of applying a function to items in a query over a `rayon` thread pool.
+/// Distributes over a `rayon` thread pool the work of applying a function to items in a query.
+/// See [`hecs::QueryBorrow::batched_ter()`](../hecs/struct.QueryBorrow.html#method.iter_batched).
 ///
 /// If the default `parallel` feature is disabled the functionality is identical
 /// to `query_borrow.iter().for_each(for_each)`.
