@@ -57,7 +57,7 @@ fn main() {
         .system_with_handle(
             |context, (entities, average): (&u32, &mut f32), query: QueryMarker<&f32>| {
                 *average = 0.0;
-                for (_, float) in context.query(query).iter() {
+                for (_entity, float) in context.query(query).iter() {
                     *average += *float;
                 }
                 *average /= *entities as f32;
@@ -66,7 +66,7 @@ fn main() {
         )
         .system_with_handle(
             |context, increment: &usize, query: QueryMarker<&mut u32>| {
-                for (_, unsigned) in context.query(query).iter() {
+                for (_entity, unsigned) in context.query(query).iter() {
                     *unsigned += *increment as u32
                 }
             },
@@ -91,7 +91,7 @@ fn system_with_two_queries(
     yaks::batch(
         &mut context.query(without_f32),
         entities / 8,
-        |_, unsigned| {
+        |_entity, unsigned| {
             *unsigned *= average.round() as u32;
         },
     );

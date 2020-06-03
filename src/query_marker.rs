@@ -1,9 +1,8 @@
 use hecs::Query;
 use std::marker::PhantomData;
 
-/// A zero-sized type used to describe the queries a system may require, as well as
-/// performing said queries within the system via methods of
-/// [`SystemContext`](struct.SystemContext.html).
+/// A zero-sized `Copy` type used to describe queries of a system, and prepare them
+/// via methods of [`SystemContext`](struct.SystemContext.html).
 ///
 /// Instantiating these directly is only useful when calling systems as plain functions,
 /// and can be done either by `QueryMarker::new()`, `QueryMarker::default()`, or
@@ -22,8 +21,10 @@ use std::marker::PhantomData;
 ///     }
 ///     *average /= entities as f32;
 /// }
+///
 /// single_query(world.into(), &mut average, QueryMarker::new());
 /// single_query(world.into(), &mut average, QueryMarker::default());
+/// single_query(world.into(), &mut average, Default::default());
 ///
 /// fn two_queries(
 ///     context: SystemContext,
@@ -42,10 +43,11 @@ use std::marker::PhantomData;
 ///     }
 ///     *average /= entities as f32;
 /// }
+///
 /// two_queries(world.into(), &mut average, Default::default());
 /// ```
 /// # Instantiating markers inside a system is improper!
-/// While it's possible to instantiate a marker within a system and use it to perform a query,
+/// While it's possible to instantiate a marker within a system and use it to prepare a query,
 /// doing so does not inform the executor the system may be in of said query,
 /// and may lead to a panic.
 pub struct QueryMarker<Q0>(PhantomData<Q0>)

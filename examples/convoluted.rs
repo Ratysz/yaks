@@ -58,7 +58,7 @@ fn motion(
     yaks::batch(
         &mut context.query(no_acceleration),
         spawned.batch_size_no_acceleration(),
-        |_, (mut pos, vel)| {
+        |_entity, (mut pos, vel)| {
             pos.0 += vel.0;
             pos.1 += vel.1;
         },
@@ -67,7 +67,7 @@ fn motion(
     yaks::batch(
         &mut context.query(with_acceleration),
         spawned.batch_size_with_acceleration(),
-        |_, (mut pos, mut vel, acc)| {
+        |_entity, (mut pos, mut vel, acc)| {
             vel.0 += acc.0;
             vel.1 += acc.1;
             pos.0 += vel.0;
@@ -84,7 +84,7 @@ fn find_highest_velocity(
 ) {
     // This cannot be batched as is because it needs mutable access to `highest`;
     // however, it's possible to work around that by using channels and/or `RwLock`.
-    for (_, vel) in context.query(query).iter() {
+    for (_entity, vel) in context.query(query).iter() {
         if vel.0 * vel.0 + vel.1 * vel.1 > highest.0 * highest.0 + highest.1 * highest.1 {
             highest.0 = vel.0;
             highest.1 = vel.1;
@@ -104,7 +104,7 @@ fn color(
     yaks::batch(
         &mut context.query(query),
         spawned.batch_size_all(),
-        |_, (pos, vel, mut col)| {
+        |_entity, (pos, vel, mut col)| {
             col.0 = pos.0.abs() / 1000.0;
             col.1 = vel.1.abs() / 100.0;
             col.2 = blue;
@@ -119,7 +119,7 @@ fn find_average_color(
     query: QueryMarker<&Color>,
 ) {
     *average_color = Color(0.0, 0.0, 0.0, 0.0);
-    for (_, color) in context.query(query).iter() {
+    for (_entity, color) in context.query(query).iter() {
         average_color.0 += color.0;
         average_color.1 += color.1;
         average_color.2 += color.2;
@@ -190,7 +190,7 @@ fn main() {
         // Systems can be defined by either a function or a closure of same signature.
         // The closures can also mutably borrow from their environment,
         // for the lifetime of the executor.
-        .system(|_, _: (), _: ()| iterations += 1)
+        .system(|_context, _resources: (), _queries: ()| iterations += 1)
         // The builder will panic if given a system with a handle it already contains,
         // a list of dependencies with a system it doesn't contain yet,
         // or a system that depends on itself.
@@ -258,7 +258,7 @@ fn main() {
     yaks::batch(
         &mut world.query::<&mut Color>(),
         spawned.batch_size_all(),
-        |_, color| {
+        |_entity, color| {
             color.3 = 0.5;
         },
     );

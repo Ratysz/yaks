@@ -2,12 +2,29 @@ use hecs::{Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
 
 use crate::{QueryMarker, SystemId};
 
+/// Thin wrapper over `&hecs::World`, can prepare queries using a
+/// [`QueryMarker`](struct.QueryMarker.html).
+///
+/// Instantiating one directly is only useful when calling systems as plain functions,
+/// and can be done either by `SystemContext::new()` or converting a `&hecs::World`
+/// or `&mut hecs::World`:
+/// ```rust
+/// # use yaks::SystemContext;
+/// fn some_system(_context: SystemContext, _resources: (), _queries: ()) {}
+///
+/// let mut world = hecs::World::new();
+///
+/// some_system(SystemContext::new(&world), (), ());
+/// some_system((&world).into(), (), ());
+/// some_system((&mut world).into(), (), ());
+/// ```
 pub struct SystemContext<'scope> {
     pub(crate) system_id: Option<SystemId>,
     pub(crate) world: &'scope World,
 }
 
 impl<'scope> SystemContext<'scope> {
+    /// Wraps a `&hecs::World`. See documentation for `SystemContext` itself.
     pub fn new(world: &'scope World) -> Self {
         Self {
             system_id: None,
@@ -15,10 +32,32 @@ impl<'scope> SystemContext<'scope> {
         }
     }
 
+    /// Returns a debug-printable `SystemId` if the system is ran in an
+    /// [`Executor`](struct.Executor.html), reflecting the order of insertion.
     pub fn id(&self) -> Option<SystemId> {
         self.system_id
     }
 
+    /// Prepares a query using the given [`QueryMarker`](struct.QueryMarker.html);
+    /// see [`hecs::World::query()`](../hecs/struct.World.html#method.query).
+    /// ```rust
+    /// # use yaks::{SystemContext, QueryMarker};
+    /// # struct Pos;
+    /// # struct Vel;
+    /// # impl std::ops::AddAssign<&Vel> for Pos {
+    /// #     fn add_assign(&mut self, _: &Vel) {}
+    /// # }
+    /// # let world = hecs::World::new();
+    /// fn some_system(
+    ///     context: SystemContext,
+    ///     _resources: (),
+    ///     query: QueryMarker<(&mut Pos, &Vel)>
+    /// ) {
+    ///     for (_entity, (pos, vel)) in context.query(query).iter() {
+    ///         *pos += vel;
+    ///     }
+    /// };
+    /// ```
     pub fn query<Q>(&self, _: QueryMarker<Q>) -> QueryBorrow<'_, Q>
     where
         Q: Query + Send + Sync,
@@ -26,6 +65,44 @@ impl<'scope> SystemContext<'scope> {
         self.world.query()
     }
 
+    /// Prepares a query against a single entity using the given
+    /// [`QueryMarker`](struct.QueryMarker.html);
+    /// see [`hecs::World::query_one()`](../hecs/struct.World.html#method.query_one).
+    /// ```rust
+    /// # use yaks::{SystemContext, QueryMarker};
+    /// # #[derive(Default)]
+    /// # struct Pos;
+    /// # #[derive(Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
+    /// # struct Vel;
+    /// # impl std::ops::AddAssign<Vel> for Pos {
+    /// #     fn add_assign(&mut self, _: Vel) {}
+    /// # }
+    /// # let world = hecs::World::new();
+    /// fn some_system(
+    ///     context: SystemContext,
+    ///     _resources: (),
+    ///     query: QueryMarker<(&mut Pos, &Vel)>
+    /// ) {
+    ///     let mut max_velocity = Vel::default();
+    ///     let mut max_velocity_entity = None;
+    ///     for (entity, (pos, vel)) in context.query(query).iter() {
+    ///         *pos += *vel;
+    ///         if *vel > max_velocity {
+    ///             max_velocity = *vel;
+    ///             max_velocity_entity = Some(entity);
+    ///         }
+    ///     }
+    ///     if let Some(entity) = max_velocity_entity {
+    ///         let mut query_one = context
+    ///             .query_one(query, entity)
+    ///             .expect("no such entity");
+    ///         let (pos, _vel) = query_one
+    ///             .get()
+    ///             .expect("some components are missing");
+    ///         *pos = Pos::default();
+    ///     }
+    /// };
+    /// ```
     pub fn query_one<Q>(
         &self,
         _: QueryMarker<Q>,
