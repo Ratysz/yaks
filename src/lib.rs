@@ -124,7 +124,7 @@ use atomic_borrow::AtomicBorrow;
 use contains::Contains;
 use deref_tuple::DerefTuple;
 use executor::SystemClosure;
-use executor_builder::SystemId;
+use executor_builder::{DummyHandle, SystemId};
 #[cfg(feature = "parallel")]
 use executor_parallel::ExecutorParallel;
 use fetch::Fetch;

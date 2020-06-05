@@ -28,6 +28,7 @@ where
     pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
 }
 
+/// A factory for [`Executor`](struct.Executor.html) (and the only way of creating one).
 pub struct ExecutorBuilder<'closures, Resources, Handle = DummyHandle>
 where
     Resources: ResourceTuple,
@@ -36,21 +37,6 @@ where
     pub(crate) handles: HashMap<Handle, SystemId>,
     #[cfg(feature = "parallel")]
     pub(crate) all_component_types: TypeSet,
-}
-
-impl<'closures, Resources> ExecutorBuilder<'closures, Resources, DummyHandle>
-where
-    Resources: ResourceTuple,
-{
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self {
-            systems: HashMap::new(),
-            handles: HashMap::with_capacity(0),
-            #[cfg(feature = "parallel")]
-            all_component_types: TypeSet::new(),
-        }
-    }
 }
 
 impl<'closures, Resources, Handle> ExecutorBuilder<'closures, Resources, Handle>
@@ -110,6 +96,63 @@ where
         }
     }
 
+    /// Creates a new system from a closure or a function, and inserts it into the builder.
+    ///
+    /// The system-to-be must return nothing and have 3 arguments:
+    /// - [`SystemContext`](struct.SystemContext.html),
+    /// - any tuple (up to 16) or a single one of "resources": references or mutable references
+    /// to `Send + Sync` values not contained in a `hecs::World` that the system will be accessing,
+    /// - any tuple (up to 16) or a single one of [`QueryMarker`](struct.QueryMarker.html) that
+    /// represent the queries the system will be making.
+    ///
+    /// Closures are allowed to mutably borrow from their environment for the lifetime of
+    /// the executor, but they must remain `Send + Sync`.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use yaks::{QueryMarker, SystemContext, Executor};
+    /// # let world = hecs::World::new();
+    /// # struct A;
+    /// # struct B;
+    /// # struct C;
+    /// fn system_0(
+    ///     context: SystemContext,
+    ///     res_a: &A,
+    ///     (query_0, query_1): (
+    ///         QueryMarker<(&B, &mut C)>,
+    ///         QueryMarker<hecs::Without<B, &C>>
+    ///     ),
+    /// ) {
+    ///     // This system may read resource of type `A`, and may prepare & execute queries
+    ///     // of `(&B, &mut C)` and `hecs::Without<B, &C>`.
+    /// }
+    ///
+    /// fn system_1(
+    ///     context: SystemContext,
+    ///     (res_a, res_b): (&mut A, &B),
+    ///     query_0: QueryMarker<(&mut B, &mut C)>,
+    /// ) {
+    ///     // This system may read or write resource of type `A`, may read resource of type `B`,
+    ///     // and may prepare & execute queries of `(&mut B, &mut C)`.
+    /// }
+    ///
+    /// let mut increment = 0;
+    /// let mut executor = Executor::<(A, B, C)>::builder()
+    ///     .system(system_0)
+    ///     .system(system_1)
+    ///     .system(|context, res_c: &C, _queries: ()| {
+    ///         // This system may read resource of type `C` and will not perform any queries.
+    ///         increment += 1;
+    ///         // ...
+    ///     })
+    ///     .build();
+    /// let (mut a, mut b, mut c) = (A, B, C);
+    /// executor.run(&world, (&mut a, &mut b, &mut c));
+    /// executor.run(&world, (&mut a, &mut b, &mut c));
+    /// executor.run(&world, (&mut a, &mut b, &mut c));
+    /// drop(executor); // This releases the borrow of `increment`.
+    /// assert_eq!(increment, 3);
+    /// ```
     pub fn system<'a, Closure, ResourceRefs, Queries, Markers>(mut self, closure: Closure) -> Self
     where
         Resources::Cells: 'a,
@@ -130,6 +173,73 @@ where
         self
     }
 
+    /// Creates a new system from a closure or a function, and inserts it into
+    /// the builder with given handle; see [`::system()`](#method.system).
+    ///
+    /// Handles allow defining relative order of execution between systems,
+    /// and using them is optional. They can be of any type that is `Sized + Eq + Hash + Debug`
+    /// and do not persist after `::build()` - the resulting executor relies on lightweight
+    /// opaque IDs; see [`SystemContext::id()`](struct.SystemContext.html#method.id).
+    ///
+    /// Handles must be unique, and systems with dependencies must be inserted
+    /// into the builder after said dependencies.
+    /// If the default `parallel` feature is disabled the systems will be executed in insertion
+    /// order, which these rules guarantee to be a valid order.
+    ///
+    /// # Examples
+    /// These two executors are identical.
+    /// ```rust
+    /// # use yaks::{QueryMarker, SystemContext, Executor};
+    /// # let world = hecs::World::new();
+    /// # fn system_0(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_1(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_2(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_3(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_4(_: SystemContext, _: (), _: ()) {}
+    /// let _ = Executor::<()>::builder()
+    ///     .system_with_handle(system_0, 0)
+    ///     .system_with_handle(system_1, 1)
+    ///     .system_with_handle_and_deps(system_2, 2, vec![0, 1])
+    ///     .system_with_deps(system_3, vec![2])
+    ///     .system_with_deps(system_4, vec![0])
+    ///     .build();
+    /// let _ = Executor::<()>::builder()
+    ///     .system_with_handle(system_0, "system_0")
+    ///     .system_with_handle(system_1, "system_1")
+    ///     .system_with_handle_and_deps(system_2, "system_2", vec!["system_1", "system_0"])
+    ///     .system_with_deps(system_3, vec!["system_2"])
+    ///     .system_with_deps(system_4, vec!["system_0"])
+    ///     .build();
+    /// ```
+    /// The order of execution (with the default `parallel` feature enabled) is:
+    /// - systems 0 ***and*** 1,
+    /// - system 4 as soon as 0 is finished ***and*** system 2 as soon as both 0 and 1 is finished,
+    /// - system 3 as soon as 2 is finished.
+    ///
+    /// This executor will behave identically to the two above if the default `parallel`
+    /// feature is enabled; otherwise, the execution order will be different, but
+    /// that doesn't matter as long as the given dependencies truthfully reflect any
+    /// relationships the systems may have.
+    /// ```rust
+    /// # use yaks::{QueryMarker, SystemContext, Executor};
+    /// # let world = hecs::World::new();
+    /// # fn system_0(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_1(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_2(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_3(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_4(_: SystemContext, _: (), _: ()) {}
+    /// let _ = Executor::<()>::builder()
+    ///     .system_with_handle(system_1, 1)
+    ///     .system_with_handle(system_0, 0)
+    ///     .system_with_deps(system_4, vec![0])
+    ///     .system_with_handle_and_deps(system_2, 2, vec![0, 1])
+    ///     .system_with_deps(system_3, vec![2])
+    ///     .build();
+    /// ```
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - a system with given handle is already present in the builder.
     pub fn system_with_handle<'a, Closure, ResourceRefs, Queries, Markers, NewHandle>(
         mut self,
         closure: Closure,
@@ -165,6 +275,20 @@ where
         }
     }
 
+    /// Creates a new system from a closure or a function, and inserts it into
+    /// the builder with given dependencies; see [`::system()`](#method.system).
+    ///
+    /// Given system will start running only after all systems in given list of dependencies
+    /// have finished running.
+    ///
+    /// This function cannot be used unless the builder already has
+    /// at least one system with a handle;
+    /// see [`::system_with_handle()`](#method.system_with_handle).
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - given list of dependencies contains a handle that
+    /// doesn't correspond to any system in the builder.
     pub fn system_with_deps<'a, Closure, ResourceRefs, Queries, Markers>(
         mut self,
         closure: Closure,
@@ -200,6 +324,22 @@ where
         self
     }
 
+    /// Creates a new system from a closure or a function, and inserts it into
+    /// the builder with given handle and dependencies; see [`::system()`](#method.system).
+    ///
+    /// Given system will start running only after all systems in given list of dependencies
+    /// have finished running.
+    ///
+    /// This function cannot be used unless the builder already has
+    /// at least one system with a handle;
+    /// see [`::system_with_handle()`](#method.system_with_handle).
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - a system with given handle is already present in the builder,
+    /// - given list of dependencies contains a handle that
+    /// doesn't correspond to any system in the builder,
+    /// - given handle appears in given list of dependencies.
     pub fn system_with_handle_and_deps<'a, Closure, ResourceRefs, Queries, Markers>(
         mut self,
         closure: Closure,
@@ -243,6 +383,7 @@ where
         self
     }
 
+    /// Consumes the builder and returns the finalized executor.
     pub fn build(self) -> Executor<'closures, Resources> {
         Executor::build(self)
     }

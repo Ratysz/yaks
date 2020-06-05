@@ -33,19 +33,23 @@ impl<'scope> SystemContext<'scope> {
     }
 
     /// Returns a debug-printable `SystemId` if the system is ran in an
-    /// [`Executor`](struct.Executor.html), reflecting the order of insertion.
+    /// [`Executor`](struct.Executor.html), with printed number reflecting
+    /// the order of insertion into the [`ExecutorBuilder`](struct.ExecutorBuilder.html).
     pub fn id(&self) -> Option<SystemId> {
         self.system_id
     }
 
     /// Prepares a query using the given [`QueryMarker`](struct.QueryMarker.html);
     /// see [`hecs::World::query()`](../hecs/struct.World.html#method.query).
+    ///
+    /// # Example
     /// ```rust
     /// # use yaks::{SystemContext, QueryMarker};
     /// # struct Pos;
+    /// # #[derive(Clone, Copy)]
     /// # struct Vel;
-    /// # impl std::ops::AddAssign<&Vel> for Pos {
-    /// #     fn add_assign(&mut self, _: &Vel) {}
+    /// # impl std::ops::AddAssign<Vel> for Pos {
+    /// #     fn add_assign(&mut self, _: Vel) {}
     /// # }
     /// # let world = hecs::World::new();
     /// fn some_system(
@@ -54,7 +58,7 @@ impl<'scope> SystemContext<'scope> {
     ///     query: QueryMarker<(&mut Pos, &Vel)>
     /// ) {
     ///     for (_entity, (pos, vel)) in context.query(query).iter() {
-    ///         *pos += vel;
+    ///         *pos += *vel;
     ///     }
     /// };
     /// ```
@@ -68,6 +72,8 @@ impl<'scope> SystemContext<'scope> {
     /// Prepares a query against a single entity using the given
     /// [`QueryMarker`](struct.QueryMarker.html);
     /// see [`hecs::World::query_one()`](../hecs/struct.World.html#method.query_one).
+    ///
+    /// # Example
     /// ```rust
     /// # use yaks::{SystemContext, QueryMarker};
     /// # #[derive(Default)]

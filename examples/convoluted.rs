@@ -187,15 +187,18 @@ fn main() {
         // can be of any type that is `Eq + Hash + Debug`,
         // and are discarded on `build()`.
         .system_with_handle(motion, "motion")
-        // Systems can be defined by either a function or a closure of same signature.
+        // Systems can be defined by either a function or a closure
+        // with a specific signature; see `ExecutorBuilder::system()` documentation.
         // The closures can also mutably borrow from their environment,
         // for the lifetime of the executor.
+        // (Don't actually do this. Systems with no resources or queries have
+        // no business being in an executor.)
         .system(|_context, _resources: (), _queries: ()| iterations += 1)
         // The builder will panic if given a system with a handle it already contains,
         // a list of dependencies with a system it doesn't contain yet,
         // or a system that depends on itself.
         .system_with_deps(find_highest_velocity, vec!["motion"])
-        // Order of execution is only guaranteed for systems with explicit dependencies.
+        // Relative order of execution is only guaranteed for systems with explicit dependencies.
         // If the default `parallel` feature is disabled, systems are ran in order of insertion.
         .system_with_handle_and_deps(color, "color", vec!["motion"])
         .system_with_deps(find_average_color, vec!["color"])

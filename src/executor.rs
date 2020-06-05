@@ -1,9 +1,12 @@
 use hecs::World;
+use std::collections::HashMap;
 
-use crate::{ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, WrappedResources};
+use crate::{
+    DummyHandle, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, WrappedResources,
+};
 
 #[cfg(feature = "parallel")]
-use crate::ExecutorParallel;
+use crate::{ExecutorParallel, TypeSet};
 
 #[cfg(not(feature = "parallel"))]
 use crate::SystemId;
@@ -25,8 +28,14 @@ impl<'closures, Resources> Executor<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
+    /// Creates a new [`ExecutorBuilder`](struct.ExecutorBuilder.html).
     pub fn builder() -> ExecutorBuilder<'closures, Resources> {
-        ExecutorBuilder::new()
+        ExecutorBuilder::<'closures, Resources, DummyHandle> {
+            systems: HashMap::new(),
+            handles: HashMap::with_capacity(0),
+            #[cfg(feature = "parallel")]
+            all_component_types: TypeSet::new(),
+        }
     }
 
     pub(crate) fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {

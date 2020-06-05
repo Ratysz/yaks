@@ -358,7 +358,7 @@ where
 #[test]
 fn dispatch_heuristic_trivial() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: (), _: ()| {})
             .system(|_, _: (), _: ()| {}),
     ) {
@@ -369,7 +369,7 @@ fn dispatch_heuristic_trivial() {
 #[test]
 fn dispatch_heuristic_trivial_with_resources() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: (), _: ()| {})
             .system(|_, _: (), _: ()| {}),
     ) {
@@ -380,7 +380,7 @@ fn dispatch_heuristic_trivial_with_resources() {
 #[test]
 fn dispatch_heuristic_resources_incompatible() {
     if let ExecutorParallel::Dispatching(_) = ExecutorParallel::<(usize, f32)>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: &f32, _: ()| {})
             .system(|_, _: &mut f32, _: ()| {}),
     ) {
@@ -391,7 +391,7 @@ fn dispatch_heuristic_resources_incompatible() {
 #[test]
 fn dispatch_heuristic_resources_disjoint() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: &mut usize, _: ()| {})
             .system(|_, _: &mut f32, _: ()| {}),
     ) {
@@ -402,7 +402,7 @@ fn dispatch_heuristic_resources_disjoint() {
 #[test]
 fn dispatch_heuristic_resources_immutable() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<(usize, f32)>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: &f32, _: ()| {})
             .system(|_, _: &f32, _: ()| {}),
     ) {
@@ -413,7 +413,7 @@ fn dispatch_heuristic_resources_immutable() {
 #[test]
 fn dispatch_heuristic_queries_incompatible() {
     if let ExecutorParallel::Dispatching(_) = ExecutorParallel::<()>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: (), _: crate::QueryMarker<&mut f32>| {})
             .system(|_, _: (), _: crate::QueryMarker<&f32>| {}),
     ) {
@@ -424,7 +424,7 @@ fn dispatch_heuristic_queries_incompatible() {
 #[test]
 fn dispatch_heuristic_queries_disjoint() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: (), _: crate::QueryMarker<&mut usize>| {})
             .system(|_, _: (), _: crate::QueryMarker<&mut f32>| {}),
     ) {
@@ -435,7 +435,7 @@ fn dispatch_heuristic_queries_disjoint() {
 #[test]
 fn dispatch_heuristic_queries_immutable() {
     if let ExecutorParallel::Scheduling(_) = ExecutorParallel::<()>::build(
-        ExecutorBuilder::new()
+        crate::Executor::builder()
             .system(|_, _: (), _: crate::QueryMarker<&f32>| {})
             .system(|_, _: (), _: crate::QueryMarker<&f32>| {}),
     ) {
