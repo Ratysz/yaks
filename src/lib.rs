@@ -96,7 +96,7 @@
 //! }
 //! ```
 
-// TODO uncomment #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 #[macro_use]
 mod tuple_macro;

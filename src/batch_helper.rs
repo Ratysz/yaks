@@ -2,7 +2,7 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 
 #[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
 /// Distributes over a `rayon` thread pool the work of applying a function to items in a query.
-/// See [`hecs::QueryBorrow::batched_ter()`](../hecs/struct.QueryBorrow.html#method.iter_batched).
+/// See [`hecs::QueryBorrow::iter_batched()`](../hecs/struct.QueryBorrow.html#method.iter_batched).
 ///
 /// If the default `parallel` feature is disabled the functionality is identical
 /// to `query_borrow.iter().for_each(for_each)`.
@@ -24,7 +24,8 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 ///     },
 /// );
 /// ```
-/// Alternatively, a specific thread pool can be used via `rayon::ThreadPool::install()`:
+/// Alternatively, a specific thread pool can be used via
+/// [`rayon::ThreadPool::install()`](../rayon/struct.ThreadPool.html#method.install):
 /// ```rust
 /// # struct Pos;
 /// # struct Vel;
@@ -43,7 +44,7 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// # {
 /// #     struct DummyPool;
 /// #     impl DummyPool {
-/// #         fn install(&self, closure: impl Fn()) {
+/// #         fn install(&self, mut closure: impl FnMut()) {
 /// #             closure();
 /// #         }
 /// #     }

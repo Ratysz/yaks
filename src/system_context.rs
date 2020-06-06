@@ -2,7 +2,7 @@ use hecs::{Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
 
 use crate::{QueryMarker, SystemId};
 
-/// Thin wrapper over `&hecs::World`, can prepare queries using a
+/// Thin wrapper over [`hecs::World`](../hecs/struct.World.html), can prepare queries using a
 /// [`QueryMarker`](struct.QueryMarker.html).
 ///
 /// Instantiating one directly is only useful when calling systems as plain functions,

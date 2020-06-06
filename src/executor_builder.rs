@@ -98,15 +98,20 @@ where
 
     /// Creates a new system from a closure or a function, and inserts it into the builder.
     ///
-    /// The system-to-be must return nothing and have 3 arguments:
+    /// The system-to-be must return nothing and have these 3 arguments:
     /// - [`SystemContext`](struct.SystemContext.html),
     /// - any tuple (up to 16) or a single one of "resources": references or mutable references
-    /// to `Send + Sync` values not contained in a `hecs::World` that the system will be accessing,
+    /// to `Send + Sync` values not contained in a [`hecs::World`](../hecs/struct.World.html)
+    /// that the system will be accessing,
     /// - any tuple (up to 16) or a single one of [`QueryMarker`](struct.QueryMarker.html) that
     /// represent the queries the system will be making.
     ///
-    /// Closures are allowed to mutably borrow from their environment for the lifetime of
-    /// the executor, but they must remain `Send + Sync`.
+    /// Additionally, closures may mutably borrow from their environment for the lifetime
+    /// of the executor, but must be `Send + Sync`.
+    ///
+    /// All resources the system requires must correspond to a type in the executor's
+    /// signature; e.g., if any number of systems require a `&f32` or a `&mut f32`,
+    /// executor's generic parameter must contain `f32`.
     ///
     /// # Example
     /// ```rust
@@ -137,13 +142,13 @@ where
     /// }
     ///
     /// let mut increment = 0;
+    /// // All together, systems require resources of types `A`, `B`, and `C`.
     /// let mut executor = Executor::<(A, B, C)>::builder()
     ///     .system(system_0)
     ///     .system(system_1)
     ///     .system(|context, res_c: &C, _queries: ()| {
     ///         // This system may read resource of type `C` and will not perform any queries.
-    ///         increment += 1;
-    ///         // ...
+    ///         increment += 1; // `increment` will be borrowed by the executor.
     ///     })
     ///     .build();
     /// let (mut a, mut b, mut c) = (A, B, C);
@@ -178,13 +183,20 @@ where
     ///
     /// Handles allow defining relative order of execution between systems,
     /// and using them is optional. They can be of any type that is `Sized + Eq + Hash + Debug`
-    /// and do not persist after `::build()` - the resulting executor relies on lightweight
-    /// opaque IDs; see [`SystemContext::id()`](struct.SystemContext.html#method.id).
+    /// and do not persist after [`::build()`](struct.ExecutorBuilder.html#method.build) - the
+    /// resulting executor relies on lightweight opaque IDs;
+    /// see [`SystemContext::id()`](struct.SystemContext.html#method.id).
     ///
     /// Handles must be unique, and systems with dependencies must be inserted
     /// into the builder after said dependencies.
     /// If the default `parallel` feature is disabled the systems will be executed in insertion
     /// order, which these rules guarantee to be a valid order.
+    ///
+    /// Since specifying a dependency between systems forbids them to run concurrently, this
+    /// functionality should be used only when necessary. In fact, for executors where systems
+    /// form a single chain of execution it is more performant to call them as functions,
+    /// in a sequence, inside a single [`rayon::scope()`](../rayon/fn.scope.html) or
+    /// [`rayon::ThreadPool::install()`](../rayon/struct.ThreadPool.html#method.install) block.
     ///
     /// # Examples
     /// These two executors are identical.

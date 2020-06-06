@@ -20,6 +20,8 @@ pub enum ExecutorParallel<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
+    // TODO consider more granularity:
+    // scheduler, disjoint scheduler, dispatcher, disjoint dispatcher
     Dispatching(Dispatcher<'closures, Resources>),
     Scheduling(Scheduler<'closures, Resources>),
 }
