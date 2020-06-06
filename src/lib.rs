@@ -9,8 +9,8 @@
 //! [License]: https://img.shields.io/crates/l/yaks.svg
 //! [license link]: https://github.com/Ratysz/yaks/blob/master/LICENSE.md
 //!
-//! `yaks` aims to be a minimalistic and performant framework for automatically
-//! threading [`hecs`] via [`rayon`].
+//! `yaks` aims to be a minimalistic and performant framework for automatic
+//! multithreading of [`hecs`] via [`rayon`].
 //!
 //! The goals are, in no particular order:
 //! - safety
@@ -34,7 +34,7 @@
 //! # Example
 //!
 //! A more elaborate and annotated example can be found
-//! [here](https://github.com/Ratysz/yaks/blob/master/examples/convoluted.rs).
+//! [here](https://github.com/Ratysz/yaks/blob/0.1.0/examples/convoluted.rs).
 //!
 //! ```rust
 //! use hecs::{With, Without, World};

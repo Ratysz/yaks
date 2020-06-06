@@ -10,8 +10,8 @@
 [License]: https://img.shields.io/crates/l/yaks.svg
 [license link]: https://github.com/Ratysz/yaks/blob/master/LICENSE.md
 
-`yaks` aims to be a minimalistic and performant framework for automatically
-threading [`hecs`] via [`rayon`].
+`yaks` aims to be a minimalistic and performant framework for automatic
+multithreading of [`hecs`] via [`rayon`].
 
 The goals are, in no particular order:
 - safety
