@@ -181,8 +181,8 @@ where
     /// Creates a new system from a closure or a function, and inserts it into
     /// the builder with given handle; see [`::system()`](#method.system).
     ///
-    /// Handles allow defining relative order of execution between systems,
-    /// and using them is optional. They can be of any type that is `Sized + Eq + Hash + Debug`
+    /// Handles allow defining relative order of execution between systems;
+    /// doing that is optional. They can be of any type that is `Sized + Eq + Hash + Debug`
     /// and do not persist after [`::build()`](struct.ExecutorBuilder.html#method.build) - the
     /// resulting executor relies on lightweight opaque IDs;
     /// see [`SystemContext::id()`](struct.SystemContext.html#method.id).
@@ -225,12 +225,12 @@ where
     /// ```
     /// The order of execution (with the default `parallel` feature enabled) is:
     /// - systems 0 ***and*** 1,
-    /// - system 4 as soon as 0 is finished ***and*** system 2 as soon as both 0 and 1 is finished,
+    /// - system 4 as soon as 0 is finished ***and*** system 2 as soon as both 0 and 1 are finished,
     /// - system 3 as soon as 2 is finished.
     ///
     /// This executor will behave identically to the two above if the default `parallel`
-    /// feature is enabled; otherwise, the execution order will be different, but
-    /// that doesn't matter as long as the given dependencies truthfully reflect any
+    /// feature is enabled; otherwise, the execution order will be different from theirs, but
+    /// that won't matter as long as the given dependencies truthfully reflect any
     /// relationships the systems may have.
     /// ```rust
     /// # use yaks::{QueryMarker, SystemContext, Executor};

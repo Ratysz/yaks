@@ -26,7 +26,7 @@ pub type SystemClosure<'closure, Cells> =
 ///
 /// Additionally, closures may mutably borrow from their environment for the lifetime `'closures`
 /// of the executor, but must be `Send + Sync`. If none of the systems make any borrows,
-/// the lifetime can simply be `'static`.
+/// that lifetime can simply be `'static`.
 ///
 /// The generic parameter `Resources` of the executor must be a superset tuple of all resource set
 /// tuples of the contained systems. Any type in `Resources` must appear no more than once,
