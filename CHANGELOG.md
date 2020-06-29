@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Fixed changelog dates.
 - Minor doc tweaks.
+- Removed `test` feature.
 
 ## [0.1.0](https://github.com/Ratysz/yaks/compare/0.0.0-aplha1..0.1.0) - 2020-06-06
 ### Changed

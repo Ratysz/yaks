@@ -17,8 +17,6 @@ maintenance = { status = "actively-developed" }
 default = ["parallel"]
 # If disabled, forces everything to work on a single thread.
 parallel = ["crossbeam-channel", "fixedbitset", "rayon"]
-# Turns off an internal debug drop check. Useful for testing panics.
-test = []
 
 [dependencies]
 crossbeam-channel = { version = "0.4.2", optional = true }

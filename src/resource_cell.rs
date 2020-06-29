@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::{ptr::NonNull, thread::panicking};
 
 use crate::AtomicBorrow;
 
@@ -47,12 +47,14 @@ impl<R0> ResourceCell<R0> {
 
 impl<R0> Drop for ResourceCell<R0> {
     fn drop(&mut self) {
-        #[cfg(not(feature = "test"))]
-        debug_assert!(
-            unsafe { self.borrow.as_ref().is_free() },
-            "borrows of {} were not released properly",
-            std::any::type_name::<R0>()
-        )
+        #[cfg(debug_assertions)]
+        if !panicking() {
+            assert!(
+                unsafe { self.borrow.as_ref().is_free() },
+                "borrows of {} were not released properly",
+                std::any::type_name::<R0>()
+            )
+        }
     }
 }
 

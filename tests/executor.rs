@@ -137,7 +137,6 @@ fn queries_decoding_four() {
     executor.run(&world, &mut a);
 }
 
-#[cfg(not(feature = "parallel"))]
 #[test]
 #[should_panic(expected = "cannot borrow executor::A immutably: already borrowed mutably")]
 fn invalid_resources_mutable_immutable() {
@@ -151,7 +150,6 @@ fn invalid_resources_mutable_immutable() {
     executor.run(&world, (&mut a, &mut b, &mut c));
 }
 
-#[cfg(not(feature = "parallel"))]
 #[test]
 #[should_panic(expected = "cannot borrow executor::A mutably: already borrowed")]
 fn invalid_resources_immutable_mutable() {
@@ -165,7 +163,6 @@ fn invalid_resources_immutable_mutable() {
     executor.run(&world, (&mut a, &mut b, &mut c));
 }
 
-#[cfg(not(feature = "parallel"))]
 #[test]
 #[should_panic(expected = "cannot borrow executor::A mutably: already borrowed")]
 fn invalid_resources_mutable_mutable() {
