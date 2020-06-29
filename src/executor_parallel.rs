@@ -21,7 +21,7 @@ where
     Resources: ResourceTuple,
 {
     // TODO consider more granularity:
-    // scheduler, disjoint scheduler, dispatcher, disjoint dispatcher
+    // scheduler, disjoint scheduler, dispatcher (has to be disjoint either way)
     Dispatching(Dispatcher<'closures, Resources>),
     Scheduling(Scheduler<'closures, Resources>),
 }

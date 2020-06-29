@@ -6,7 +6,7 @@ use crate::{QueryMarker, SystemId};
 /// [`QueryMarker`](struct.QueryMarker.html).
 ///
 /// Instantiating one directly is only useful when calling systems as plain functions,
-/// and can be done either by `SystemContext::new()` or converting a `&hecs::World`
+/// and can be done via `SystemContext::new()`, or by converting a `&hecs::World`
 /// or `&mut hecs::World`:
 /// ```rust
 /// # use yaks::SystemContext;

@@ -25,8 +25,8 @@ pub type SystemClosure<'closure, Cells> =
 /// represent the queries the system will be making.
 ///
 /// Additionally, closures may mutably borrow from their environment for the lifetime `'closures`
-/// of the executor, but must be `Send + Sync`. If none of the systems make any borrows,
-/// that lifetime can simply be `'static`.
+/// of the executor, but must be `Send + Sync`. If none of the systems make any borrows from the
+/// environment, said lifetime can simply be `'static`.
 ///
 /// The generic parameter `Resources` of the executor must be a superset tuple of all resource set
 /// tuples of the contained systems. Any type in `Resources` must appear no more than once,
@@ -84,9 +84,9 @@ where
     /// Forces the executor to forget stored [`hecs::ArchetypesGeneration`][1], see
     /// [`hecs::World::archetypes_generation()`][2].
     ///
-    /// **Must** be called before using the executor with a different [`hecs::World`][3]
-    /// than it was used with earlier. Otherwise, calling this function is unnecessary
-    /// and detrimental to performance.
+    /// **Must** be called before using the executor with a different [`hecs::World`][3] than
+    /// it was used with earlier - not doing so may cause a panic when a query makes it's borrows.
+    /// In all other cases, calling this function is unnecessary and detrimental to performance.
     ///
     /// [1]: ../hecs/struct.ArchetypesGeneration.html
     /// [2]: ../hecs/struct.World.html#method.archetypes_generation
@@ -169,6 +169,16 @@ where
     /// ```
     /// Doing so will cause all [`yaks::batch()`](fn.batch.html) calls inside systems
     /// to also use said thread pool.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - a system within the executor has resource requirements that are incompatible with itself,
+    /// e.g. `(&mut SomeResource, &SomeResource)`.
+    ///
+    /// Additionally, it *may* panic if:
+    /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than in a previous
+    /// call, without first calling
+    /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
     pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
     where
         ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,

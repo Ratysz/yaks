@@ -83,9 +83,13 @@
 //!         QueryMarker<Without<f32, &mut u32>>,
 //!     ),
 //! ) {
-//!     yaks::batch(&mut context.query(with_f32), entities / 8, |_, unsigned| {
-//!         *unsigned += average.round() as u32;
-//!     });
+//!     yaks::batch(
+//!         &mut context.query(with_f32),
+//!         entities / 8,
+//!         |_entity, unsigned| {
+//!             *unsigned += average.round() as u32;
+//!         },
+//!     );
 //!     yaks::batch(
 //!         &mut context.query(without_f32),
 //!         entities / 8,

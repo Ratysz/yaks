@@ -228,6 +228,9 @@ where
     /// - system 4 as soon as 0 is finished ***and*** system 2 as soon as both 0 and 1 are finished,
     /// - system 3 as soon as 2 is finished.
     ///
+    /// Note that system 4 may start running before system 1 has finished, and,
+    /// if it's calculations take long enough, might finish last, after system 3.
+    ///
     /// This executor will behave identically to the two above if the default `parallel`
     /// feature is enabled; otherwise, the execution order will be different from theirs, but
     /// that won't matter as long as the given dependencies truthfully reflect any
