@@ -1,14 +1,12 @@
-use crate::{Contains, DerefTuple, Ref, RefMut};
+use crate::Contains;
 
 #[cfg(feature = "parallel")]
 use crate::ResourceSet;
 
 pub trait Fetch<'a, T, M0>: Sized {
-    type Fetched: DerefTuple<'a, Output = Self>;
+    fn fetch(resources: &'a T) -> Self;
 
-    fn fetch(resources: &T) -> Self::Fetched;
-
-    fn release(resources: &T, fetched: Self::Fetched);
+    unsafe fn release(resources: &'a T);
 
     #[cfg(feature = "parallel")]
     fn set_resource_bits(resource_set: &mut ResourceSet);
@@ -19,14 +17,12 @@ where
     T: Contains<R0, M0>,
     R0: 'a,
 {
-    type Fetched = Ref<R0>;
-
-    fn fetch(resources: &T) -> Self::Fetched {
+    fn fetch(resources: &'a T) -> Self {
         T::borrow(resources)
     }
 
-    fn release(resources: &T, fetched: Self::Fetched) {
-        T::release(resources, fetched);
+    unsafe fn release(resources: &'a T) {
+        T::release(resources);
     }
 
     #[cfg(feature = "parallel")]
@@ -40,14 +36,12 @@ where
     T: Contains<R0, M0>,
     R0: 'a,
 {
-    type Fetched = RefMut<R0>;
-
-    fn fetch(resources: &T) -> Self::Fetched {
+    fn fetch(resources: &'a T) -> Self {
         T::borrow_mut(resources)
     }
 
-    fn release(resources: &T, fetched: Self::Fetched) {
-        T::release_mut(resources, fetched);
+    unsafe fn release(resources: &'a T) {
+        T::release_mut(resources);
     }
 
     #[cfg(feature = "parallel")]
@@ -57,11 +51,9 @@ where
 }
 
 impl<'a, T> Fetch<'a, T, ()> for () {
-    type Fetched = ();
+    fn fetch(_: &'a T) -> Self {}
 
-    fn fetch(_: &T) -> Self::Fetched {}
-
-    fn release(_: &T, _: Self::Fetched) {}
+    unsafe fn release(_: &'a T) {}
 
     #[cfg(feature = "parallel")]
     fn set_resource_bits(_: &mut ResourceSet) {}
@@ -71,14 +63,12 @@ impl<'a, T, M0, F0> Fetch<'a, T, (M0,)> for (F0,)
 where
     F0: Fetch<'a, T, M0>,
 {
-    type Fetched = (F0::Fetched,);
-
-    fn fetch(resources: &T) -> Self::Fetched {
+    fn fetch(resources: &'a T) -> Self {
         (F0::fetch(resources),)
     }
 
-    fn release(resources: &T, fetched: Self::Fetched) {
-        F0::release(resources, fetched.0);
+    unsafe fn release(resources: &'a T) {
+        F0::release(resources);
     }
 
     #[cfg(feature = "parallel")]
@@ -95,16 +85,13 @@ macro_rules! impl_fetch {
             where
                 $([<F $letter>]: Fetch<'a, T, [<M $letter>]>,)*
             {
-                type Fetched = ($([<F $letter>]::Fetched,)*);
-
-                fn fetch(resources: &T) -> Self::Fetched {
+                fn fetch(resources: &'a T) -> Self {
                     ($([<F $letter>]::fetch(resources)),*)
                 }
 
                 #[allow(non_snake_case)]
-                fn release(resources: &T, fetched: Self::Fetched) {
-                    let ($($letter,)*) = fetched;
-                    $([<F $letter>]::release(resources, $letter);)*
+                unsafe fn release(resources: &'a T) {
+                    $([<F $letter>]::release(resources);)*
                 }
 
                 #[cfg(feature = "parallel")]

@@ -11,8 +11,8 @@ pub struct Dispatcher<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub borrows: Resources::Borrows,
-    pub systems: HashMap<SystemId, Arc<Mutex<SystemClosure<'closures, Resources::Cells>>>>,
+    pub borrows: Resources::BorrowTuple,
+    pub systems: HashMap<SystemId, Arc<Mutex<SystemClosure<'closures, Resources::Wrapped>>>>,
 }
 
 impl<'closures, Resources> Dispatcher<'closures, Resources>
@@ -21,9 +21,10 @@ where
 {
     pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
     where
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        ResourceTuple:
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         // Wrap resources for disjoint fetching.
         let wrapped = resources.wrap(&mut self.borrows);

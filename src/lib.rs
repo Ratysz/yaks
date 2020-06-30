@@ -111,7 +111,6 @@ mod access_set;
 mod atomic_borrow;
 mod batch_helper;
 mod contains;
-mod deref_tuple;
 mod executor;
 mod executor_builder;
 #[cfg(feature = "parallel")]
@@ -127,15 +126,14 @@ mod system_context;
 use access_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
 use atomic_borrow::AtomicBorrow;
 use contains::Contains;
-use deref_tuple::DerefTuple;
 use executor::SystemClosure;
 use executor_builder::{DummyHandle, SystemId};
 #[cfg(feature = "parallel")]
 use executor_parallel::ExecutorParallel;
 use fetch::Fetch;
 use query_bundle::QueryBundle;
-use resource_cell::{Ref, RefMut, ResourceCell};
-use resource_tuple::{ResourceTuple, ResourceWrap, WrappedResources};
+use resource_cell::ResourceCell;
+use resource_tuple::{ResourceTuple, ResourceWrap};
 
 pub use batch_helper::batch;
 pub use executor::Executor;

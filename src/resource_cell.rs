@@ -8,7 +8,7 @@ pub struct ResourceCell<R0> {
 }
 
 impl<R0> ResourceCell<R0> {
-    pub(crate) fn new(resource: &mut R0, borrow: &mut AtomicBorrow) -> Self
+    pub fn new(resource: &mut R0, borrow: &mut AtomicBorrow) -> Self
     where
         R0: Send + Sync,
     {
@@ -18,30 +18,31 @@ impl<R0> ResourceCell<R0> {
         }
     }
 
-    pub(crate) fn borrow(&self) -> Ref<R0> {
+    pub fn borrow(&self) -> &R0 {
         assert!(
             unsafe { self.borrow.as_ref().borrow() },
             "cannot borrow {} immutably: already borrowed mutably",
             std::any::type_name::<R0>()
         );
-        Ref(self.cell)
+        unsafe { self.cell.as_ref() }
     }
 
-    pub(crate) fn borrow_mut(&self) -> RefMut<R0> {
+    #[allow(clippy::mut_from_ref)]
+    pub fn borrow_mut(&self) -> &mut R0 {
         assert!(
             unsafe { self.borrow.as_ref().borrow_mut() },
             "cannot borrow {} mutably: already borrowed",
             std::any::type_name::<R0>()
         );
-        RefMut(self.cell)
+        unsafe { &mut *self.cell.clone().as_ptr() }
     }
 
-    pub(crate) fn release(&self, _: Ref<R0>) {
-        unsafe { self.borrow.as_ref().release() };
+    pub unsafe fn release(&self) {
+        self.borrow.as_ref().release();
     }
 
-    pub(crate) fn release_mut(&self, _: RefMut<R0>) {
-        unsafe { self.borrow.as_ref().release_mut() };
+    pub unsafe fn release_mut(&self) {
+        self.borrow.as_ref().release_mut();
     }
 }
 
@@ -61,19 +62,3 @@ impl<R0> Drop for ResourceCell<R0> {
 unsafe impl<R0> Send for ResourceCell<R0> where R0: Send {}
 
 unsafe impl<R0> Sync for ResourceCell<R0> where R0: Sync {}
-
-pub struct Ref<R0>(NonNull<R0>);
-
-impl<R0> Ref<R0> {
-    pub(crate) fn deref(&self) -> &R0 {
-        unsafe { self.0.as_ref() }
-    }
-}
-
-pub struct RefMut<R0>(NonNull<R0>);
-
-impl<R0> RefMut<R0> {
-    pub(crate) fn deref(&mut self) -> &mut R0 {
-        unsafe { self.0.as_mut() }
-    }
-}

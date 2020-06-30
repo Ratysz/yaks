@@ -24,7 +24,7 @@ pub struct System<'closure, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub closure: Arc<Mutex<SystemClosure<'closure, Resources::Cells>>>,
+    pub closure: Arc<Mutex<SystemClosure<'closure, Resources::Wrapped>>>,
     pub resource_set: ResourceSet,
     pub component_set: ComponentSet,
     pub archetype_set: ArchetypeSet,
@@ -162,9 +162,10 @@ where
 
     pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
     where
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        ResourceTuple:
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         match self {
             ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, resources),

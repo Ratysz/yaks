@@ -129,7 +129,7 @@ pub fn batch<'query, 'world, Q, F>(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "parallel"))]
 mod tests {
     use hecs::World;
     use std::{
@@ -140,7 +140,6 @@ mod tests {
     struct A(usize);
     struct B(usize);
 
-    #[cfg(feature = "parallel")]
     #[test]
     fn thread_pool_installation() {
         let mut world = World::new();

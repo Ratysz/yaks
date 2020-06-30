@@ -1,9 +1,7 @@
 use hecs::World;
 use std::collections::HashMap;
 
-use crate::{
-    DummyHandle, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext, WrappedResources,
-};
+use crate::{DummyHandle, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext};
 
 #[cfg(feature = "parallel")]
 use crate::{ExecutorParallel, TypeSet};
@@ -11,8 +9,7 @@ use crate::{ExecutorParallel, TypeSet};
 #[cfg(not(feature = "parallel"))]
 use crate::SystemId;
 
-pub type SystemClosure<'closure, Cells> =
-    dyn FnMut(SystemContext, &WrappedResources<Cells>) + Send + Sync + 'closure;
+pub type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
 
 /// A sealed container for systems that may be executed in parallel.
 ///
@@ -181,9 +178,10 @@ where
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
     pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
     where
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        ResourceTuple:
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         self.inner.run(world, resources);
     }
@@ -194,8 +192,8 @@ struct ExecutorSequential<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    borrows: Resources::Borrows,
-    systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Cells>>)>,
+    borrows: Resources::BorrowTuple,
+    systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Wrapped>>)>,
 }
 
 #[cfg(not(feature = "parallel"))]
@@ -220,9 +218,10 @@ where
 
     fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
     where
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        ResourceTuple:
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         let wrapped = resources.wrap(&mut self.borrows);
         for (id, closure) in &mut self.systems {

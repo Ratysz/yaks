@@ -1,36 +1,37 @@
 #[cfg(feature = "parallel")]
 use fixedbitset::FixedBitSet;
 
-use crate::{Ref, RefMut, ResourceCell, WrappedResources};
+use crate::ResourceCell;
 
 pub trait Contains<R0, M0> {
-    fn borrow(&self) -> Ref<R0>;
+    fn borrow(&self) -> &R0;
 
-    fn borrow_mut(&self) -> RefMut<R0>;
+    #[allow(clippy::mut_from_ref)]
+    fn borrow_mut(&self) -> &mut R0;
 
-    fn release(&self, borrowed: Ref<R0>);
+    unsafe fn release(&self);
 
-    fn release_mut(&self, borrowed: RefMut<R0>);
+    unsafe fn release_mut(&self);
 
     #[cfg(feature = "parallel")]
     fn set_resource_bit(bitset: &mut FixedBitSet);
 }
 
-impl<R0> Contains<R0, ()> for WrappedResources<'_, (ResourceCell<R0>,)> {
-    fn borrow(&self) -> Ref<R0> {
-        self.tuple.0.borrow()
+impl<R0> Contains<R0, ()> for (ResourceCell<R0>,) {
+    fn borrow(&self) -> &R0 {
+        self.0.borrow()
     }
 
-    fn borrow_mut(&self) -> RefMut<R0> {
-        self.tuple.0.borrow_mut()
+    fn borrow_mut(&self) -> &mut R0 {
+        self.0.borrow_mut()
     }
 
-    fn release(&self, borrowed: Ref<R0>) {
-        self.tuple.0.release(borrowed);
+    unsafe fn release(&self) {
+        self.0.release();
     }
 
-    fn release_mut(&self, borrowed: RefMut<R0>) {
-        self.tuple.0.release_mut(borrowed);
+    unsafe fn release_mut(&self) {
+        self.0.release_mut();
     }
 
     #[cfg(feature = "parallel")]
@@ -59,26 +60,26 @@ macro_rules! impl_contains {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         impl<$($all),*> Contains<$letter, ($letter, swap_to_markers!($($tail),*))>
-            for WrappedResources<'_, ($(ResourceCell<$all>,)*)>
+            for ($(ResourceCell<$all>,)*)
         {
-            fn borrow(&self) -> Ref<$letter> {
-                let ($($all,)*) = &self.tuple;
+            fn borrow(&self) -> &$letter {
+                let ($($all,)*) = self;
                 $letter.borrow()
             }
 
-            fn borrow_mut(&self) -> RefMut<$letter> {
-                let ($($all,)*) = &self.tuple;
+            fn borrow_mut(&self) -> &mut $letter {
+                let ($($all,)*) = self;
                 $letter.borrow_mut()
             }
 
-            fn release(&self, borrowed: Ref<$letter>) {
-                let ($($all,)*) = &self.tuple;
-                $letter.release(borrowed);
+            unsafe fn release(&self) {
+                let ($($all,)*) = self;
+                $letter.release();
             }
 
-            fn release_mut(&self, borrowed: RefMut<$letter>) {
-                let ($($all,)*) = &self.tuple;
-                $letter.release_mut(borrowed);
+            unsafe fn release_mut(&self) {
+                let ($($all,)*) = self;
+                $letter.release_mut();
             }
 
             #[cfg(feature = "parallel")]
@@ -92,26 +93,26 @@ macro_rules! impl_contains {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         impl<$($all),*> Contains<$letter, ($letter, )>
-            for WrappedResources<'_, ($(ResourceCell<$all>,)*)>
+            for ($(ResourceCell<$all>,)*)
         {
-            fn borrow(&self) -> Ref<$letter> {
-                let ($($all,)*) = &self.tuple;
+            fn borrow(&self) -> &$letter {
+                let ($($all,)*) = self;
                 $letter.borrow()
             }
 
-            fn borrow_mut(&self) -> RefMut<$letter> {
-                let ($($all,)*) = &self.tuple;
+            fn borrow_mut(&self) -> &mut $letter {
+                let ($($all,)*) = self;
                 $letter.borrow_mut()
             }
 
-            fn release(&self, borrowed: Ref<$letter>) {
-                let ($($all,)*) = &self.tuple;
-                $letter.release(borrowed);
+            unsafe fn release(&self) {
+                let ($($all,)*) = self;
+                $letter.release();
             }
 
-            fn release_mut(&self, borrowed: RefMut<$letter>) {
-                let ($($all,)*) = &self.tuple;
-                $letter.release_mut(borrowed);
+            unsafe fn release_mut(&self) {
+                let ($($all,)*) = self;
+                $letter.release_mut();
             }
 
             #[cfg(feature = "parallel")]

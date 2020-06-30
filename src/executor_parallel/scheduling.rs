@@ -4,7 +4,7 @@ use rayon::Scope;
 use std::collections::{HashMap, HashSet};
 
 use super::{System, DISCONNECTED, INVALID_ID};
-use crate::{ResourceTuple, ResourceWrap, SystemContext, SystemId, WrappedResources};
+use crate::{ResourceTuple, ResourceWrap, SystemContext, SystemId};
 
 /// Typed `usize` used to cache the amount of dependants the system associated
 /// with a `SystemId` has; avoids hashmap lookups while sorting.
@@ -17,7 +17,7 @@ pub struct Scheduler<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub borrows: Resources::Borrows,
+    pub borrows: Resources::BorrowTuple,
     pub systems: HashMap<SystemId, System<'closures, Resources>>,
     pub archetypes_generation: Option<ArchetypesGeneration>,
     pub systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
@@ -35,9 +35,10 @@ where
 {
     pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
     where
-        ResourceTuple: ResourceWrap<Cells = Resources::Cells, Borrows = Resources::Borrows> + Send,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        ResourceTuple:
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         // Wrap resources for disjoint fetching.
         let wrapped = resources.wrap(&mut self.borrows);
@@ -85,11 +86,11 @@ where
         &mut self,
         scope: &Scope<'run>,
         world: &'run World,
-        wrapped: &'run WrappedResources<Resources::Cells>,
+        wrapped: &'run Resources::Wrapped,
     ) where
         'closures: 'run,
-        Resources::Borrows: Send,
-        Resources::Cells: Send + Sync,
+        Resources::BorrowTuple: Send,
+        Resources::Wrapped: Send + Sync,
     {
         for (id, _) in &self.systems_to_run_now {
             // Check if a queued system can run concurrently with

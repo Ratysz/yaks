@@ -3,10 +3,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 #[cfg(feature = "parallel")]
 use hecs::World;
 
-use crate::{
-    DerefTuple, Executor, Fetch, QueryBundle, ResourceTuple, SystemClosure, SystemContext,
-    WrappedResources,
-};
+use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemClosure, SystemContext};
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, ComponentTypeSet, ResourceSet, TypeSet};
@@ -18,7 +15,7 @@ pub struct System<'closure, Resources>
 where
     Resources: ResourceTuple + 'closure,
 {
-    pub closure: Box<SystemClosure<'closure, Resources::Cells>>,
+    pub closure: Box<SystemClosure<'closure, Resources::Wrapped>>,
     pub dependencies: Vec<SystemId>,
     #[cfg(feature = "parallel")]
     pub resource_set: ResourceSet,
@@ -48,27 +45,22 @@ where
         mut closure: Closure,
     ) -> System<'closures, Resources>
     where
-        Resources::Cells: 'a,
+        Resources::Wrapped: 'a,
         Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, WrappedResources<'a, Resources::Cells>, Markers> + 'a,
+        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
         Queries: QueryBundle,
     {
         let closure = Box::new(
-            move |context: SystemContext<'a>, resources: &'a WrappedResources<Resources::Cells>| {
-                let mut fetched = ResourceRefs::fetch(resources);
-                closure(context, unsafe { fetched.deref() }, Queries::markers());
-                ResourceRefs::release(resources, fetched);
+            move |context: SystemContext<'a>, resources: &'a Resources::Wrapped| {
+                let fetched = ResourceRefs::fetch(resources);
+                closure(context, fetched, Queries::markers());
+                unsafe { ResourceRefs::release(resources) };
             },
         );
         let closure = unsafe {
             std::mem::transmute::<
                 Box<dyn FnMut(_, &'a _) + Send + Sync + 'closures>,
-                Box<
-                    dyn FnMut(SystemContext, &WrappedResources<Resources::Cells>)
-                        + Send
-                        + Sync
-                        + 'closures,
-                >,
+                Box<dyn FnMut(SystemContext, &Resources::Wrapped) + Send + Sync + 'closures>,
             >(closure)
         };
         #[cfg(feature = "parallel")]
@@ -160,9 +152,9 @@ where
     /// ```
     pub fn system<'a, Closure, ResourceRefs, Queries, Markers>(mut self, closure: Closure) -> Self
     where
-        Resources::Cells: 'a,
+        Resources::Wrapped: 'a,
         Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, WrappedResources<'a, Resources::Cells>, Markers> + 'a,
+        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
         Queries: QueryBundle,
     {
         let id = SystemId(self.systems.len());
@@ -261,9 +253,9 @@ where
         handle: NewHandle,
     ) -> ExecutorBuilder<'closures, Resources, NewHandle>
     where
-        Resources::Cells: 'a,
+        Resources::Wrapped: 'a,
         Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, WrappedResources<'a, Resources::Cells>, Markers> + 'a,
+        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
         Queries: QueryBundle,
         NewHandle: HandleConversion<Handle> + Debug,
     {
@@ -310,9 +302,9 @@ where
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Resources::Cells: 'a,
+        Resources::Wrapped: 'a,
         Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, WrappedResources<'a, Resources::Cells>, Markers> + 'a,
+        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
         Queries: QueryBundle,
         Handle: Eq + Hash + Debug,
     {
@@ -362,9 +354,9 @@ where
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Resources::Cells: 'a,
+        Resources::Wrapped: 'a,
         Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, WrappedResources<'a, Resources::Cells>, Markers> + 'a,
+        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
         Queries: QueryBundle,
         Handle: Eq + Hash + Debug,
     {
