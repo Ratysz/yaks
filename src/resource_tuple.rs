@@ -42,9 +42,7 @@ impl ResourceWrap for () {
     type Wrapped = ();
     type BorrowTuple = ();
 
-    fn wrap(&mut self, _: &mut Self::BorrowTuple) -> Self::Wrapped {
-        ()
-    }
+    fn wrap(&mut self, _: &mut Self::BorrowTuple) -> Self::Wrapped {}
 }
 
 impl<R0> ResourceTuple for (R0,)
