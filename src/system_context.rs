@@ -23,6 +23,8 @@ pub struct SystemContext<'scope> {
     pub(crate) world: &'scope World,
 }
 
+// TODO: reserve entity
+
 impl<'scope> SystemContext<'scope> {
     /// Wraps a `&hecs::World`. See documentation for `SystemContext` itself.
     pub fn new(world: &'scope World) -> Self {
