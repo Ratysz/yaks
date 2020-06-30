@@ -2,6 +2,7 @@
 [![Latest Version]][crates.io]
 [![Documentation]][docs.rs]
 [![License]][license link]
+[![CI]][CI link]
 
 [Latest Version]: https://img.shields.io/crates/v/yaks.svg
 [crates.io]: https://crates.io/crates/yaks
@@ -9,6 +10,8 @@
 [docs.rs]: https://docs.rs/yaks
 [License]: https://img.shields.io/crates/l/yaks.svg
 [license link]: https://github.com/Ratysz/yaks/blob/master/LICENSE.md
+[CI]: https://github.com/Ratysz/yaks/workflows/CI/badge.svg?branch=master
+[CI link]: https://github.com/Ratysz/yaks/actions?query=workflow%3ACI
 
 `yaks` aims to be a minimalistic and performant framework for automatic
 multithreading of [`hecs`] via [`rayon`].
