@@ -171,106 +171,22 @@ where
             ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, resources),
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::ExecutorParallel::{self, *};
-    use crate::{Executor, QueryMarker};
-
-    #[test]
-    fn dispatch_heuristic_trivial() {
-        match ExecutorParallel::<()>::build(
-            Executor::builder()
-                .system(|_, _: (), _: ()| {})
-                .system(|_, _: (), _: ()| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
+    #[cfg(test)]
+    fn unwrap_to_dispatcher(self) -> Dispatcher<'closures, Resources> {
+        use ExecutorParallel::*;
+        match self {
+            Dispatching(dispatcher) => dispatcher,
+            Scheduling(_) => panic!("produced executor is a scheduler"),
         }
     }
 
-    #[test]
-    fn dispatch_heuristic_trivial_with_resources() {
-        match ExecutorParallel::<(usize, f32)>::build(
-            Executor::builder()
-                .system(|_, _: (), _: ()| {})
-                .system(|_, _: (), _: ()| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_resources_incompatible() {
-        match ExecutorParallel::<(usize, f32)>::build(
-            Executor::builder()
-                .system(|_, _: &f32, _: ()| {})
-                .system(|_, _: &mut f32, _: ()| {}),
-        ) {
-            Scheduling(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_resources_disjoint() {
-        match ExecutorParallel::<(usize, f32)>::build(
-            Executor::builder()
-                .system(|_, _: &mut usize, _: ()| {})
-                .system(|_, _: &mut f32, _: ()| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_resources_immutable() {
-        match ExecutorParallel::<(usize, f32)>::build(
-            Executor::builder()
-                .system(|_, _: &f32, _: ()| {})
-                .system(|_, _: &f32, _: ()| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_queries_incompatible() {
-        match ExecutorParallel::<()>::build(
-            Executor::builder()
-                .system(|_, _: (), _: QueryMarker<&mut f32>| {})
-                .system(|_, _: (), _: QueryMarker<&f32>| {}),
-        ) {
-            Scheduling(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_queries_disjoint() {
-        match ExecutorParallel::<()>::build(
-            Executor::builder()
-                .system(|_, _: (), _: QueryMarker<&mut usize>| {})
-                .system(|_, _: (), _: QueryMarker<&mut f32>| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
-        }
-    }
-
-    #[test]
-    fn dispatch_heuristic_queries_immutable() {
-        match ExecutorParallel::<()>::build(
-            Executor::builder()
-                .system(|_, _: (), _: QueryMarker<&f32>| {})
-                .system(|_, _: (), _: QueryMarker<&f32>| {}),
-        ) {
-            Dispatching(_) => (),
-            _ => panic!(),
+    #[cfg(test)]
+    fn unwrap_to_scheduler(self) -> Scheduler<'closures, Resources> {
+        use ExecutorParallel::*;
+        match self {
+            Dispatching(_) => panic!("produced executor is a dispatcher"),
+            Scheduling(scheduler) => scheduler,
         }
     }
 }

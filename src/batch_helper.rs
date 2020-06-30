@@ -129,33 +129,37 @@ pub fn batch<'query, 'world, Q, F>(
     }
 }
 
-#[cfg(feature = "parallel")]
-#[test]
-fn thread_pool_installation() {
+#[cfg(test)]
+mod tests {
     use hecs::World;
     use std::{
         thread,
         time::{Duration, Instant},
     };
+
     struct A(usize);
     struct B(usize);
 
-    let mut world = World::new();
-    world.spawn_batch((0..20).map(|_| (B(0),)));
-    let a = A(1);
-    let thread_pool = rayon::ThreadPoolBuilder::new().build().unwrap();
-    let time = Instant::now();
-    thread_pool.install(|| {
-        batch(&mut world.query::<&mut B>(), 4, |_, b| {
-            b.0 += a.0;
-            thread::sleep(Duration::from_millis(10));
-        });
-    });
-    #[cfg(not(feature = "parallel"))]
-    assert!(time.elapsed() > Duration::from_millis(200));
     #[cfg(feature = "parallel")]
-    assert!(time.elapsed() < Duration::from_millis(200));
-    for (_, b) in world.query::<&B>().iter() {
-        assert_eq!(b.0, 1);
+    #[test]
+    fn thread_pool_installation() {
+        let mut world = World::new();
+        world.spawn_batch((0..20).map(|_| (B(0),)));
+        let a = A(1);
+        let thread_pool = rayon::ThreadPoolBuilder::new().build().unwrap();
+        let time = Instant::now();
+        thread_pool.install(|| {
+            crate::batch(&mut world.query::<&mut B>(), 4, |_, b| {
+                b.0 += a.0;
+                thread::sleep(Duration::from_millis(10));
+            });
+        });
+        #[cfg(not(feature = "parallel"))]
+        assert!(time.elapsed() > Duration::from_millis(200));
+        #[cfg(feature = "parallel")]
+        assert!(time.elapsed() < Duration::from_millis(200));
+        for (_, b) in world.query::<&B>().iter() {
+            assert_eq!(b.0, 1);
+        }
     }
 }
