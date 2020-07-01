@@ -6,7 +6,7 @@ use hecs::World;
 use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemClosure, SystemContext};
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, ComponentTypeSet, ResourceSet, TypeSet};
+use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(usize);
@@ -18,9 +18,9 @@ where
     pub closure: Box<SystemClosure<'closure, Resources::Wrapped>>,
     pub dependencies: Vec<SystemId>,
     #[cfg(feature = "parallel")]
-    pub resource_set: ResourceSet,
+    pub resource_set: BorrowSet,
     #[cfg(feature = "parallel")]
-    pub component_type_set: ComponentTypeSet,
+    pub component_type_set: BorrowTypeSet,
     #[cfg(feature = "parallel")]
     pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
 }
@@ -65,10 +65,9 @@ where
         };
         #[cfg(feature = "parallel")]
         {
-            let mut resource_set = ResourceSet::with_capacity(Resources::LENGTH);
+            let mut resource_set = BorrowSet::with_capacity(Resources::LENGTH);
             ResourceRefs::set_resource_bits(&mut resource_set);
-            let mut component_type_set =
-                ComponentTypeSet::with_capacity(Queries::COMPONENT_TYPE_SET_LENGTH);
+            let mut component_type_set = BorrowTypeSet::new();
             Queries::insert_component_types(&mut component_type_set);
             let archetype_writer = Box::new(|world: &World, archetype_set: &mut ArchetypeSet| {
                 Queries::set_archetype_bits(world, archetype_set)

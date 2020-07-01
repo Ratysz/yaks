@@ -123,7 +123,7 @@ mod resource_tuple;
 mod system_context;
 
 #[cfg(feature = "parallel")]
-use access_set::{ArchetypeSet, ComponentSet, ComponentTypeSet, ResourceSet, TypeSet};
+use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use atomic_borrow::AtomicBorrow;
 use contains::Contains;
 use executor::SystemClosure;

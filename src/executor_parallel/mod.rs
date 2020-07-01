@@ -6,8 +6,7 @@ use std::{
 };
 
 use crate::{
-    ArchetypeSet, ComponentSet, ExecutorBuilder, ResourceSet, ResourceTuple, ResourceWrap,
-    SystemClosure, SystemId,
+    ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemClosure, SystemId,
 };
 
 mod dispatching;
@@ -25,8 +24,8 @@ where
     Resources: ResourceTuple,
 {
     pub closure: Arc<Mutex<SystemClosure<'closure, Resources::Wrapped>>>,
-    pub resource_set: ResourceSet,
-    pub component_set: ComponentSet,
+    pub resource_set: BorrowSet,
+    pub component_set: BorrowSet,
     pub archetype_set: ArchetypeSet,
     pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
     pub dependants: Vec<SystemId>,

@@ -8,14 +8,11 @@ use std::any::TypeId;
 use crate::QueryMarker;
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, ComponentTypeSet};
+use crate::{ArchetypeSet, BorrowTypeSet};
 
 pub trait QueryExt: Query {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet);
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet);
 
     #[cfg(feature = "parallel")]
     fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet)
@@ -27,13 +24,10 @@ pub trait QueryExt: Query {
 }
 
 pub trait QueryBundle {
-    #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize;
-
     fn markers() -> Self;
 
     #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet);
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet);
 
     #[cfg(feature = "parallel")]
     fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet);
@@ -41,20 +35,14 @@ pub trait QueryBundle {
 
 impl QueryExt for () {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = 0;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(_: &mut ComponentTypeSet) {}
+    fn insert_component_types(_: &mut BorrowTypeSet) {}
 }
 
 impl QueryBundle for () {
-    #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = 0;
-
     fn markers() -> Self {}
 
     #[cfg(feature = "parallel")]
-    fn insert_component_types(_: &mut ComponentTypeSet) {}
+    fn insert_component_types(_: &mut BorrowTypeSet) {}
 
     #[cfg(feature = "parallel")]
     fn set_archetype_bits(_: &World, _: &mut ArchetypeSet) {}
@@ -65,10 +53,7 @@ where
     C0: Component,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = 1;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         component_type_set.immutable.insert(TypeId::of::<C0>());
     }
 }
@@ -78,10 +63,7 @@ where
     C0: Component,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = 1;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         component_type_set.mutable.insert(TypeId::of::<C0>());
     }
 }
@@ -91,10 +73,7 @@ where
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 }
@@ -105,10 +84,7 @@ where
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 }
@@ -119,10 +95,7 @@ where
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 }
@@ -131,15 +104,12 @@ impl<Q0> QueryBundle for QueryMarker<Q0>
 where
     Q0: QueryExt,
 {
-    #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
     fn markers() -> Self {
         QueryMarker::new()
     }
 
     #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 
@@ -154,10 +124,7 @@ where
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
-    #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 }
@@ -166,15 +133,12 @@ impl<Q0> QueryBundle for (QueryMarker<Q0>,)
 where
     Q0: Query + QueryExt,
 {
-    #[cfg(feature = "parallel")]
-    const COMPONENT_TYPE_SET_LENGTH: usize = Q0::COMPONENT_TYPE_SET_LENGTH;
-
     fn markers() -> Self {
         (QueryMarker::new(),)
     }
 
     #[cfg(feature = "parallel")]
-    fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+    fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
         Q0::insert_component_types(component_type_set);
     }
 
@@ -184,24 +148,21 @@ where
     }
 }
 
-macro_rules! impl_query_single {
+macro_rules! impl_query_ext {
     ($($letter:ident),*) => {
         impl<$($letter),*> QueryExt for ($($letter,)*)
         where
             $($letter: QueryExt,)*
         {
             #[cfg(feature = "parallel")]
-            const COMPONENT_TYPE_SET_LENGTH: usize = 0 $(+ $letter::COMPONENT_TYPE_SET_LENGTH)*;
-
-            #[cfg(feature = "parallel")]
-            fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+            fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
                 $($letter::insert_component_types(component_type_set);)*
             }
         }
     }
 }
 
-impl_for_tuples!(impl_query_single);
+impl_for_tuples!(impl_query_ext);
 
 macro_rules! impl_query_bundle {
     ($($letter:ident),*) => {
@@ -209,15 +170,12 @@ macro_rules! impl_query_bundle {
         where
             $($letter: Query + QueryExt,)*
         {
-            #[cfg(feature = "parallel")]
-            const COMPONENT_TYPE_SET_LENGTH: usize = 0 $(+ $letter::COMPONENT_TYPE_SET_LENGTH)*;
-
             fn markers() -> Self {
                 ($(QueryMarker::<$letter>::new(),)*)
             }
 
             #[cfg(feature = "parallel")]
-            fn insert_component_types(component_type_set: &mut ComponentTypeSet) {
+            fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
                 $($letter::insert_component_types(component_type_set);)*
             }
 

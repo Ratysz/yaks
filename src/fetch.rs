@@ -1,7 +1,7 @@
 use crate::Contains;
 
 #[cfg(feature = "parallel")]
-use crate::ResourceSet;
+use crate::BorrowSet;
 
 pub trait Fetch<'a, T, M0>: Sized {
     fn fetch(resources: &'a T) -> Self;
@@ -9,7 +9,7 @@ pub trait Fetch<'a, T, M0>: Sized {
     unsafe fn release(resources: &'a T);
 
     #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut ResourceSet);
+    fn set_resource_bits(resource_set: &mut BorrowSet);
 }
 
 impl<'a, T, M0, R0> Fetch<'a, T, M0> for &'a R0
@@ -26,7 +26,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut ResourceSet) {
+    fn set_resource_bits(resource_set: &mut BorrowSet) {
         T::set_resource_bit(&mut resource_set.immutable);
     }
 }
@@ -45,7 +45,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut ResourceSet) {
+    fn set_resource_bits(resource_set: &mut BorrowSet) {
         T::set_resource_bit(&mut resource_set.mutable);
     }
 }
@@ -56,7 +56,7 @@ impl<'a, T> Fetch<'a, T, ()> for () {
     unsafe fn release(_: &'a T) {}
 
     #[cfg(feature = "parallel")]
-    fn set_resource_bits(_: &mut ResourceSet) {}
+    fn set_resource_bits(_: &mut BorrowSet) {}
 }
 
 impl<'a, T, M0, F0> Fetch<'a, T, (M0,)> for (F0,)
@@ -72,7 +72,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut ResourceSet) {
+    fn set_resource_bits(resource_set: &mut BorrowSet) {
         F0::set_resource_bits(resource_set);
     }
 }
@@ -95,7 +95,7 @@ macro_rules! impl_fetch {
                 }
 
                 #[cfg(feature = "parallel")]
-                fn set_resource_bits(resource_set: &mut ResourceSet) {
+                fn set_resource_bits(resource_set: &mut BorrowSet) {
                     $([<F $letter>]::set_resource_bits(resource_set);)*
                 }
             }

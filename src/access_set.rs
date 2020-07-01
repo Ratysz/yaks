@@ -4,42 +4,41 @@ use std::{any::TypeId, collections::HashSet};
 
 pub type TypeSet = HashSet<TypeId>;
 
-pub struct ComponentTypeSet {
+pub struct BorrowTypeSet {
     pub immutable: TypeSet,
     pub mutable: TypeSet,
 }
 
-impl ComponentTypeSet {
-    pub fn with_capacity(types: usize) -> Self {
+impl BorrowTypeSet {
+    // Clippy, this is an internal type that is instantiated in one place, chill.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
         Self {
-            immutable: TypeSet::with_capacity(types),
-            mutable: TypeSet::with_capacity(types),
+            immutable: TypeSet::new(),
+            mutable: TypeSet::new(),
         }
     }
 
-    pub fn condense(self, all_component_types: &[TypeId]) -> ComponentSet {
-        let mut component_set = ComponentSet::with_capacity(all_component_types.len());
-        all_component_types
-            .iter()
-            .enumerate()
-            .for_each(|(i, component)| {
-                if self.immutable.contains(component) {
-                    component_set.immutable.insert(i);
-                }
-                if self.mutable.contains(component) {
-                    component_set.mutable.insert(i);
-                }
-            });
-        component_set
+    pub fn condense(self, all_types: &[TypeId]) -> BorrowSet {
+        let mut set = BorrowSet::with_capacity(all_types.len());
+        all_types.iter().enumerate().for_each(|(index, element)| {
+            if self.immutable.contains(element) {
+                set.immutable.insert(index);
+            }
+            if self.mutable.contains(element) {
+                set.mutable.insert(index);
+            }
+        });
+        set
     }
 }
 
-pub struct ComponentSet {
+pub struct BorrowSet {
     pub immutable: FixedBitSet,
     pub mutable: FixedBitSet,
 }
 
-impl ComponentSet {
+impl BorrowSet {
     pub fn with_capacity(bits: usize) -> Self {
         Self {
             immutable: FixedBitSet::with_capacity(bits),
@@ -47,27 +46,7 @@ impl ComponentSet {
         }
     }
 
-    pub fn is_compatible(&self, other: &ComponentSet) -> bool {
-        self.mutable.is_disjoint(&other.mutable)
-            && self.mutable.is_disjoint(&other.immutable)
-            && self.immutable.is_disjoint(&other.mutable)
-    }
-}
-
-pub struct ResourceSet {
-    pub immutable: FixedBitSet,
-    pub mutable: FixedBitSet,
-}
-
-impl ResourceSet {
-    pub fn with_capacity(bits: usize) -> Self {
-        Self {
-            immutable: FixedBitSet::with_capacity(bits),
-            mutable: FixedBitSet::with_capacity(bits),
-        }
-    }
-
-    pub fn is_compatible(&self, other: &ResourceSet) -> bool {
+    pub fn is_compatible(&self, other: &BorrowSet) -> bool {
         self.mutable.is_disjoint(&other.mutable)
             && self.mutable.is_disjoint(&other.immutable)
             && self.immutable.is_disjoint(&other.mutable)
