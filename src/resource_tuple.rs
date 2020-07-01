@@ -1,16 +1,16 @@
 use crate::{AtomicBorrow, ResourceCell};
 
 pub trait ResourceTuple {
-    type Wrapped;
-    type BorrowTuple;
+    type Wrapped: Send + Sync;
+    type BorrowTuple: Send + Sync;
     const LENGTH: usize;
 
     fn instantiate_borrows() -> Self::BorrowTuple;
 }
 
 pub trait ResourceWrap {
-    type Wrapped;
-    type BorrowTuple;
+    type Wrapped: Send + Sync;
+    type BorrowTuple: Send + Sync;
 
     fn wrap(&mut self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped;
 }

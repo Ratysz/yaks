@@ -5,9 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemClosure, SystemId,
-};
+use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemClosure, SystemId};
 
 mod dispatching;
 mod scheduling;
@@ -105,7 +103,6 @@ where
             }
             if all_disjoint {
                 return ExecutorParallel::Dispatching(Dispatcher {
-                    borrows: Resources::instantiate_borrows(),
                     systems: systems
                         .drain()
                         .map(|(id, system)| (id, system.closure))
@@ -139,7 +136,6 @@ where
         debug_assert!(!systems_without_dependencies.is_empty());
         let (sender, receiver) = crossbeam_channel::unbounded();
         ExecutorParallel::Scheduling(Scheduler {
-            borrows: Resources::instantiate_borrows(),
             systems,
             archetypes_generation: None,
             systems_without_dependencies,
@@ -159,16 +155,10 @@ where
         }
     }
 
-    pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
-    where
-        ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
-        Resources::BorrowTuple: Send,
-        Resources::Wrapped: Send + Sync,
-    {
+    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
         match self {
-            ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, resources),
-            ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, resources),
+            ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, wrapped),
+            ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, wrapped),
         }
     }
 

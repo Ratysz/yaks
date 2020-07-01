@@ -49,6 +49,7 @@ pub struct Executor<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
+    borrows: Resources::BorrowTuple,
     #[cfg(feature = "parallel")]
     inner: ExecutorParallel<'closures, Resources>,
     #[cfg(not(feature = "parallel"))]
@@ -71,6 +72,7 @@ where
 
     pub(crate) fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {
         Self {
+            borrows: Resources::instantiate_borrows(),
             #[cfg(feature = "parallel")]
             inner: ExecutorParallel::build(builder),
             #[cfg(not(feature = "parallel"))]
@@ -176,14 +178,13 @@ where
     /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than in a previous
     /// call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<ResourceTuple>(&mut self, world: &World, resources: ResourceTuple)
+    pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
     where
         ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
-        Resources::BorrowTuple: Send,
-        Resources::Wrapped: Send + Sync,
+            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple>,
     {
-        self.inner.run(world, resources);
+        let wrapped = resources.wrap(&mut self.borrows);
+        self.inner.run(world, wrapped);
     }
 }
 
@@ -192,7 +193,6 @@ struct ExecutorSequential<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    borrows: Resources::BorrowTuple,
     systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Wrapped>>)>,
 }
 
@@ -208,22 +208,12 @@ where
             .map(|(id, system)| (id, system.closure))
             .collect();
         systems.sort_by(|(a, _), (b, _)| a.cmp(b));
-        ExecutorSequential {
-            borrows: Resources::instantiate_borrows(),
-            systems,
-        }
+        ExecutorSequential { systems }
     }
 
     fn force_archetype_recalculation(&mut self) {}
 
-    fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
-    where
-        ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
-        Resources::BorrowTuple: Send,
-        Resources::Wrapped: Send + Sync,
-    {
-        let wrapped = resources.wrap(&mut self.borrows);
+    fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
         for (id, closure) in &mut self.systems {
             closure(
                 SystemContext {

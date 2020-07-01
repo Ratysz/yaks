@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{ResourceTuple, ResourceWrap, SystemClosure, SystemContext, SystemId};
+use crate::{ResourceTuple, SystemClosure, SystemContext, SystemId};
 
 /// Parallel executor variant, used when all systems are proven to be statically disjoint,
 /// and have no dependencies.
@@ -11,7 +11,6 @@ pub struct Dispatcher<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub borrows: Resources::BorrowTuple,
     pub systems: HashMap<SystemId, Arc<Mutex<SystemClosure<'closures, Resources::Wrapped>>>>,
 }
 
@@ -19,15 +18,7 @@ impl<'closures, Resources> Dispatcher<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
-    where
-        ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
-        Resources::BorrowTuple: Send,
-        Resources::Wrapped: Send + Sync,
-    {
-        // Wrap resources for disjoint fetching.
-        let wrapped = resources.wrap(&mut self.borrows);
+    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
         // All systems are statically disjoint, so they can all be running together at all times.
         self.systems.par_iter().for_each(|(id, system)| {
             let system = &mut *system
@@ -47,7 +38,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::super::ExecutorParallel;
-    use crate::{Executor, QueryMarker};
+    use crate::{AtomicBorrow, Executor, QueryMarker, ResourceWrap};
     use hecs::World;
 
     struct A(usize);
@@ -90,7 +81,13 @@ mod tests {
                 }),
         )
         .unwrap_to_dispatcher();
-        executor.run(&world, (&mut a, &mut b, &mut c));
+        let mut borrows = (
+            AtomicBorrow::new(),
+            AtomicBorrow::new(),
+            AtomicBorrow::new(),
+        );
+        let wrapped = (&mut a, &mut b, &mut c).wrap(&mut borrows);
+        executor.run(&world, wrapped);
         assert_eq!(a.0, 2);
         assert_eq!(b.0, 3);
     }
@@ -114,7 +111,9 @@ mod tests {
                 }),
         )
         .unwrap_to_dispatcher();
-        executor.run(&world, &mut a);
+        let mut borrow = (AtomicBorrow::new(),);
+        let wrapped = (&mut a).wrap(&mut borrow);
+        executor.run(&world, wrapped);
         for (_, (b, c)) in world.query::<(&B, &C)>().iter() {
             assert_eq!(b.0, 1);
             assert_eq!(c.0, 1);

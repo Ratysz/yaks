@@ -4,7 +4,7 @@ use rayon::Scope;
 use std::collections::{HashMap, HashSet};
 
 use super::{System, DISCONNECTED, INVALID_ID};
-use crate::{ResourceTuple, ResourceWrap, SystemContext, SystemId};
+use crate::{ResourceTuple, SystemContext, SystemId};
 
 /// Typed `usize` used to cache the amount of dependants the system associated
 /// with a `SystemId` has; avoids hashmap lookups while sorting.
@@ -17,7 +17,6 @@ pub struct Scheduler<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub borrows: Resources::BorrowTuple,
     pub systems: HashMap<SystemId, System<'closures, Resources>>,
     pub archetypes_generation: Option<ArchetypesGeneration>,
     pub systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
@@ -33,15 +32,7 @@ impl<'closures, Resources> Scheduler<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
-    where
-        ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple> + Send,
-        Resources::BorrowTuple: Send,
-        Resources::Wrapped: Send + Sync,
-    {
-        // Wrap resources for disjoint fetching.
-        let wrapped = resources.wrap(&mut self.borrows);
+    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
         rayon::scope(|scope| {
             self.prepare(world);
             // All systems have been ran if there are no queued or currently running systems.
@@ -202,7 +193,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::super::ExecutorParallel;
-    use crate::{Executor, QueryMarker, ResourceWrap, SystemContext};
+    use crate::{AtomicBorrow, Executor, QueryMarker, ResourceWrap, SystemContext};
     use hecs::World;
 
     struct A(usize);
@@ -350,7 +341,8 @@ mod tests {
         .unwrap_to_scheduler();
         let mut a = A(0);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let mut borrows = (AtomicBorrow::new(),);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -378,7 +370,8 @@ mod tests {
         .unwrap_to_scheduler();
         let mut a = A(0);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let mut borrows = (AtomicBorrow::new(),);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -411,7 +404,8 @@ mod tests {
         .unwrap_to_scheduler();
         let mut a = A(1);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let mut borrows = (AtomicBorrow::new(),);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -450,7 +444,8 @@ mod tests {
         .unwrap_to_scheduler();
         let mut a = A(1);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let mut borrows = (AtomicBorrow::new(),);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -490,7 +485,8 @@ mod tests {
         .unwrap_to_scheduler();
         let mut a = A(2);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let mut borrows = (AtomicBorrow::new(),);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -510,7 +506,7 @@ mod tests {
         world.spawn_batch((0..10).map(|_| (A(0), B(1), C(0))));
         let mut a = A(1);
         let mut a = &mut a;
-        let wrapped = a.wrap(&mut executor.borrows);
+        let wrapped = a.wrap(&mut borrows);
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
