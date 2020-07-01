@@ -9,7 +9,6 @@ pub trait ResourceTuple {
 }
 
 pub trait ResourceWrap {
-    type Types;
     type Wrapped;
     type BorrowTuple;
 
@@ -20,7 +19,6 @@ impl<'a, R0> ResourceWrap for &'a mut R0
 where
     R0: Send + Sync,
 {
-    type Types = (R0,);
     type Wrapped = (ResourceCell<R0>,);
     type BorrowTuple = (AtomicBorrow,);
 
@@ -38,7 +36,6 @@ impl ResourceTuple for () {
 }
 
 impl ResourceWrap for () {
-    type Types = ();
     type Wrapped = ();
     type BorrowTuple = ();
 
@@ -62,7 +59,6 @@ impl<R0> ResourceWrap for (&'_ mut R0,)
 where
     R0: Send + Sync,
 {
-    type Types = (R0,);
     type Wrapped = (ResourceCell<R0>,);
     type BorrowTuple = (AtomicBorrow,);
 
@@ -106,7 +102,6 @@ macro_rules! impl_resource_wrap {
             where
                 $($letter: Send + Sync,)*
             {
-                type Types = ($($letter,)*);
                 type Wrapped = ($(ResourceCell<$letter>,)*);
                 type BorrowTuple = ($(swap_to_atomic_borrow!($letter),)*);
 

@@ -40,6 +40,7 @@ struct Acceleration(f32, f32);
 struct Color(f32, f32, f32, f32);
 
 // A system that simulates 2D kinematic motion.
+#[allow(clippy::type_complexity)]
 fn motion(
     // Thin wrapper over `&hecs::World`.
     context: SystemContext,
@@ -135,8 +136,7 @@ fn find_average_color(
 fn main() {
     // Trying to parse a passed argument, if any.
     let to_spawn: u32 = std::env::args()
-        .skip(1)
-        .next()
+        .nth(1)
         .ok_or(())
         .and_then(|arg| arg.parse::<u32>().map_err(|_| ()))
         .unwrap_or(100_000);

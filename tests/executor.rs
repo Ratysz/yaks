@@ -93,6 +93,7 @@ fn queries_decoding_single() {
 }
 
 #[test]
+#[allow(clippy::type_complexity)]
 fn queries_decoding_four() {
     let mut world = World::new();
     world.spawn((B(1),));

@@ -220,8 +220,7 @@ mod tests {
                 .system_with_handle_and_deps(dummy_system, 1, vec![0]),
         )
         .unwrap_to_scheduler();
-        let mut resources = ();
-        let wrapped = resources.wrap(&mut executor.borrows);
+        let wrapped = ();
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -248,8 +247,7 @@ mod tests {
                 .system_with_deps(dummy_system, vec![0, 1, 2]),
         )
         .unwrap_to_scheduler();
-        let mut resources = ();
-        let wrapped = resources.wrap(&mut executor.borrows);
+        let wrapped = ();
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -278,8 +276,7 @@ mod tests {
                 .system_with_deps(dummy_system, vec![2]),
         )
         .unwrap_to_scheduler();
-        let mut resources = ();
-        let wrapped = resources.wrap(&mut executor.borrows);
+        let wrapped = ();
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -316,8 +313,7 @@ mod tests {
                 .system_with_deps(dummy_system, vec![0, 1, 2]),
         )
         .unwrap_to_scheduler();
-        let mut resources = ();
-        let wrapped = resources.wrap(&mut executor.borrows);
+        let wrapped = ();
         rayon::scope(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -473,7 +469,7 @@ mod tests {
         }
     }
 
-    //#[test]
+    #[test]
     fn queries_disjoint_by_archetypes() {
         let mut world = World::new();
         world.spawn_batch((0..10).map(|_| (A(0), B(0))));
@@ -508,9 +504,10 @@ mod tests {
             assert_eq!(b.0, 2);
         }
 
-        let mut entities: Vec<_> = world
-            .spawn_batch((0..10).map(|_| (A(0), B(1), C(0))))
-            .collect();
+        /*let mut entities: Vec<_> = world
+        .spawn_batch((0..10).map(|_| (A(0), B(1), C(0))))
+        .collect();*/
+        world.spawn_batch((0..10).map(|_| (A(0), B(1), C(0))));
         let mut a = A(1);
         let mut a = &mut a;
         let wrapped = a.wrap(&mut executor.borrows);
@@ -531,7 +528,7 @@ mod tests {
             assert_eq!(b.0, 3);
         }
 
-        entities
+        /*entities
             .drain(..)
             .for_each(|entity| world.despawn(entity).unwrap());
         rayon::scope(|scope| {
@@ -546,6 +543,6 @@ mod tests {
         });
         for (_, b) in world.query::<&B>().iter() {
             assert_eq!(b.0, 4);
-        }
+        }*/
     }
 }

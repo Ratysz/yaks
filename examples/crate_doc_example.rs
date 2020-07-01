@@ -40,6 +40,7 @@ fn main() {
     executor.run(&world, (&mut entities, &mut increment, &mut average));
 }
 
+#[allow(clippy::type_complexity)]
 fn system_with_two_queries(
     context: yaks::SystemContext,
     (entities, average): (&u32, &f32),
