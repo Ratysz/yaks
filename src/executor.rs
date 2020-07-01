@@ -9,6 +9,9 @@ use crate::{ExecutorParallel, TypeSet};
 #[cfg(not(feature = "parallel"))]
 use crate::SystemId;
 
+#[cfg(feature = "resources-interop")]
+use crate::InvertedWrap;
+
 pub type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
 
 /// A sealed container for systems that may be executed in parallel.
@@ -185,6 +188,15 @@ where
     {
         let wrapped = resources.wrap(&mut self.borrows);
         self.inner.run(world, wrapped);
+    }
+
+    /// WIP
+    #[cfg(feature = "resources-interop")]
+    pub fn run_with_dyn_resources(&mut self, world: &World, resources: &resources::Resources)
+    where
+        Resources: InvertedWrap,
+    {
+        Resources::run(self, world, resources);
     }
 }
 

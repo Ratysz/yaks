@@ -120,6 +120,8 @@ mod query_bundle;
 mod query_marker;
 mod resource_cell;
 mod resource_tuple;
+#[cfg(feature = "resources-interop")]
+mod resources_interop;
 mod system_context;
 
 #[cfg(feature = "parallel")]
@@ -134,6 +136,8 @@ use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::ResourceCell;
 use resource_tuple::{ResourceTuple, ResourceWrap};
+#[cfg(feature = "resources-interop")]
+use resources_interop::InvertedWrap;
 
 pub use batch_helper::batch;
 pub use executor::Executor;
