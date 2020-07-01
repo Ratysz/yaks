@@ -15,7 +15,7 @@ pub trait ResourceWrap {
     fn wrap(&mut self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped;
 }
 
-impl<'a, R0> ResourceWrap for &'a mut R0
+impl<R0> ResourceWrap for &'_ mut R0
 where
     R0: Send + Sync,
 {
