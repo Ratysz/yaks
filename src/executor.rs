@@ -1,16 +1,13 @@
 use hecs::World;
 use std::collections::HashMap;
 
-use crate::{DummyHandle, ExecutorBuilder, ResourceTuple, ResourceWrap, SystemContext};
+use crate::{DummyHandle, ExecutorBuilder, RefExtractor, ResourceTuple, SystemContext};
 
 #[cfg(feature = "parallel")]
 use crate::{ExecutorParallel, TypeSet};
 
 #[cfg(not(feature = "parallel"))]
 use crate::SystemId;
-
-#[cfg(feature = "resources-interop")]
-use crate::InvertedWrap;
 
 pub type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
 
@@ -52,11 +49,11 @@ pub struct Executor<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    borrows: Resources::BorrowTuple,
+    pub(crate) borrows: Resources::BorrowTuple,
     #[cfg(feature = "parallel")]
-    inner: ExecutorParallel<'closures, Resources>,
+    pub(crate) inner: ExecutorParallel<'closures, Resources>,
     #[cfg(not(feature = "parallel"))]
-    inner: ExecutorSequential<'closures, Resources>,
+    pub(crate) inner: ExecutorSequential<'closures, Resources>,
 }
 
 impl<'closures, Resources> Executor<'closures, Resources>
@@ -178,30 +175,19 @@ where
     /// e.g. `(&mut SomeResource, &SomeResource)`.
     ///
     /// Additionally, it *may* panic if:
-    /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than in a previous
-    /// call, without first calling
+    /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than
+    /// in a previous call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<ResourceTuple>(&mut self, world: &World, mut resources: ResourceTuple)
+    pub fn run<RefSource>(&mut self, world: &World, resources: RefSource)
     where
-        ResourceTuple:
-            ResourceWrap<Wrapped = Resources::Wrapped, BorrowTuple = Resources::BorrowTuple>,
+        Resources: RefExtractor<RefSource>,
     {
-        let wrapped = resources.wrap(&mut self.borrows);
-        self.inner.run(world, wrapped);
-    }
-
-    /// WIP
-    #[cfg(feature = "resources-interop")]
-    pub fn run_with_dyn_resources(&mut self, world: &World, resources: &resources::Resources)
-    where
-        Resources: InvertedWrap,
-    {
-        Resources::run(self, world, resources);
+        Resources::extract_and_run(self, world, resources);
     }
 }
 
 #[cfg(not(feature = "parallel"))]
-struct ExecutorSequential<'closures, Resources>
+pub struct ExecutorSequential<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
@@ -225,7 +211,7 @@ where
 
     fn force_archetype_recalculation(&mut self) {}
 
-    fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
         for (id, closure) in &mut self.systems {
             closure(
                 SystemContext {

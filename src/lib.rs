@@ -135,9 +135,7 @@ use executor_parallel::ExecutorParallel;
 use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::ResourceCell;
-use resource_tuple::{ResourceTuple, ResourceWrap};
-#[cfg(feature = "resources-interop")]
-use resources_interop::InvertedWrap;
+use resource_tuple::{RefExtractor, ResourceTuple};
 
 pub use batch_helper::batch;
 pub use executor::Executor;
