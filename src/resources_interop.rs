@@ -14,10 +14,9 @@ where
     R0: Resource,
 {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: &Resources) {
-        let mut refs = match resources.fetch::<&mut R0>() {
-            Ok(refs) => refs,
-            Err(error) => panic!("{}", error),
-        };
+        let mut refs = resources
+            .fetch::<&mut R0>()
+            .unwrap_or_else(|error| panic!("{}", error));
         let derefs = (&mut *refs,);
         executor.run(world, derefs);
     }
@@ -35,10 +34,9 @@ macro_rules! impl_ref_extractor {
                 world: &World,
                 resources: &Resources,
             ) {
-                let ($(mut $letter,)*) = match resources.fetch::<($(&mut $letter, )*)>() {
-                    Ok(refs) => refs,
-                    Err(error) => panic!("{}", error),
-                };
+                let ($(mut $letter,)*) = resources
+                    .fetch::<($(&mut $letter, )*)>()
+                    .unwrap_or_else(|error| panic!("{}", error));
                 let derefs = ($(&mut *$letter,)*);
                 executor.run(world, derefs);
             }
