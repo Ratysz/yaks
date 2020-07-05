@@ -1,4 +1,6 @@
-use hecs::{Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World};
+use hecs::{
+    Archetype, ArchetypesGeneration, Entity, NoSuchEntity, Query, QueryBorrow, QueryOne, World,
+};
 
 use crate::{QueryMarker, SystemId};
 
@@ -22,8 +24,6 @@ pub struct SystemContext<'scope> {
     pub(crate) system_id: Option<SystemId>,
     pub(crate) world: &'scope World,
 }
-
-// TODO: reserve entity
 
 impl<'scope> SystemContext<'scope> {
     /// Wraps a `&hecs::World`. See documentation for `SystemContext` itself.
@@ -120,6 +120,28 @@ impl<'scope> SystemContext<'scope> {
         Q: Query + Send + Sync,
     {
         self.world.query_one(entity)
+    }
+
+    /// See [`hecs::World::reserve_entity()`](../hecs/struct.World.html#method.reserve_entity).
+    pub fn reserve_entity(&self) -> Entity {
+        self.world.reserve_entity()
+    }
+
+    /// See [`hecs::World::contains()`](../hecs/struct.World.html#method.contains).
+    pub fn contains(&self, entity: Entity) -> bool {
+        self.world.contains(entity)
+    }
+
+    /// See [`hecs::World::archetypes()`](../hecs/struct.World.html#method.archetypes).
+    pub fn archetypes(&self) -> impl ExactSizeIterator<Item = &Archetype> + '_ {
+        self.world.archetypes()
+    }
+
+    /// See [`hecs::World::archetypes_generation()`][ag].
+    ///
+    /// [ag]: ../hecs/struct.World.html#method.archetypes_generation
+    pub fn archetypes_generation(&self) -> ArchetypesGeneration {
+        self.world.archetypes_generation()
     }
 }
 
