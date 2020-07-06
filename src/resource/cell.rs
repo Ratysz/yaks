@@ -1,7 +1,9 @@
 use std::{ptr::NonNull, thread::panicking};
 
-use crate::AtomicBorrow;
+use super::AtomicBorrow;
 
+/// A pointer to a resource, with runtime borrow checking via an `AtomicBorrow`,
+/// accessed through a pointer to a cached one in an executor.
 pub struct ResourceCell<R0> {
     cell: NonNull<R0>,
     borrow: NonNull<AtomicBorrow>,

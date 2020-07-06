@@ -108,28 +108,20 @@ mod tuple_macro;
 
 #[cfg(feature = "parallel")]
 mod access_set;
-mod atomic_borrow;
 mod batch;
-mod contains;
 mod executor;
-mod fetch;
 mod query_bundle;
 mod query_marker;
-mod resource_cell;
-mod resource_tuple;
+mod resource;
 #[cfg(feature = "resources-interop")]
 mod resources_interop;
 mod system_context;
 
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
-use atomic_borrow::AtomicBorrow;
-use contains::Contains;
 use executor::SystemId;
-use fetch::Fetch;
 use query_bundle::QueryBundle;
-use resource_cell::ResourceCell;
-use resource_tuple::{RefExtractor, ResourceTuple};
+use resource::{Fetch, RefExtractor, ResourceTuple};
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};

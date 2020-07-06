@@ -193,7 +193,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::super::ExecutorParallel;
-    use crate::{resource_tuple::ResourceWrap, AtomicBorrow, Executor, QueryMarker, SystemContext};
+    use crate::{
+        resource::{AtomicBorrow, ResourceWrap},
+        Executor, QueryMarker, SystemContext,
+    };
     use hecs::World;
     use rayon::{ScopeFifo, ThreadPoolBuilder};
 

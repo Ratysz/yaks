@@ -1,8 +1,9 @@
 #[cfg(feature = "parallel")]
 use fixedbitset::FixedBitSet;
 
-use crate::ResourceCell;
+use super::ResourceCell;
 
+/// Specifies how a specific type may be borrowed from a tuple of cells.
 pub trait Contains<R0, M0> {
     fn borrow(&self) -> &R0;
 

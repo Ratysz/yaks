@@ -39,7 +39,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::super::ExecutorParallel;
-    use crate::{resource_tuple::ResourceWrap, AtomicBorrow, Executor, QueryMarker};
+    use crate::{
+        resource::{AtomicBorrow, ResourceWrap},
+        Executor, QueryMarker,
+    };
     use hecs::World;
 
     struct A(usize);
