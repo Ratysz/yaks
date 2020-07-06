@@ -109,7 +109,7 @@ mod tuple_macro;
 #[cfg(feature = "parallel")]
 mod access_set;
 mod atomic_borrow;
-mod batch_helper;
+mod batch;
 mod contains;
 mod executor;
 mod fetch;
@@ -131,7 +131,7 @@ use query_bundle::QueryBundle;
 use resource_cell::ResourceCell;
 use resource_tuple::{RefExtractor, ResourceTuple};
 
-pub use batch_helper::batch;
+pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
 pub use system_context::SystemContext;
