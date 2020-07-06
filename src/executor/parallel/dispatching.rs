@@ -3,7 +3,8 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{ResourceTuple, SystemClosure, SystemContext, SystemId};
+use super::SystemClosure;
+use crate::{ResourceTuple, SystemContext, SystemId};
 
 /// Parallel executor variant, used when all systems are proven to be statically disjoint,
 /// and have no dependencies.

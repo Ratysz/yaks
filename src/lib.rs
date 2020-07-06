@@ -112,9 +112,6 @@ mod atomic_borrow;
 mod batch_helper;
 mod contains;
 mod executor;
-mod executor_builder;
-#[cfg(feature = "parallel")]
-mod executor_parallel;
 mod fetch;
 mod query_bundle;
 mod query_marker;
@@ -128,17 +125,13 @@ mod system_context;
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use atomic_borrow::AtomicBorrow;
 use contains::Contains;
-use executor::SystemClosure;
-use executor_builder::{DummyHandle, SystemId};
-#[cfg(feature = "parallel")]
-use executor_parallel::ExecutorParallel;
+use executor::SystemId;
 use fetch::Fetch;
 use query_bundle::QueryBundle;
 use resource_cell::ResourceCell;
 use resource_tuple::{RefExtractor, ResourceTuple};
 
 pub use batch_helper::batch;
-pub use executor::Executor;
-pub use executor_builder::ExecutorBuilder;
+pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
 pub use system_context::SystemContext;

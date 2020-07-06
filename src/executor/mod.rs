@@ -1,15 +1,32 @@
 use hecs::World;
 use std::collections::HashMap;
 
-use crate::{DummyHandle, ExecutorBuilder, RefExtractor, ResourceTuple, SystemContext};
+use crate::{RefExtractor, ResourceTuple, SystemContext};
 
-#[cfg(feature = "parallel")]
-use crate::{ExecutorParallel, TypeSet};
+mod builder;
+
+use builder::DummyHandle;
+
+pub use builder::ExecutorBuilder;
 
 #[cfg(not(feature = "parallel"))]
-use crate::SystemId;
+mod sequential;
 
-pub type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
+#[cfg(not(feature = "parallel"))]
+use sequential::ExecutorSequential;
+
+#[cfg(feature = "parallel")]
+mod parallel;
+
+#[cfg(feature = "parallel")]
+use crate::TypeSet;
+#[cfg(feature = "parallel")]
+use parallel::ExecutorParallel;
+
+type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
+
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct SystemId(pub(crate) usize);
 
 /// A sealed container for systems that may be executed in parallel.
 ///
@@ -183,43 +200,5 @@ where
         Resources: RefExtractor<RefSource>,
     {
         Resources::extract_and_run(self, world, resources);
-    }
-}
-
-#[cfg(not(feature = "parallel"))]
-pub struct ExecutorSequential<'closures, Resources>
-where
-    Resources: ResourceTuple,
-{
-    systems: Vec<(SystemId, Box<SystemClosure<'closures, Resources::Wrapped>>)>,
-}
-
-#[cfg(not(feature = "parallel"))]
-impl<'closures, Resources> ExecutorSequential<'closures, Resources>
-where
-    Resources: ResourceTuple,
-{
-    fn build<Handle>(builder: ExecutorBuilder<'closures, Resources, Handle>) -> Self {
-        let ExecutorBuilder { mut systems, .. } = builder;
-        let mut systems: Vec<_> = systems
-            .drain()
-            .map(|(id, system)| (id, system.closure))
-            .collect();
-        systems.sort_by(|(a, _), (b, _)| a.cmp(b));
-        ExecutorSequential { systems }
-    }
-
-    fn force_archetype_recalculation(&mut self) {}
-
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
-        for (id, closure) in &mut self.systems {
-            closure(
-                SystemContext {
-                    system_id: Some(*id),
-                    world,
-                },
-                &wrapped,
-            );
-        }
     }
 }

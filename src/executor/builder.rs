@@ -3,13 +3,11 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 #[cfg(feature = "parallel")]
 use hecs::World;
 
-use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemClosure, SystemContext};
+use super::SystemClosure;
+use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemContext, SystemId};
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
-
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct SystemId(usize);
 
 /// Container for parsed systems and their metadata;
 /// destructured in concrete executors' build functions.

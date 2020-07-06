@@ -5,7 +5,8 @@ use std::{
     sync::Arc,
 };
 
-use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemClosure, SystemId};
+use super::SystemClosure;
+use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemId};
 
 mod dispatching;
 mod scheduling;
