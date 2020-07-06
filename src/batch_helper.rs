@@ -74,7 +74,7 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// # #[cfg(feature = "parallel")]
 /// # let thread_pool =
 /// # {
-/// #     rayon::ThreadPoolBuilder::new().build().unwrap()
+/// #     rayon::ThreadPoolBuilder::new().num_threads(2).build().unwrap()
 /// # };
 /// # #[cfg(not(feature = "parallel"))]
 /// # let thread_pool =
@@ -126,29 +126,5 @@ pub fn batch<'query, 'world, Q, F>(
         query_borrow
             .iter()
             .for_each(|(entity, components)| for_each(entity, components));
-    }
-}
-
-#[cfg(all(test, feature = "parallel"))]
-mod tests {
-    use hecs::World;
-
-    struct A(usize);
-    struct B(usize);
-
-    #[test]
-    fn thread_pool_installation() {
-        let mut world = World::new();
-        world.spawn_batch((0..20).map(|_| (B(0),)));
-        let a = A(1);
-        let thread_pool = rayon::ThreadPoolBuilder::new().build().unwrap();
-        thread_pool.install(|| {
-            crate::batch(&mut world.query::<&mut B>(), 4, |_, b| {
-                b.0 += a.0;
-            });
-        });
-        for (_, b) in world.query::<&B>().iter() {
-            assert_eq!(b.0, 1);
-        }
     }
 }

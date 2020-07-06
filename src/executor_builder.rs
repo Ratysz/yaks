@@ -11,6 +11,8 @@ use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(usize);
 
+/// Container for parsed systems and their metadata;
+/// destructured in concrete executors' build functions.
 pub struct System<'closure, Resources>
 where
     Resources: ResourceTuple + 'closure,
@@ -25,7 +27,7 @@ where
     pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
 }
 
-/// A factory for [`Executor`](struct.Executor.html) (and the only way of creating one).
+/// A builder for [`Executor`](struct.Executor.html) (and the only way of creating one).
 pub struct ExecutorBuilder<'closures, Resources, Handle = DummyHandle>
 where
     Resources: ResourceTuple,

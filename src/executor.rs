@@ -150,7 +150,7 @@ where
     /// # #[cfg(feature = "parallel")]
     /// # let thread_pool =
     /// # {
-    /// #     rayon::ThreadPoolBuilder::new().build().unwrap()
+    /// #     rayon::ThreadPoolBuilder::new().num_threads(2).build().unwrap()
     /// # };
     /// # #[cfg(not(feature = "parallel"))]
     /// # let thread_pool =
