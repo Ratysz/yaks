@@ -1,6 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
 use hecs::{ArchetypesGeneration, World};
-use rayon::Scope;
+use rayon::ScopeFifo;
 use std::collections::{HashMap, HashSet};
 
 use super::{System, DISCONNECTED, INVALID_ID};
@@ -33,7 +33,7 @@ where
     Resources: ResourceTuple,
 {
     pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
-        rayon::scope(|scope| {
+        rayon::scope_fifo(|scope| {
             self.prepare(world);
             // All systems have been ran if there are no queued or currently running systems.
             while !(self.systems_to_run_now.is_empty() && self.systems_running.is_empty()) {
@@ -75,7 +75,7 @@ where
 
     fn start_all_currently_runnable<'run>(
         &mut self,
-        scope: &Scope<'run>,
+        scope: &ScopeFifo<'run>,
         world: &'run World,
         wrapped: &'run Resources::Wrapped,
     ) where
@@ -93,7 +93,7 @@ where
                 let system = self.systems.get_mut(id).expect(INVALID_ID).closure.clone();
                 let sender = self.sender.clone();
                 let id = *id;
-                scope.spawn(move |_| {
+                scope.spawn_fifo(move |_| {
                     let system = &mut *system
                         .try_lock() // TODO should this be .lock() instead?
                         .expect("systems should only be ran once per execution");
@@ -195,12 +195,24 @@ mod tests {
     use super::super::ExecutorParallel;
     use crate::{resource_tuple::ResourceWrap, AtomicBorrow, Executor, QueryMarker, SystemContext};
     use hecs::World;
+    use rayon::{ScopeFifo, ThreadPoolBuilder};
 
     struct A(usize);
     struct B(usize);
     struct C(usize);
 
     fn dummy_system(_: SystemContext, _: (), _: ()) {}
+
+    fn local_pool_scope_fifo<'scope, F>(closure: F)
+    where
+        F: for<'s> FnOnce(&'s ScopeFifo<'scope>) + 'scope + Send,
+    {
+        ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap()
+            .scope_fifo(closure)
+    }
 
     #[test]
     fn dependencies_single() {
@@ -212,7 +224,7 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let wrapped = ();
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -239,7 +251,7 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let wrapped = ();
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 3);
@@ -268,7 +280,7 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let wrapped = ();
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -305,7 +317,7 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let wrapped = ();
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -343,7 +355,7 @@ mod tests {
         let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -372,7 +384,7 @@ mod tests {
         let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -406,7 +418,7 @@ mod tests {
         let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -446,7 +458,7 @@ mod tests {
         let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
@@ -487,7 +499,7 @@ mod tests {
         let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 2);
@@ -507,7 +519,7 @@ mod tests {
         let mut a = A(1);
         let mut a = &mut a;
         let wrapped = a.wrap(&mut borrows);
-        rayon::scope(|scope| {
+        local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
             assert_eq!(executor.systems_running.len(), 1);
