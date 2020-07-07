@@ -1,9 +1,9 @@
 //! Resource flow:
-//! - resources argument is passed to `Executor::<Tuple>::run()`,
+//! - resources argument is passed to `Executor::<Tuple: ResourceTuple>::run()`,
 //! - tuple of references to types in `Tuple` is extracted
 //! from the argument (`RefExtractor`),
 //! - the references, together with `AtomicBorrow`s from the executor,
-//! are wrapped into cells (`ResourceWrap`),
+//! are wrapped into `ResourceCell`s (`ResourceWrap`),
 //! - when each system in the executor is ran, a subset tuple of references matching
 //! that of the system's resources argument is fetched from the cells, setting runtime
 //! borrow checking (`Fetch` for the whole tuple, `Contains` for each of it's elements),

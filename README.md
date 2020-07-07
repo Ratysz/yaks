@@ -32,6 +32,8 @@ The goals are, in no particular order:
 
 - `parallel` - enabled by default; can be disabled to force `yaks` to work on a single thread.
 Useful for writing the code once, and running it on platforms with or without threading.
+- `resources-interop` - when enabled, allows `Executor::run()` to also
+accept `Resources` struct from the `resources` crate in place of resources argument.
 
 # Example
 

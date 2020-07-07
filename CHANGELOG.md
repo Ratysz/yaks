@@ -6,10 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/Ratysz/yaks/compare/0.1.0..HEAD)
 ### Added
+- `resources-interop` feature: when enabled, allows `Executor::run()` to also
+accept `Resources` struct from the `resources` crate in place of resources argument.
+- `SystemContext::reserve_entity()`, `::contains()`, `::archetypes()`,
+and `::archetype_generation()`, mirroring similar methods of `hecs::World`.
 - CI badge.
 ### Changed
-- Fixed changelog dates.
+- `Executor::run()` now uses `rayon::scope_fifo()`.
 - Minor doc tweaks.
+- Fixed changelog dates.
+- Internal refactors.
 ### Removed
 - `test` feature.
 

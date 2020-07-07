@@ -3,6 +3,8 @@ use hecs::World;
 use super::{ResourceTuple, ResourceWrap};
 use crate::Executor;
 
+// TODO consider exposing.
+
 /// Specifies how a tuple of references may be extracted from the implementor and used
 /// as resources when running an executor.
 pub trait RefExtractor<RefSource>: ResourceTuple + Sized {
