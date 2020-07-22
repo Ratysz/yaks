@@ -1,15 +1,28 @@
 use crossbeam_channel::{Receiver, Sender};
 use hecs::{ArchetypesGeneration, World};
+use parking_lot::Mutex;
 use rayon::ScopeFifo;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use super::{System, DISCONNECTED, INVALID_ID};
-use crate::{ResourceTuple, SystemContext, SystemId};
+use super::{DependantsLength, SystemClosure, DISCONNECTED, INVALID_ID};
+use crate::{ArchetypeSet, BorrowSet, ResourceTuple, SystemContext, SystemId};
 
-/// Typed `usize` used to cache the amount of dependants the system associated
-/// with a `SystemId` has; avoids hashmap lookups while sorting.
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-pub struct DependantsLength(pub usize);
+pub struct System<'closure, Resources>
+where
+    Resources: ResourceTuple,
+{
+    pub closure: Arc<Mutex<SystemClosure<'closure, Resources::Wrapped>>>,
+    pub resource_set: BorrowSet,
+    pub component_set: BorrowSet,
+    pub archetype_set: ArchetypeSet,
+    pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    pub dependants: Vec<SystemId>,
+    pub dependencies: usize,
+    pub unsatisfied_dependencies: usize,
+}
 
 /// Parallel executor variant, used when systems cannot be proven to be statically disjoint,
 /// or have dependencies.
@@ -32,7 +45,12 @@ impl<'closures, Resources> Scheduler<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
+    //#[inline]
     pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+        debug_assert!(self.systems_to_run_now.is_empty());
+        debug_assert!(self.systems_running.is_empty());
+        debug_assert!(self.systems_just_finished.is_empty());
+        debug_assert!(self.systems_to_decrement_dependencies.is_empty());
         rayon::scope_fifo(|scope| {
             self.prepare(world);
             // All systems have been ran if there are no queued or currently running systems.
@@ -48,10 +66,6 @@ where
     }
 
     fn prepare(&mut self, world: &World) {
-        debug_assert!(self.systems_to_run_now.is_empty());
-        debug_assert!(self.systems_running.is_empty());
-        debug_assert!(self.systems_just_finished.is_empty());
-        debug_assert!(self.systems_to_decrement_dependencies.is_empty());
         // Queue systems that don't have any dependencies to run first.
         self.systems_to_run_now
             .extend(&self.systems_without_dependencies);
@@ -104,7 +118,7 @@ where
                         },
                         wrapped,
                     );
-                    // Notify dispatching thread than this system has finished running.
+                    // Notify dispatching thread that this system has finished running.
                     sender.send(id).expect(DISCONNECTED);
                 });
             }
@@ -157,26 +171,22 @@ where
             .push(self.receiver.recv().expect(DISCONNECTED));
         // Handle any other systems that may have finished.
         self.systems_just_finished.extend(self.receiver.try_iter());
-        // Remove finished systems from set of running systems.
-        for id in &self.systems_just_finished {
-            self.systems_running.remove(id);
-        }
-        // Gather dependants of finished systems.
-        for finished in &self.systems_just_finished {
-            for dependant in &self.systems.get(finished).expect(INVALID_ID).dependants {
+        for finished in self.systems_just_finished.drain(..) {
+            self.systems_running.remove(&finished);
+            // Gather dependants of the finished system.
+            for dependant in &self.systems.get(&finished).expect(INVALID_ID).dependants {
                 self.systems_to_decrement_dependencies.push(*dependant);
             }
         }
-        self.systems_just_finished.clear();
         // Figure out which of the gathered dependants have had all their dependencies
         // satisfied and queue them to run.
         for id in self.systems_to_decrement_dependencies.drain(..) {
             let system = &mut self.systems.get_mut(&id).expect(INVALID_ID);
-            let dependants = DependantsLength(system.dependants.len());
             let unsatisfied_dependencies = &mut system.unsatisfied_dependencies;
             *unsatisfied_dependencies -= 1;
             if *unsatisfied_dependencies == 0 {
-                self.systems_to_run_now.push((id, dependants));
+                self.systems_to_run_now
+                    .push((id, DependantsLength(system.dependants.len())));
             }
         }
         // Sort queued systems so that those with most dependants run first.

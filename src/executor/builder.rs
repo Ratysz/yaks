@@ -9,8 +9,7 @@ use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemContext, SystemId
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 
-/// Container for parsed systems and their metadata;
-/// destructured in concrete executors' build functions.
+/// Container for systems and their metadata.
 pub struct System<'closure, Resources>
 where
     Resources: ResourceTuple + 'closure,

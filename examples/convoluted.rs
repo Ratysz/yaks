@@ -5,9 +5,6 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::time::{Duration, Instant};
 use yaks::{Executor, QueryMarker, SystemContext};
 
-// Each of the tests will be ran this many times.
-const ITERATIONS: u32 = 100;
-
 // A resource used to inform systems of how many entities they're working with,
 // without explicitly counting them each time.
 struct SpawnedEntities {
@@ -134,12 +131,20 @@ fn find_average_color(
 }
 
 fn main() {
-    // Trying to parse a passed argument, if any.
-    let to_spawn: u32 = std::env::args()
-        .nth(1)
+    // Parsing arguments.
+    let mut args = std::env::args().skip(1).take(2);
+    // How many total entities will be spawned.
+    let to_spawn: u32 = args
+        .next()
         .ok_or(())
         .and_then(|arg| arg.parse::<u32>().map_err(|_| ()))
         .unwrap_or(100_000);
+    // Each of the tests will be ran this many times.
+    let iterations: u32 = args
+        .next()
+        .ok_or(())
+        .and_then(|arg| arg.parse::<u32>().map_err(|_| ()))
+        .unwrap_or(100);
     // Initializing resources.
     let mut rng = StdRng::from_entropy();
     let mut world = World::new();
@@ -176,7 +181,7 @@ fn main() {
     );
     let world = &world;
 
-    let mut iterations = 0u32;
+    let mut counter = 0u32;
 
     // The `Executor` is the main abstraction provided by `yaks`; it tries to execute
     // as much of it's systems at the same time as their borrows allow, while preserving
@@ -193,7 +198,7 @@ fn main() {
         // for the lifetime of the executor.
         // (Don't actually do this. Systems with no resources or queries have
         // no business being in an executor.)
-        .system(|_context, _resources: (), _queries: ()| iterations += 1)
+        .system(|_context, _resources: (), _queries: ()| counter += 1)
         // The builder will panic if given a system with a handle it already contains,
         // a list of dependencies with a system it doesn't contain yet,
         // or a system that depends on itself.
@@ -205,9 +210,9 @@ fn main() {
         // Building is allocating, so executors should be cached whenever possible.
         .build();
 
-    print!("running {} iterations of executor...  ", ITERATIONS);
+    print!("running {} iterations of executor...  ", iterations);
     let mut elapsed = Duration::from_millis(0);
-    for _ in 0..ITERATIONS {
+    for _ in 0..iterations {
         let time = Instant::now();
         // Running the executor requires a tuple of exclusive references to the resources
         // specified in it's generic parameter.
@@ -225,35 +230,43 @@ fn main() {
         );
         elapsed += time.elapsed();
     }
-    println!("average time: {:?}", elapsed / ITERATIONS);
-    drop(executor); // Dropping the executor releases the borrow of `iterations`.
-    assert_eq!(ITERATIONS, iterations);
+    println!("average time: {:?}", elapsed / iterations);
+    drop(executor); // Dropping the executor releases the borrow of `counter`.
+    assert_eq!(iterations, counter);
 
     // The types appearing in system signatures have convenience constructors
     // to allow easily using systems as plain functions.
-    print!("running {} iterations of functions... ", ITERATIONS);
+    print!("running {} iterations of functions... ", iterations);
     let mut elapsed = Duration::from_millis(0);
-    for _ in 0..ITERATIONS {
-        let time = Instant::now();
-        // `SystemContext` can be constructed from `&hecs::World` or `&mut hecs::World`,
-        // or via `SystemContext::new()`.
-        motion(world.into(), &spawned, Default::default());
-        // The zero-sized `QueryMarker` can be constructed by `QueryMarker::new()`; singles
-        // or tuples of them can also be constructed via `Default::default()` (up to 10).
-        find_highest_velocity(
-            SystemContext::new(world),
-            &mut highest_velocity,
-            QueryMarker::new(),
-        );
-        color(world.into(), (&spawned, &mut rng), Default::default());
-        find_average_color(
-            world.into(),
-            (&mut average_color, &spawned),
-            Default::default(),
-        );
-        elapsed += time.elapsed();
-    }
-    println!("average time: {:?}", elapsed / ITERATIONS);
+    let mut functions = || {
+        for _ in 0..iterations {
+            let time = Instant::now();
+            // `SystemContext` can be constructed from `&hecs::World` or `&mut hecs::World`,
+            // or via `SystemContext::new()`.
+            motion(world.into(), &spawned, Default::default());
+            // The zero-sized `QueryMarker` can be constructed by `QueryMarker::new()`; singles
+            // or tuples of them can also be constructed via `Default::default()` (up to 10).
+            find_highest_velocity(
+                SystemContext::new(world),
+                &mut highest_velocity,
+                QueryMarker::new(),
+            );
+            color(world.into(), (&spawned, &mut rng), Default::default());
+            find_average_color(
+                world.into(),
+                (&mut average_color, &spawned),
+                Default::default(),
+            );
+            elapsed += time.elapsed();
+        }
+    };
+    #[cfg(feature = "parallel")]
+    rayon::scope(|_| {
+        functions();
+    });
+    #[cfg(not(feature = "parallel"))]
+    functions();
+    println!("average time: {:?}", elapsed / iterations);
 
     // The `batch()` helper function can also be used outside of systems,
     // since the first argument is simply a `QueryBorrow`.

@@ -8,29 +8,34 @@ use std::{
 use super::SystemClosure;
 use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemId};
 
-mod dispatching;
-mod scheduling;
+mod dispatcher;
+mod scheduler;
+mod scheduler_disjoint;
 
-use dispatching::Dispatcher;
-use scheduling::{DependantsLength, Scheduler};
+use dispatcher::Dispatcher;
+use scheduler::Scheduler;
+use scheduler_disjoint::DisjointScheduler;
 
 static DISCONNECTED: &str = "channel should not be disconnected at this point";
 static INVALID_ID: &str = "system IDs should always be valid";
 
-/// System closure and scheduling metadata container.
-pub struct System<'closure, Resources>
+/// Container for systems and their condensed metadata.
+struct System<'closure, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub closure: Arc<Mutex<SystemClosure<'closure, Resources::Wrapped>>>,
-    pub resource_set: BorrowSet,
-    pub component_set: BorrowSet,
-    pub archetype_set: ArchetypeSet,
-    pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
-    pub dependants: Vec<SystemId>,
-    pub dependencies: usize,
-    pub unsatisfied_dependencies: usize,
+    closure: Arc<Mutex<SystemClosure<'closure, Resources::Wrapped>>>,
+    resource_set: BorrowSet,
+    component_set: BorrowSet,
+    archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    dependants: Vec<SystemId>,
+    dependencies: usize,
 }
+
+/// Typed `usize` used to cache the amount of dependants the system associated
+/// with a `SystemId` has; avoids hashmap lookups while sorting.
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub struct DependantsLength(pub usize);
 
 /// Variants of parallel executor, chosen based on properties of systems in the builder.
 pub enum ExecutorParallel<'closures, Resources>
@@ -45,6 +50,7 @@ where
     /// Used when systems cannot be proven to be statically disjoint,
     /// or have dependencies.
     Scheduling(Scheduler<'closures, Resources>),
+    DisjointScheduling(DisjointScheduler<'closures, Resources>),
 }
 
 impl<'closures, Resources> ExecutorParallel<'closures, Resources>
@@ -62,6 +68,8 @@ where
         } = builder;
         // This guarantees iteration order; TODO probably not necessary?..
         let all_component_types = all_component_types.drain().collect::<Vec<_>>();
+        // Convert systems from builder representation to executor representation,
+        // splitting off dependency collections and condensing component type sets into bitsets.
         let mut systems: HashMap<SystemId, System<'closures, Resources>> = systems
             .drain()
             .map(|(id, system)| {
@@ -77,19 +85,17 @@ where
                         closure: Arc::new(Mutex::new(system.closure)),
                         resource_set: system.resource_set,
                         component_set: system.component_type_set.condense(&all_component_types),
-                        archetype_set: ArchetypeSet::default(),
                         archetype_writer: system.archetype_writer,
                         dependants: vec![],
                         dependencies,
-                        unsatisfied_dependencies: 0,
                     },
                 )
             })
             .collect();
-        // If all systems are independent, it might be possible to use dispatching heuristic.
-        if systems.len() == systems_without_dependencies.len() {
-            let mut tested_ids = Vec::new();
+        // Check if all systems can be ran concurrently, ignoring dependencies.
+        let all_disjoint = {
             let mut all_disjoint = true;
+            let mut tested_ids = Vec::new();
             'outer: for (id, system) in &systems {
                 tested_ids.push(*id);
                 for (id, other) in &systems {
@@ -102,14 +108,16 @@ where
                     }
                 }
             }
-            if all_disjoint {
-                return ExecutorParallel::Dispatching(Dispatcher {
-                    systems: systems
-                        .drain()
-                        .map(|(id, system)| (id, system.closure))
-                        .collect(),
-                });
-            }
+            all_disjoint
+        };
+        // If all systems are disjoint and independent, dispatching heuristic may be used.
+        if all_disjoint && systems.len() == systems_without_dependencies.len() {
+            return ExecutorParallel::Dispatching(Dispatcher {
+                systems: systems
+                    .drain()
+                    .map(|(id, system)| (id, system.closure))
+                    .collect(),
+            });
         }
         // Convert system-dependencies mapping to system-dependants mapping.
         for (dependant_id, mut dependencies) in all_dependencies.drain(..) {
@@ -136,30 +144,78 @@ where
         // This should be guaranteed by the builder's logic anyway.
         debug_assert!(!systems_without_dependencies.is_empty());
         let (sender, receiver) = crossbeam_channel::unbounded();
-        ExecutorParallel::Scheduling(Scheduler {
-            systems,
-            archetypes_generation: None,
-            systems_without_dependencies,
-            systems_to_run_now: Vec::new(),
-            systems_running: HashSet::new(),
-            systems_just_finished: Vec::new(),
-            systems_to_decrement_dependencies: Vec::new(),
-            sender,
-            receiver,
-        })
+        if all_disjoint {
+            ExecutorParallel::DisjointScheduling(DisjointScheduler {
+                systems: systems
+                    .drain()
+                    .map(|(id, system)| {
+                        (
+                            id,
+                            scheduler_disjoint::System {
+                                closure: system.closure,
+                                dependants: system.dependants,
+                                dependencies: system.dependencies,
+                                unsatisfied_dependencies: 0,
+                            },
+                        )
+                    })
+                    .collect(),
+                archetypes_generation: None,
+                systems_without_dependencies,
+                systems_to_run_now: Vec::new(),
+                systems_running: 0,
+                systems_just_finished: Vec::new(),
+                systems_to_decrement_dependencies: Vec::new(),
+                sender,
+                receiver,
+            })
+        } else {
+            ExecutorParallel::Scheduling(Scheduler {
+                systems: systems
+                    .drain()
+                    .map(|(id, system)| {
+                        (
+                            id,
+                            scheduler::System {
+                                closure: system.closure,
+                                resource_set: system.resource_set,
+                                component_set: system.component_set,
+                                archetype_set: Default::default(),
+                                archetype_writer: system.archetype_writer,
+                                dependants: system.dependants,
+                                dependencies: system.dependencies,
+                                unsatisfied_dependencies: 0,
+                            },
+                        )
+                    })
+                    .collect(),
+                archetypes_generation: None,
+                systems_without_dependencies,
+                systems_to_run_now: Vec::new(),
+                systems_running: HashSet::new(),
+                systems_just_finished: Vec::new(),
+                systems_to_decrement_dependencies: Vec::new(),
+                sender,
+                receiver,
+            })
+        }
     }
 
     pub fn force_archetype_recalculation(&mut self) {
+        use ExecutorParallel::*;
         match self {
-            ExecutorParallel::Dispatching(_) => (),
-            ExecutorParallel::Scheduling(scheduler) => scheduler.archetypes_generation = None,
+            Dispatching(_) => (),
+            Scheduling(scheduler) => scheduler.archetypes_generation = None,
+            DisjointScheduling(_) => (),
         }
     }
 
     pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+        use ExecutorParallel::*;
         match self {
-            ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, wrapped),
-            ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, wrapped),
+            Dispatching(dispatcher) => dispatcher.run(world, wrapped),
+            Scheduling(scheduler) => scheduler.run(world, wrapped),
+            DisjointScheduling(disjoint_scheduler) => disjoint_scheduler.run(world, wrapped),
         }
     }
 
@@ -169,6 +225,7 @@ where
         match self {
             Dispatching(dispatcher) => dispatcher,
             Scheduling(_) => panic!("produced executor is a scheduler"),
+            DisjointScheduling(_) => panic!("produced executor is a disjoint scheduler"),
         }
     }
 
@@ -178,6 +235,7 @@ where
         match self {
             Dispatching(_) => panic!("produced executor is a dispatcher"),
             Scheduling(scheduler) => scheduler,
+            DisjointScheduling(_) => panic!("produced executor is a disjoint scheduler"),
         }
     }
 }
