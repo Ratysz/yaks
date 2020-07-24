@@ -119,6 +119,7 @@ mod query_marker;
 mod resource;
 #[cfg(feature = "resources-interop")]
 mod resources_interop;
+mod run;
 mod system_context;
 
 #[cfg(feature = "parallel")]
@@ -130,4 +131,5 @@ use resource::{Fetch, RefExtractor, ResourceTuple};
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
+pub use run::System;
 pub use system_context::SystemContext;

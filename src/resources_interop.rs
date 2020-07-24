@@ -3,6 +3,8 @@ use resources::{Resource, Resources};
 
 use crate::{Executor, RefExtractor};
 
+// TODO sprinkle this in doc examples
+
 impl RefExtractor<&Resources> for () {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, _: &Resources) {
         executor.run(world, ());
