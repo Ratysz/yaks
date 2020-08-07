@@ -7,33 +7,14 @@ use crate::{QueryMarker, SystemId};
 /// Thin wrapper over [`hecs::World`](../hecs/struct.World.html), can prepare queries using a
 /// [`QueryMarker`](struct.QueryMarker.html).
 ///
-/// Instantiating one directly is only useful when calling systems as plain functions,
-/// and can be done via `SystemContext::new()`, or by converting a `&hecs::World`
-/// or `&mut hecs::World`:
-/// ```rust
-/// # use yaks::SystemContext;
-/// fn some_system(_context: SystemContext, _resources: (), _queries: ()) {}
-///
-/// let mut world = hecs::World::new();
-///
-/// some_system(SystemContext::new(&world), (), ());
-/// some_system((&world).into(), (), ());
-/// some_system((&mut world).into(), (), ());
-/// ```
+/// It cannot be instantiated directly. See [`System`](trait.System.html) for instructions
+/// on how to call systems outside of an executor, as plain functions.
 pub struct SystemContext<'scope> {
     pub(crate) system_id: Option<SystemId>,
     pub(crate) world: &'scope World,
 }
 
 impl<'scope> SystemContext<'scope> {
-    /// Wraps a `&hecs::World`. See documentation for `SystemContext` itself.
-    pub fn new(world: &'scope World) -> Self {
-        Self {
-            system_id: None,
-            world,
-        }
-    }
-
     /// Returns a debug-printable `SystemId` if the system is ran in an
     /// [`Executor`](struct.Executor.html), with printed number reflecting
     /// the order of insertion into the [`ExecutorBuilder`](struct.ExecutorBuilder.html).
@@ -142,23 +123,5 @@ impl<'scope> SystemContext<'scope> {
     /// [ag]: ../hecs/struct.World.html#method.archetypes_generation
     pub fn archetypes_generation(&self) -> ArchetypesGeneration {
         self.world.archetypes_generation()
-    }
-}
-
-impl<'scope> From<&'scope World> for SystemContext<'scope> {
-    fn from(world: &'scope World) -> Self {
-        Self {
-            system_id: None,
-            world,
-        }
-    }
-}
-
-impl<'scope> From<&'scope mut World> for SystemContext<'scope> {
-    fn from(world: &'scope mut World) -> Self {
-        Self {
-            system_id: None,
-            world,
-        }
     }
 }

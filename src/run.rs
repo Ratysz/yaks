@@ -5,12 +5,12 @@ use crate::{QueryBundle, SystemContext};
 // TODO improve doc
 /// Automatically implemented on all closures and functions than
 /// can be used as systems in an executor.
-pub trait System<'closure, Resources, Queries, RefSource> {
+pub trait System<'closure, Resources, Queries, RefSource, Marker> {
     /// Zero-cost wrapping function that executes the system.
     fn run(&mut self, world: &World, resources: RefSource);
 }
 
-impl<'closure, Closure, Resources, Queries> System<'closure, Resources, Queries, Resources>
+impl<'closure, Closure, Resources, Queries> System<'closure, Resources, Queries, Resources, ()>
     for Closure
 where
     Closure: FnMut(SystemContext, Resources, Queries) + Send + Sync + 'closure,
@@ -18,18 +18,23 @@ where
     Queries: QueryBundle,
 {
     fn run(&mut self, world: &World, resources: Resources) {
-        self(world.into(), resources, Queries::markers());
+        self(
+            SystemContext {
+                system_id: None,
+                world,
+            },
+            resources,
+            Queries::markers(),
+        );
     }
 }
 
 #[test]
-fn test() {
+fn smoke_test() {
     let world = hecs::World::new();
 
-    fn hello_system(_: SystemContext, _: (), _: ()) {
-        println!("Hello!")
-    }
-    hello_system.run(&world, ());
+    fn dummy_system(_: SystemContext, _: (), _: ()) {}
+    dummy_system.run(&world, ());
 
     let mut counter = 0i32;
     fn increment_system(_: SystemContext, value: &mut i32, _: ()) {
@@ -44,4 +49,6 @@ fn test() {
     }
     sum_system.run(&world, (&mut counter, &increment));
     assert_eq!(counter, 4);
+    sum_system.run(&world, (&mut counter, &increment));
+    assert_eq!(counter, 7);
 }

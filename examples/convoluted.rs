@@ -191,14 +191,14 @@ fn main() {
         // with a specific signature; see `ExecutorBuilder::system()` documentation.
         // The closures can also mutably borrow from their environment,
         // for the lifetime of the executor.
-        // (Don't actually do this. Systems with no resources or queries have
-        // no business being in an executor.)
+        // (Note, systems with no resources or queries have
+        // no business being in an executor, this is for demonstration only.)
         .system(|_context, _resources: (), _queries: ()| iterations += 1)
         // The builder will panic if given a system with a handle it already contains,
         // a list of dependencies with a system it doesn't contain yet,
         // or a system that depends on itself.
         .system_with_deps(find_highest_velocity, vec!["motion"])
-        // Relative order of execution is only guaranteed for systems with explicit dependencies.
+        // Relative order of execution is guaranteed only for systems with explicit dependencies.
         // If the default `parallel` feature is disabled, systems are ran in order of insertion.
         .system_with_handle_and_deps(color, "color", vec!["motion"])
         .system_with_deps(find_average_color, vec!["color"])
@@ -229,28 +229,17 @@ fn main() {
     drop(executor); // Dropping the executor releases the borrow of `iterations`.
     assert_eq!(ITERATIONS, iterations);
 
-    // The types appearing in system signatures have convenience constructors
-    // to allow easily using systems as plain functions.
+    // The automatically implemented trait `System` allows easily calling systems
+    // as plain functions with `::run()`.
+    use yaks::System;
     print!("running {} iterations of functions... ", ITERATIONS);
     let mut elapsed = Duration::from_millis(0);
     for _ in 0..ITERATIONS {
         let time = Instant::now();
-        // `SystemContext` can be constructed from `&hecs::World` or `&mut hecs::World`,
-        // or via `SystemContext::new()`.
-        motion(world.into(), &spawned, Default::default());
-        // The zero-sized `QueryMarker` can be constructed by `QueryMarker::new()`; singles
-        // or tuples of them can also be constructed via `Default::default()` (up to 10).
-        find_highest_velocity(
-            SystemContext::new(world),
-            &mut highest_velocity,
-            QueryMarker::new(),
-        );
-        color(world.into(), (&spawned, &mut rng), Default::default());
-        find_average_color(
-            world.into(),
-            (&mut average_color, &spawned),
-            Default::default(),
-        );
+        motion.run(world, &spawned);
+        find_highest_velocity.run(world, &mut highest_velocity);
+        color.run(world, (&spawned, &mut rng));
+        find_average_color.run(world, (&mut average_color, &spawned));
         elapsed += time.elapsed();
     }
     println!("average time: {:?}", elapsed / ITERATIONS);
@@ -265,10 +254,6 @@ fn main() {
             color.3 = 0.5;
         },
     );
-    find_average_color(
-        world.into(),
-        (&mut average_color, &spawned),
-        Default::default(),
-    );
+    find_average_color.run(world, (&mut average_color, &spawned));
     assert!((average_color.3 - 0.5).abs() < std::f32::EPSILON);
 }
