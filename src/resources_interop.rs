@@ -58,7 +58,7 @@ pub trait Fetch<'a> {
 
 impl<'a, R0> Fetch<'a> for &'_ R0
 where
-    R0: Send + Sync + 'static,
+    R0: Resource,
 {
     type Wrapped = Ref<'a, R0>;
 
@@ -73,7 +73,7 @@ where
 
 impl<'a, R0> Fetch<'a> for &'_ mut R0
 where
-    R0: Send + Sync + 'static,
+    R0: Resource,
 {
     type Wrapped = RefMut<'a, R0>;
 
@@ -100,34 +100,40 @@ where
     }
 }
 
-impl<'a, 'closure, Closure, R0, Queries> System<'closure, R0, Queries, &'a Resources, Resources>
+impl<'a, 'closure, Closure, A, Queries> System<'closure, A, Queries, &'a Resources, Resources>
     for Closure
 where
-    Closure: FnMut(SystemContext, R0, Queries) + 'closure,
-    Closure: System<'closure, R0, Queries, R0, ()>,
-    for<'r0> R0: Fetch<'r0> + 'static,
+    Closure: FnMut(SystemContext, A, Queries) + 'closure,
+    Closure: System<'closure, A, Queries, A, ()>,
+    for<'r0> A: Fetch<'r0>,
     Queries: QueryBundle,
 {
     fn run(&mut self, world: &World, resources: &'a Resources) {
-        let mut refs = R0::fetch(resources);
-        self.run(world, R0::deref(&mut refs));
+        let mut refs = A::fetch(resources);
+        self.run(world, A::deref(&mut refs));
     }
 }
 
-impl<'a, 'closure, Closure, R0, R1, Queries>
-    System<'closure, (R0, R1), Queries, &'a Resources, Resources> for Closure
-where
-    Closure: FnMut(SystemContext, (R0, R1), Queries) + 'closure,
-    Closure: System<'closure, (R0, R1), Queries, (R0, R1), ()>,
-    for<'r0> R0: Fetch<'r0> + 'static,
-    for<'r1> R1: Fetch<'r1> + 'static,
-    Queries: QueryBundle,
-{
-    fn run(&mut self, world: &World, resources: &'a Resources) {
-        let mut refs = (R0::fetch(resources), R1::fetch(resources));
-        self.run(world, (R0::deref(&mut refs.0), R1::deref(&mut refs.1)));
+macro_rules! impl_system {
+    ($($letter:ident),*) => {
+        impl<'a, 'closure, Closure, $($letter),*, Queries>
+            System<'closure, ($($letter),*), Queries, &'a Resources, Resources> for Closure
+        where
+            Closure: FnMut(SystemContext, ($($letter),*), Queries) + 'closure,
+            Closure: System<'closure, ($($letter),*), Queries, ($($letter),*), ()>,
+            $(for<'r> $letter: Fetch<'r>,)*
+            Queries: QueryBundle,
+        {
+            #[allow(non_snake_case)]
+            fn run(&mut self, world: &World, resources: &'a Resources) {
+                let ($(mut $letter,)*) = ($($letter::fetch(resources),)*);
+                self.run(world, ($($letter::deref(&mut $letter),)*));
+            }
+        }
     }
 }
+
+impl_for_tuples!(impl_system);
 
 #[test]
 fn smoke_test() {
