@@ -1,45 +1,97 @@
-use super::{AtomicBorrow, ResourceCell};
+use super::{AtomicBorrow, ResourceCellMut, ResourceCellRef};
 
-/// Specifies how a tuple of references is wrapped into a tuple of cells.
-pub trait ResourceWrap {
+trait WrappableSingle {
+    type Wrapped: Send + Sync;
+
+    fn wrap(self, borrow: &mut AtomicBorrow) -> Self::Wrapped;
+}
+
+impl<R0> WrappableSingle for &'_ R0
+where
+    R0: Send + Sync,
+{
+    type Wrapped = ResourceCellRef<R0>;
+
+    fn wrap(self, borrow: &mut AtomicBorrow) -> Self::Wrapped {
+        ResourceCellRef::new(self, borrow)
+    }
+}
+
+impl<R0> WrappableSingle for &'_ mut R0
+where
+    R0: Send + Sync,
+{
+    type Wrapped = ResourceCellMut<R0>;
+
+    fn wrap(self, borrow: &mut AtomicBorrow) -> Self::Wrapped {
+        ResourceCellMut::new(self, borrow)
+    }
+}
+
+pub trait Wrappable {
     type Wrapped: Send + Sync;
     type BorrowTuple: Send + Sync;
 
-    fn wrap(&mut self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped;
+    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped;
 }
 
-impl ResourceWrap for () {
+impl<R0> Wrappable for &'_ R0
+where
+    R0: Send + Sync,
+{
+    type Wrapped = (ResourceCellRef<R0>,);
+    type BorrowTuple = (AtomicBorrow,);
+
+    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
+        (ResourceCellRef::new(self, &mut borrows.0),)
+    }
+}
+
+impl<R0> Wrappable for &'_ mut R0
+where
+    R0: Send + Sync,
+{
+    type Wrapped = (ResourceCellMut<R0>,);
+    type BorrowTuple = (AtomicBorrow,);
+
+    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
+        (ResourceCellMut::new(self, &mut borrows.0),)
+    }
+}
+
+impl Wrappable for () {
     type Wrapped = ();
     type BorrowTuple = ();
 
-    fn wrap(&mut self, _: &mut Self::BorrowTuple) -> Self::Wrapped {}
+    fn wrap(self, _: &mut Self::BorrowTuple) -> Self::Wrapped {}
 }
 
-impl<R0> ResourceWrap for &'_ mut R0
+impl<R0> Wrappable for (R0,)
 where
-    R0: Send + Sync,
+    R0: WrappableSingle,
 {
-    type Wrapped = (ResourceCell<R0>,);
+    type Wrapped = (R0::Wrapped,);
     type BorrowTuple = (AtomicBorrow,);
 
-    fn wrap(&mut self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
-        (ResourceCell::new(self, &mut borrows.0),)
+    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
+        (self.0.wrap(&mut borrows.0),)
     }
 }
 
-impl<R0> ResourceWrap for (&'_ mut R0,)
+impl<R0, R1> Wrappable for (R0, R1)
 where
-    R0: Send + Sync,
+    R0: WrappableSingle,
+    R1: WrappableSingle,
 {
-    type Wrapped = (ResourceCell<R0>,);
-    type BorrowTuple = (AtomicBorrow,);
+    type Wrapped = (R0::Wrapped, R1::Wrapped);
+    type BorrowTuple = (AtomicBorrow, AtomicBorrow);
 
-    fn wrap(&mut self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
-        (ResourceCell::new(self.0, &mut borrows.0),)
+    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
+        (self.0.wrap(&mut borrows.0), self.1.wrap(&mut borrows.1))
     }
 }
 
-macro_rules! swap_to_atomic_borrow {
+/*macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
     };
@@ -69,4 +121,4 @@ macro_rules! impl_resource_wrap {
     }
 }
 
-impl_for_tuples!(impl_resource_wrap);
+impl_for_tuples!(impl_resource_wrap);*/

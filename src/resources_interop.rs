@@ -1,7 +1,7 @@
 use hecs::World;
 use resources::{Ref, RefMut, Resource, Resources};
 
-use crate::{Executor, QueryBundle, RefExtractor, System, SystemContext};
+use crate::{Executor, QueryBundle, RefExtractor, ResourceTuple, System, SystemContext};
 
 // TODO sprinkle this in doc examples
 
@@ -13,6 +13,7 @@ impl RefExtractor<&Resources> for () {
 
 impl<R0> RefExtractor<&Resources> for (R0,)
 where
+    Self: ResourceTuple,
     R0: Resource,
 {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: &Resources) {
@@ -28,6 +29,7 @@ macro_rules! impl_ref_extractor {
     ($($letter:ident),*) => {
         impl<'a, $($letter),*> RefExtractor<&Resources> for ($($letter,)*)
         where
+            Self: ResourceTuple,
             $($letter: Resource,)*
         {
             #[allow(non_snake_case)]

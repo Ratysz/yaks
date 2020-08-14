@@ -20,11 +20,11 @@ mod ref_extractor;
 mod tuple;
 mod wrap;
 
-use cell::ResourceCell;
-use contains::Contains;
+use cell::{ResourceCell, ResourceCellMut, ResourceCellRef};
+use contains::{Contains, ContainsMut, ContainsRef};
 
 pub use atomic_borrow::AtomicBorrow;
 pub use fetch::Fetch;
 pub use ref_extractor::RefExtractor;
-pub use tuple::ResourceTuple;
-pub use wrap::ResourceWrap;
+pub use tuple::{Mut, Ref, ResourceTuple};
+pub use wrap::Wrappable;

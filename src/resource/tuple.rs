@@ -1,12 +1,63 @@
-use super::{AtomicBorrow, ResourceCell};
+use std::marker::PhantomData;
 
-/// Specifies how a tuple behaves when used as the generic parameter of an executor.
+use super::{AtomicBorrow, ResourceCellMut, ResourceCellRef};
+
+/// Marker to denote that the executor will be borrowing the type `Resource` immutably.
+pub struct Ref<Resource>(PhantomData<Resource>);
+
+/// Marker to denote that the executor will be borrowing the type `Resource` mutably.
+pub struct Mut<Resource>(PhantomData<Resource>);
+
+pub trait ResourceSingle {
+    type Wrapped: Send + Sync;
+}
+
+impl<R0> ResourceSingle for Ref<R0>
+where
+    R0: Send + Sync,
+{
+    type Wrapped = ResourceCellRef<R0>;
+}
+
+impl<R0> ResourceSingle for Mut<R0>
+where
+    R0: Send + Sync,
+{
+    type Wrapped = ResourceCellMut<R0>;
+}
+
 pub trait ResourceTuple {
     type Wrapped: Send + Sync;
     type BorrowTuple: Send + Sync;
     const LENGTH: usize;
 
     fn instantiate_borrows() -> Self::BorrowTuple;
+}
+
+impl<R0> ResourceTuple for Ref<R0>
+where
+    R0: Send + Sync,
+{
+    type Wrapped = (ResourceCellRef<R0>,);
+    type BorrowTuple = (AtomicBorrow,);
+    const LENGTH: usize = 1;
+
+    fn instantiate_borrows() -> Self::BorrowTuple {
+        (AtomicBorrow::new(),)
+    }
+}
+
+impl<R0> ResourceTuple for Mut<R0>
+where
+    R0: Send + Sync,
+{
+    type Wrapped = (ResourceCellMut<R0>,);
+    type BorrowTuple = (AtomicBorrow,);
+    const LENGTH: usize = 1;
+
+    fn instantiate_borrows() -> Self::BorrowTuple {
+        (AtomicBorrow::new(),)
+    }
 }
 
 impl ResourceTuple for () {
@@ -19,9 +70,9 @@ impl ResourceTuple for () {
 
 impl<R0> ResourceTuple for (R0,)
 where
-    R0: Send + Sync,
+    R0: ResourceSingle,
 {
-    type Wrapped = (ResourceCell<R0>,);
+    type Wrapped = (R0::Wrapped,);
     type BorrowTuple = (AtomicBorrow,);
     const LENGTH: usize = 1;
 
@@ -30,7 +81,21 @@ where
     }
 }
 
-macro_rules! swap_to_atomic_borrow {
+impl<R0, R1> ResourceTuple for (R0, R1)
+where
+    R0: ResourceSingle,
+    R1: ResourceSingle,
+{
+    type Wrapped = (R0::Wrapped, R1::Wrapped);
+    type BorrowTuple = (AtomicBorrow, AtomicBorrow);
+    const LENGTH: usize = 2;
+
+    fn instantiate_borrows() -> Self::BorrowTuple {
+        (AtomicBorrow::new(), AtomicBorrow::new())
+    }
+}
+
+/*macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
     };
@@ -56,4 +121,4 @@ macro_rules! impl_resource_tuple {
     }
 }
 
-impl_for_tuples!(impl_resource_tuple);
+impl_for_tuples!(impl_resource_tuple);*/

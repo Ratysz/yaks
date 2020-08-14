@@ -1,6 +1,6 @@
 use hecs::World;
 
-use super::{ResourceTuple, ResourceWrap};
+use super::{ResourceTuple, Wrappable};
 use crate::Executor;
 
 // TODO consider exposing.
@@ -11,7 +11,7 @@ pub trait RefExtractor<RefSource>: ResourceTuple + Sized {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: RefSource);
 }
 
-impl RefExtractor<()> for () {
+/*impl RefExtractor<()> for () {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, _: ()) {
         executor.inner.run(world, ());
     }
@@ -19,6 +19,7 @@ impl RefExtractor<()> for () {
 
 impl<R0> RefExtractor<&mut R0> for (R0,)
 where
+    Self: ResourceTuple,
     R0: Send + Sync,
 {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: &mut R0) {
@@ -29,6 +30,7 @@ where
 
 impl<R0> RefExtractor<(&mut R0,)> for (R0,)
 where
+    Self: ResourceTuple,
     R0: Send + Sync,
 {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: (&mut R0,)) {
@@ -41,6 +43,7 @@ macro_rules! impl_ref_extractor {
     ($($letter:ident),*) => {
         impl<'a, $($letter),*> RefExtractor<($(&mut $letter,)*)> for ($($letter,)*)
         where
+            Self: ResourceTuple,
             $($letter: Send + Sync,)*
         {
             fn extract_and_run(
@@ -56,3 +59,4 @@ macro_rules! impl_ref_extractor {
 }
 
 impl_for_tuples!(impl_ref_extractor);
+*/

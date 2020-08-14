@@ -1,7 +1,23 @@
-use super::Contains;
+use super::{Contains, ContainsMut, ContainsRef};
 
 #[cfg(feature = "parallel")]
 use crate::BorrowSet;
+
+pub trait Fetch2<'a, R> {
+    fn fetch(cells: &'a R) -> Self;
+
+    fn release(cells: &'a R);
+}
+
+impl<'a, R, R0> Fetch2<'a, R> for &'a R0 {
+    fn fetch(cells: &'a R) -> Self {
+        unimplemented!()
+    }
+
+    fn release(cells: &'a R) {
+        unimplemented!()
+    }
+}
 
 /// Specifies how a tuple of types may be borrowed from a tuple of cells.
 pub trait Fetch<'a, T, M0>: Sized {

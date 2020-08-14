@@ -194,7 +194,7 @@ where
 mod tests {
     use super::super::ExecutorParallel;
     use crate::{
-        resource::{AtomicBorrow, ResourceWrap},
+        resource::{AtomicBorrow, Wrappable},
         Executor, QueryMarker, SystemContext,
     };
     use hecs::World;

@@ -131,5 +131,6 @@ use resource::{Fetch, RefExtractor, ResourceTuple};
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
+pub use resource::Mut;
 pub use run::System;
 pub use system_context::SystemContext;
