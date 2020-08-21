@@ -1,10 +1,10 @@
 use hecs::World;
 use resources::{Resource, Resources};
 
-use crate::{
-    AtomicBorrow, Executor, Mut, QueryBundle, Ref, RefExtractor, ResourceMutCell, ResourceRefCell,
-    ResourceTuple, System, SystemContext,
+use super::{
+    AtomicBorrow, Mut, Ref, RefExtractor, ResourceMutCell, ResourceRefCell, ResourceTuple,
 };
+use crate::{Executor, QueryBundle, System, SystemContext};
 
 // TODO sprinkle this in doc examples
 
@@ -120,7 +120,9 @@ where
     }
 
     fn wrap(fetched: &mut Self::Fetched, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
-        (F0::wrap(&mut fetched.0, &mut borrows.0),)
+        let (fetched,) = fetched;
+        let (borrow,) = borrows;
+        (F0::wrap(fetched, borrow),)
     }
 }
 

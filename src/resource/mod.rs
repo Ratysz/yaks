@@ -17,6 +17,8 @@ mod cell;
 mod contains;
 mod fetch;
 mod ref_extractor;
+#[cfg(feature = "resources-interop")]
+mod resources_interop;
 mod tuple;
 mod wrap;
 

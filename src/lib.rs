@@ -119,8 +119,6 @@ mod executor;
 mod query_bundle;
 mod query_marker;
 mod resource;
-#[cfg(feature = "resources-interop")]
-mod resources_interop;
 mod run;
 mod system_context;
 
@@ -128,9 +126,7 @@ mod system_context;
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
 use query_bundle::QueryBundle;
-use resource::{
-    AtomicBorrow, Fetch, RefExtractor, ResourceMutCell, ResourceRefCell, ResourceTuple,
-};
+use resource::{Fetch, RefExtractor, ResourceTuple};
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
