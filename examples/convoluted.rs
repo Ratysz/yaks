@@ -3,7 +3,7 @@
 use hecs::World;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::time::{Duration, Instant};
-use yaks::{Executor, QueryMarker, SystemContext};
+use yaks::{Executor, Mut, QueryMarker, Ref, SystemContext};
 
 // Each of the tests will be ran this many times.
 const ITERATIONS: u32 = 100;
@@ -182,28 +182,29 @@ fn main() {
     // as much of it's systems at the same time as their borrows allow, while preserving
     // given order of execution, if any.
     // The generic parameter is the superset of resource sets of all of it's systems.
-    let mut executor = Executor::<'_, (SpawnedEntities, StdRng, Color, Velocity)>::builder()
-        // Handles and dependencies are optional,
-        // can be of any type that is `Eq + Hash + Debug`,
-        // and are discarded on `build()`.
-        .system_with_handle(motion, "motion")
-        // Systems can be defined by either a function or a closure
-        // with a specific signature; see `ExecutorBuilder::system()` documentation.
-        // The closures can also mutably borrow from their environment,
-        // for the lifetime of the executor.
-        // (Note, systems with no resources or queries have
-        // no business being in an executor, this is for demonstration only.)
-        .system(|_context, _resources: (), _queries: ()| iterations += 1)
-        // The builder will panic if given a system with a handle it already contains,
-        // a list of dependencies with a system it doesn't contain yet,
-        // or a system that depends on itself.
-        .system_with_deps(find_highest_velocity, vec!["motion"])
-        // Relative order of execution is guaranteed only for systems with explicit dependencies.
-        // If the default `parallel` feature is disabled, systems are ran in order of insertion.
-        .system_with_handle_and_deps(color, "color", vec!["motion"])
-        .system_with_deps(find_average_color, vec!["color"])
-        // Building is allocating, so executors should be cached whenever possible.
-        .build();
+    let mut executor =
+        Executor::<'_, (Ref<SpawnedEntities>, Mut<StdRng>, Mut<Color>, Mut<Velocity>)>::builder()
+            // Handles and dependencies are optional,
+            // can be of any type that is `Eq + Hash + Debug`,
+            // and are discarded on `build()`.
+            .system_with_handle(motion, "motion")
+            // Systems can be defined by either a function or a closure
+            // with a specific signature; see `ExecutorBuilder::system()` documentation.
+            // The closures can also mutably borrow from their environment,
+            // for the lifetime of the executor.
+            // (Note, systems with no resources or queries have
+            // no business being in an executor, this is for demonstration only.)
+            .system(|_context, _resources: (), _queries: ()| iterations += 1)
+            // The builder will panic if given a system with a handle it already contains,
+            // a list of dependencies with a system it doesn't contain yet,
+            // or a system that depends on itself.
+            .system_with_deps(find_highest_velocity, vec!["motion"])
+            // Relative order of execution is guaranteed only for systems with explicit dependencies.
+            // If the default `parallel` feature is disabled, systems are ran in order of insertion.
+            .system_with_handle_and_deps(color, "color", vec!["motion"])
+            .system_with_deps(find_average_color, vec!["color"])
+            // Building is allocating, so executors should be cached whenever possible.
+            .build();
 
     print!("running {} iterations of executor...  ", ITERATIONS);
     let mut elapsed = Duration::from_millis(0);
@@ -217,7 +218,7 @@ fn main() {
         executor.run(
             world,
             (
-                &mut spawned,
+                &spawned,
                 &mut rng,
                 &mut average_color,
                 &mut highest_velocity,

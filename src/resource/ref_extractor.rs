@@ -11,29 +11,38 @@ pub trait RefExtractor<RefSource>: ResourceTuple + Sized {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: RefSource);
 }
 
+impl<W, T> RefExtractor<W> for T
+where
+    W: Wrappable<Wrapped = T::Wrapped, BorrowTuple = T::BorrowTuple>,
+    T: ResourceTuple,
+{
+    fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: W) {
+        let wrapped = resources.wrap(&mut executor.borrows);
+        executor.inner.run(world, wrapped);
+    }
+}
+
 /*impl RefExtractor<()> for () {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, _: ()) {
         executor.inner.run(world, ());
     }
 }
 
-impl<R0> RefExtractor<&mut R0> for (R0,)
+impl<R0> RefExtractor<&R0> for (Ref<R0>,)
 where
     Self: ResourceTuple,
-    R0: Send + Sync,
 {
-    fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: &mut R0) {
+    fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: &R0) {
         let wrapped = resources.wrap(&mut executor.borrows);
         executor.inner.run(world, wrapped);
     }
 }
 
-impl<R0> RefExtractor<(&mut R0,)> for (R0,)
+impl<R0> RefExtractor<&mut R0> for (Mut<R0>,)
 where
     Self: ResourceTuple,
-    R0: Send + Sync,
 {
-    fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: (&mut R0,)) {
+    fn extract_and_run(executor: &mut Executor<Self>, world: &World, mut resources: &mut R0) {
         let wrapped = resources.wrap(&mut executor.borrows);
         executor.inner.run(world, wrapped);
     }
@@ -58,5 +67,4 @@ macro_rules! impl_ref_extractor {
     }
 }
 
-impl_for_tuples!(impl_ref_extractor);
-*/
+impl_for_tuples!(impl_ref_extractor);*/

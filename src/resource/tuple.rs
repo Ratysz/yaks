@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{AtomicBorrow, ResourceCellMut, ResourceCellRef};
+use super::{AtomicBorrow, ResourceMutCell, ResourceRefCell};
 
 /// Marker to denote that the executor will be borrowing the type `Resource` immutably.
 pub struct Ref<Resource>(PhantomData<Resource>);
@@ -16,14 +16,14 @@ impl<R0> ResourceSingle for Ref<R0>
 where
     R0: Send + Sync,
 {
-    type Wrapped = ResourceCellRef<R0>;
+    type Wrapped = ResourceRefCell<R0>;
 }
 
 impl<R0> ResourceSingle for Mut<R0>
 where
     R0: Send + Sync,
 {
-    type Wrapped = ResourceCellMut<R0>;
+    type Wrapped = ResourceMutCell<R0>;
 }
 
 pub trait ResourceTuple {
@@ -38,7 +38,7 @@ impl<R0> ResourceTuple for Ref<R0>
 where
     R0: Send + Sync,
 {
-    type Wrapped = (ResourceCellRef<R0>,);
+    type Wrapped = (ResourceRefCell<R0>,);
     type BorrowTuple = (AtomicBorrow,);
     const LENGTH: usize = 1;
 
@@ -51,7 +51,7 @@ impl<R0> ResourceTuple for Mut<R0>
 where
     R0: Send + Sync,
 {
-    type Wrapped = (ResourceCellMut<R0>,);
+    type Wrapped = (ResourceMutCell<R0>,);
     type BorrowTuple = (AtomicBorrow,);
     const LENGTH: usize = 1;
 
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<R0, R1> ResourceTuple for (R0, R1)
+/*impl<R0, R1> ResourceTuple for (R0, R1)
 where
     R0: ResourceSingle,
     R1: ResourceSingle,
@@ -93,9 +93,9 @@ where
     fn instantiate_borrows() -> Self::BorrowTuple {
         (AtomicBorrow::new(), AtomicBorrow::new())
     }
-}
+}*/
 
-/*macro_rules! swap_to_atomic_borrow {
+macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
     };
@@ -108,9 +108,9 @@ macro_rules! impl_resource_tuple {
     ($($letter:ident),*) => {
         impl<$($letter),*> ResourceTuple for ($($letter,)*)
         where
-            $($letter: Send + Sync,)*
+            $($letter: ResourceSingle,)*
         {
-            type Wrapped = ($(ResourceCell<$letter>,)*);
+            type Wrapped = ($($letter::Wrapped,)*);
             type BorrowTuple = ($(swap_to_atomic_borrow!($letter),)*);
             const LENGTH: usize = count!($($letter)*);
 
@@ -121,4 +121,4 @@ macro_rules! impl_resource_tuple {
     }
 }
 
-impl_for_tuples!(impl_resource_tuple);*/
+impl_for_tuples!(impl_resource_tuple);

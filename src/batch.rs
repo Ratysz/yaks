@@ -63,7 +63,6 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// `batch()` can be called in systems, where it will use whichever thread pool is used by
 /// the system or the executor it's in:
 /// ```rust
-/// # use yaks::{QueryMarker, Executor};
 /// # struct Pos;
 /// # struct Vel;
 /// # impl std::ops::AddAssign<&Vel> for Pos {
@@ -87,7 +86,9 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// #     }
 /// #     DummyPool
 /// # };
-/// let mut executor = Executor::<(u32, )>::builder()
+/// use yaks::{QueryMarker, Executor, Ref};
+///
+/// let mut executor = Executor::<Ref<u32>>::builder()
 ///     .system(|context, num_entities: &u32, query: QueryMarker<(&mut Pos, &Vel)>| {
 ///         yaks::batch(
 ///             &mut context.query(query),
@@ -99,10 +100,10 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 ///     })
 ///     .build();
 ///
-/// executor.run(&world, &mut num_entities);
+/// executor.run(&world, &num_entities);
 ///
 /// thread_pool.install(|| {
-///     executor.run(&world, &mut num_entities);
+///     executor.run(&world, &num_entities);
 /// });
 /// ```
 pub fn batch<'query, 'world, Q, F>(

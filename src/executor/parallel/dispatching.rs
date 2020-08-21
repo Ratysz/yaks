@@ -41,7 +41,7 @@ mod tests {
     use super::super::ExecutorParallel;
     use crate::{
         resource::{AtomicBorrow, Wrappable},
-        Executor, QueryMarker,
+        Executor, Mut, QueryMarker, Ref,
     };
     use hecs::World;
 
@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn trivial_with_resources() {
-        ExecutorParallel::<(A, B, C)>::build(
+        ExecutorParallel::<(Ref<A>, Ref<B>, Ref<C>)>::build(
             Executor::builder()
                 .system(|_, _: (), _: ()| {})
                 .system(|_, _: (), _: ()| {}),
@@ -74,8 +74,8 @@ mod tests {
         let world = World::new();
         let mut a = A(0);
         let mut b = B(1);
-        let mut c = C(2);
-        let mut executor = ExecutorParallel::<(A, B, C)>::build(
+        let c = C(2);
+        let mut executor = ExecutorParallel::<(Mut<A>, Mut<B>, Ref<C>)>::build(
             Executor::builder()
                 .system(|_, (a, c): (&mut A, &C), _: ()| {
                     a.0 += c.0;
@@ -90,7 +90,7 @@ mod tests {
             AtomicBorrow::new(),
             AtomicBorrow::new(),
         );
-        let wrapped = (&mut a, &mut b, &mut c).wrap(&mut borrows);
+        let wrapped = (&mut a, &mut b, &c).wrap(&mut borrows);
         executor.run(&world, wrapped);
         assert_eq!(a.0, 2);
         assert_eq!(b.0, 3);
@@ -100,8 +100,8 @@ mod tests {
     fn components_disjoint() {
         let mut world = World::new();
         world.spawn_batch((0..10).map(|_| (A(0), B(0), C(0))));
-        let mut a = A(1);
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let a = A(1);
+        let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
                 .system(|ctx, a: &A, q: QueryMarker<(&A, &mut B)>| {
                     for (_, (_, b)) in ctx.query(q).iter() {
@@ -116,7 +116,7 @@ mod tests {
         )
         .unwrap_to_dispatcher();
         let mut borrow = (AtomicBorrow::new(),);
-        let wrapped = (&mut a).wrap(&mut borrow);
+        let wrapped = (&a).wrap(&mut borrow);
         executor.run(&world, wrapped);
         for (_, (b, c)) in world.query::<(&B, &C)>().iter() {
             assert_eq!(b.0, 1);

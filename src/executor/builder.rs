@@ -106,11 +106,12 @@ where
     ///
     /// # Example
     /// ```rust
-    /// # use yaks::{QueryMarker, SystemContext, Executor};
     /// # let world = hecs::World::new();
     /// # struct A;
     /// # struct B;
     /// # struct C;
+    /// use yaks::{QueryMarker, SystemContext, Executor, Ref, Mut};
+    ///
     /// fn system_0(
     ///     context: SystemContext,
     ///     res_a: &A,
@@ -134,7 +135,7 @@ where
     ///
     /// let mut increment = 0;
     /// // All together, systems require resources of types `A`, `B`, and `C`.
-    /// let mut executor = Executor::<(A, B, C)>::builder()
+    /// let mut executor = Executor::<(Mut<A>, Ref<B>, Mut<C>)>::builder()
     ///     .system(system_0)
     ///     .system(system_1)
     ///     .system(|context, res_c: &C, _queries: ()| {
@@ -142,10 +143,10 @@ where
     ///         increment += 1; // `increment` will be borrowed by the executor.
     ///     })
     ///     .build();
-    /// let (mut a, mut b, mut c) = (A, B, C);
-    /// executor.run(&world, (&mut a, &mut b, &mut c));
-    /// executor.run(&world, (&mut a, &mut b, &mut c));
-    /// executor.run(&world, (&mut a, &mut b, &mut c));
+    /// let (mut a, b, mut c) = (A, B, C);
+    /// executor.run(&world, (&mut a, &b, &mut c));
+    /// executor.run(&world, (&mut a, &b, &mut c));
+    /// executor.run(&world, (&mut a, &b, &mut c));
     /// drop(executor); // This releases the borrow of `increment`.
     /// assert_eq!(increment, 3);
     /// ```

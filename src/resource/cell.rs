@@ -2,12 +2,12 @@ use std::{ptr::NonNull, thread::panicking};
 
 use super::AtomicBorrow;
 
-pub struct ResourceCellRef<R0> {
+pub struct ResourceRefCell<R0> {
     pointer: NonNull<R0>,
     borrow: NonNull<AtomicBorrow>,
 }
 
-impl<R0> ResourceCellRef<R0>
+impl<R0> ResourceRefCell<R0>
 where
     R0: Send + Sync,
 {
@@ -19,11 +19,11 @@ where
     }
 }
 
-unsafe impl<R0> Send for ResourceCellRef<R0> where R0: Send {}
+unsafe impl<R0> Send for ResourceRefCell<R0> where R0: Send {}
 
-unsafe impl<R0> Sync for ResourceCellRef<R0> where R0: Sync {}
+unsafe impl<R0> Sync for ResourceRefCell<R0> where R0: Sync {}
 
-impl<R0> Drop for ResourceCellRef<R0> {
+impl<R0> Drop for ResourceRefCell<R0> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         if !panicking() {
@@ -36,12 +36,12 @@ impl<R0> Drop for ResourceCellRef<R0> {
     }
 }
 
-pub struct ResourceCellMut<R0> {
+pub struct ResourceMutCell<R0> {
     pointer: NonNull<R0>,
     borrow: NonNull<AtomicBorrow>,
 }
 
-impl<R0> ResourceCellMut<R0>
+impl<R0> ResourceMutCell<R0>
 where
     R0: Send + Sync,
 {
@@ -53,11 +53,11 @@ where
     }
 }
 
-unsafe impl<R0> Send for ResourceCellMut<R0> where R0: Send {}
+unsafe impl<R0> Send for ResourceMutCell<R0> where R0: Send {}
 
-unsafe impl<R0> Sync for ResourceCellMut<R0> where R0: Sync {}
+unsafe impl<R0> Sync for ResourceMutCell<R0> where R0: Sync {}
 
-impl<R0> Drop for ResourceCellMut<R0> {
+impl<R0> Drop for ResourceMutCell<R0> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         if !panicking() {
@@ -81,7 +81,7 @@ pub trait ResourceCell<R0> {
     unsafe fn release_mut(&self);
 }
 
-impl<R0> ResourceCell<R0> for ResourceCellRef<R0>
+impl<R0> ResourceCell<R0> for ResourceRefCell<R0>
 where
     R0: Send + Sync,
 {
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<R0> ResourceCell<R0> for ResourceCellMut<R0>
+impl<R0> ResourceCell<R0> for ResourceMutCell<R0>
 where
     R0: Send + Sync,
 {

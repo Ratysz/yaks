@@ -43,7 +43,7 @@
 //!
 //! ```rust
 //! use hecs::{With, Without, World};
-//! use yaks::{Executor, QueryMarker};
+//! use yaks::{Executor, QueryMarker, Ref, Mut};
 //!
 //! let mut world = World::new();
 //! let mut entities = 0u32;
@@ -55,9 +55,9 @@
 //!     entities += 1;
 //!     (index, index as f32)
 //! }));
-//! let mut increment = 5usize;
+//! let increment = 5usize;
 //! let mut average = 0f32;
-//! let mut executor = Executor::<(u32, usize, f32)>::builder()
+//! let mut executor = Executor::<(Ref<u32>, Ref<usize>, Mut<f32>)>::builder()
 //!     .system_with_handle(
 //!         |context, (entities, average): (&u32, &mut f32), query: QueryMarker<&f32>| {
 //!             *average = 0.0;
@@ -78,7 +78,7 @@
 //!     )
 //!     .system_with_deps(system_with_two_queries, vec!["increment", "average"])
 //!     .build();
-//! executor.run(&world, (&mut entities, &mut increment, &mut average));
+//! executor.run(&world, (&entities, &increment, &mut average));
 //!
 //! fn system_with_two_queries(
 //!     context: yaks::SystemContext,
@@ -107,6 +107,8 @@
 
 #![warn(missing_docs)]
 
+// TODO document Ref/Mut properly.
+
 #[macro_use]
 mod tuple_macro;
 
@@ -131,6 +133,6 @@ use resource::{Fetch, RefExtractor, ResourceTuple};
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
-pub use resource::Mut;
+pub use resource::{Mut, Ref};
 pub use run::System;
 pub use system_context::SystemContext;

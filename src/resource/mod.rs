@@ -20,8 +20,8 @@ mod ref_extractor;
 mod tuple;
 mod wrap;
 
-use cell::{ResourceCell, ResourceCellMut, ResourceCellRef};
-use contains::{Contains, ContainsMut, ContainsRef};
+use cell::{ResourceCell, ResourceMutCell, ResourceRefCell};
+use contains::{ContainsMut, ContainsRef};
 
 pub use atomic_borrow::AtomicBorrow;
 pub use fetch::Fetch;

@@ -195,7 +195,7 @@ mod tests {
     use super::super::ExecutorParallel;
     use crate::{
         resource::{AtomicBorrow, Wrappable},
-        Executor, QueryMarker, SystemContext,
+        Executor, Mut, QueryMarker, Ref, SystemContext,
     };
     use hecs::World;
     use rayon::{ScopeFifo, ThreadPoolBuilder};
@@ -348,16 +348,15 @@ mod tests {
     #[test]
     fn resources_incompatible_mutable_immutable() {
         let world = World::new();
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
                 .system(|_, _: &A, _: ()| {})
                 .system(|_, a: &mut A, _: ()| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
-        let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = a.wrap(&mut borrows);
+        let wrapped = (&mut a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -377,16 +376,15 @@ mod tests {
     #[test]
     fn resources_incompatible_mutable_mutable() {
         let world = World::new();
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
                 .system(|_, a: &mut A, _: ()| a.0 += 1)
                 .system(|_, a: &mut A, _: ()| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
-        let mut a = &mut a;
         let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = a.wrap(&mut borrows);
+        let wrapped = (&mut a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -407,7 +405,7 @@ mod tests {
     fn queries_incompatible_mutable_immutable() {
         let mut world = World::new();
         world.spawn_batch((0..10).map(|_| (B(0),)));
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
                 .system(|ctx, _: (), q: QueryMarker<&B>| for (_, _) in ctx.query(q).iter() {})
                 .system(|ctx, a: &A, q: QueryMarker<&mut B>| {
@@ -417,10 +415,9 @@ mod tests {
                 }),
         )
         .unwrap_to_scheduler();
-        let mut a = A(1);
-        let mut a = &mut a;
+        let a = A(1);
         let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = a.wrap(&mut borrows);
+        let wrapped = (&a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -443,7 +440,7 @@ mod tests {
     fn queries_incompatible_mutable_mutable() {
         let mut world = World::new();
         world.spawn_batch((0..10).map(|_| (B(0),)));
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
                 .system(|ctx, a: &A, q: QueryMarker<&mut B>| {
                     for (_, b) in ctx.query(q).iter() {
@@ -457,10 +454,9 @@ mod tests {
                 }),
         )
         .unwrap_to_scheduler();
-        let mut a = A(1);
-        let mut a = &mut a;
+        let a = A(1);
         let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = a.wrap(&mut borrows);
+        let wrapped = (&a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -484,7 +480,7 @@ mod tests {
         let mut world = World::new();
         world.spawn_batch((0..10).map(|_| (A(0), B(0))));
         world.spawn_batch((0..10).map(|_| (B(0), C(0))));
-        let mut executor = ExecutorParallel::<(A,)>::build(
+        let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
                 .system(|ctx, a: &A, q: QueryMarker<(&A, &mut B)>| {
                     for (_, (_, b)) in ctx.query(q).iter() {
@@ -498,10 +494,9 @@ mod tests {
                 }),
         )
         .unwrap_to_scheduler();
-        let mut a = A(2);
-        let mut a = &mut a;
+        let a = A(2);
         let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = a.wrap(&mut borrows);
+        let wrapped = (&a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -519,9 +514,8 @@ mod tests {
         .spawn_batch((0..10).map(|_| (A(0), B(1), C(0))))
         .collect();*/
         world.spawn_batch((0..10).map(|_| (A(0), B(1), C(0))));
-        let mut a = A(1);
-        let mut a = &mut a;
-        let wrapped = a.wrap(&mut borrows);
+        let a = A(1);
+        let wrapped = (&a).wrap(&mut borrows);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);

@@ -138,19 +138,16 @@ where
     /// The `resources` argument when calling this function must be a tuple of exclusive references
     /// to values of types specified by the generic parameter `Resources` of the executor:
     /// ```rust
-    /// # use yaks::Executor;
     /// # let world = hecs::World::new();
-    /// let mut executor = Executor::<(f32, u32)>::builder().build();
-    /// let mut some_f32 = 0f32;
+    /// use yaks::{Executor, Ref, Mut};
+    /// let some_f32 = 0f32;
     /// let mut some_u32 = 0u32;
-    /// executor.run(&world, (&mut some_f32, &mut some_u32));
     ///
-    /// let mut executor = Executor::<(f32, )>::builder().build();
-    /// executor.run(&world, (&mut some_f32, ));
+    /// let mut executor = Executor::<Ref<f32>>::builder().build();
+    /// executor.run(&world, &some_f32);
     ///
-    /// // Single resource type is also special-cased for convenience.
-    /// let mut executor = Executor::<(f32, )>::builder().build();
-    /// executor.run(&world, &mut some_f32);
+    /// let mut executor = Executor::<(Ref<f32>, Mut<u32>)>::builder().build();
+    /// executor.run(&world, (&some_f32, &mut some_u32));
     ///
     /// let mut executor = Executor::<()>::builder().build();
     /// executor.run(&world, ());
