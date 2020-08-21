@@ -128,7 +128,9 @@ mod system_context;
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
 use query_bundle::QueryBundle;
-use resource::{Fetch, RefExtractor, ResourceTuple};
+use resource::{
+    AtomicBorrow, Fetch, RefExtractor, ResourceMutCell, ResourceRefCell, ResourceTuple,
+};
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};

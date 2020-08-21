@@ -78,29 +78,13 @@ where
     }
 }
 
-/*impl<R0, R1> Wrappable for (R0, R1)
-where
-    R0: WrappableSingle,
-    R1: WrappableSingle,
-{
-    type Wrapped = (R0::Wrapped, R1::Wrapped);
-    type BorrowTuple = (AtomicBorrow, AtomicBorrow);
-
-    fn wrap(self, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
-        (self.0.wrap(&mut borrows.0), self.1.wrap(&mut borrows.1))
-    }
-}*/
-
 macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
     };
-    (new $anything:tt) => {
-        AtomicBorrow::new()
-    };
 }
 
-macro_rules! impl_resource_wrap {
+macro_rules! impl_wrappable {
     ($($letter:ident),*) => {
         paste::item! {
             impl<$($letter),*> Wrappable for ($($letter,)*)
@@ -121,4 +105,4 @@ macro_rules! impl_resource_wrap {
     }
 }
 
-impl_for_tuples!(impl_resource_wrap);
+impl_for_tuples!(impl_wrappable);

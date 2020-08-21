@@ -7,11 +7,11 @@ use crate::Executor;
 
 /// Specifies how a tuple of references may be extracted from the implementor and used
 /// as resources when running an executor.
-pub trait RefExtractor<RefSource>: ResourceTuple + Sized {
+pub trait RefExtractor<RefSource, Marker>: ResourceTuple + Sized {
     fn extract_and_run(executor: &mut Executor<Self>, world: &World, resources: RefSource);
 }
 
-impl<W, T> RefExtractor<W> for T
+impl<W, T> RefExtractor<W, ()> for T
 where
     W: Wrappable<Wrapped = T::Wrapped, BorrowTuple = T::BorrowTuple>,
     T: ResourceTuple,

@@ -192,9 +192,9 @@ where
     /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than
     /// in a previous call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<RefSource>(&mut self, world: &World, resources: RefSource)
+    pub fn run<RefSource, Marker>(&mut self, world: &World, resources: RefSource)
     where
-        Resources: RefExtractor<RefSource>,
+        Resources: RefExtractor<RefSource, Marker>,
     {
         Resources::extract_and_run(self, world, resources);
     }
