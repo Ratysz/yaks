@@ -110,7 +110,7 @@
 // TODO document Ref/Mut properly.
 
 #[macro_use]
-mod tuple_macro;
+mod r#macro;
 
 #[cfg(feature = "parallel")]
 mod access_set;
@@ -126,11 +126,11 @@ mod system_context;
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
 use query_bundle::QueryBundle;
-use resource::{Fetch, RefExtractor, ResourceTuple};
+use resource::{Fetch, ResourceTuple, Wrap};
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query_marker::QueryMarker;
-pub use resource::{Mut, Ref};
+pub use resource::{MarkerGet, Mut, Ref};
 pub use run::System;
 pub use system_context::SystemContext;

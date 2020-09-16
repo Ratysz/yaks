@@ -40,7 +40,7 @@ where
 mod tests {
     use super::super::ExecutorParallel;
     use crate::{
-        resource::{AtomicBorrow, Wrappable},
+        resource::{AtomicBorrow, WrappableSingle},
         Executor, Mut, QueryMarker, Ref,
     };
     use hecs::World;
@@ -90,7 +90,11 @@ mod tests {
             AtomicBorrow::new(),
             AtomicBorrow::new(),
         );
-        let wrapped = (&mut a, &mut b, &c).wrap(&mut borrows);
+        let wrapped = (
+            wrap_helper!(mut a, A, borrows.0),
+            wrap_helper!(mut b, B, borrows.1),
+            wrap_helper!(c, C, borrows.2),
+        );
         executor.run(&world, wrapped);
         assert_eq!(a.0, 2);
         assert_eq!(b.0, 3);
@@ -115,8 +119,8 @@ mod tests {
                 }),
         )
         .unwrap_to_dispatcher();
-        let mut borrow = (AtomicBorrow::new(),);
-        let wrapped = (&a).wrap(&mut borrow);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(a, A, borrow),);
         executor.run(&world, wrapped);
         for (_, (b, c)) in world.query::<(&B, &C)>().iter() {
             assert_eq!(b.0, 1);

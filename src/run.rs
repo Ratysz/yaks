@@ -1,13 +1,14 @@
 use hecs::World;
+use std::ops::{Deref, DerefMut};
 
-use crate::{QueryBundle, SystemContext};
+use crate::{MarkerGet, Mut, QueryBundle, Ref, SystemContext};
 
 // TODO improve doc
-/// Automatically implemented on all closures and functions than
-/// can be used as systems in an executor.
-pub trait System<'closure, Resources, Queries, RefSource, Marker> {
+/// Automatically implemented on all closures and functions that can be used
+/// as systems in an executor. It shouldn't be implemented manually.
+pub trait System<'closure, Resources, Queries, Source, Marker> {
     /// Zero-cost wrapping function that executes the system.
-    fn run(&mut self, world: &World, resources: RefSource);
+    fn run(&mut self, world: &World, resources: Source);
 }
 
 impl<'closure, Closure, Resources, Queries> System<'closure, Resources, Queries, Resources, ()>
@@ -28,6 +29,85 @@ where
         );
     }
 }
+
+pub trait Fetchable<Source> {
+    type Fetched;
+
+    fn fetch(source: Source) -> Self::Fetched;
+
+    fn deref(fetched: &mut Self::Fetched) -> Self;
+}
+
+impl<Source, R0> Fetchable<Source> for &'_ R0
+where
+    Source: Copy,
+    Ref<R0>: MarkerGet<Source>,
+    <Ref<R0> as MarkerGet<Source>>::Fetched: Deref<Target = R0>,
+{
+    type Fetched = <Ref<R0> as MarkerGet<Source>>::Fetched;
+
+    fn fetch(source: Source) -> Self::Fetched {
+        <Ref<R0> as MarkerGet<Source>>::fetch(source)
+    }
+
+    fn deref(fetched: &mut Self::Fetched) -> Self {
+        unsafe { std::mem::transmute(&**fetched) }
+    }
+}
+
+impl<Source, R0> Fetchable<Source> for &'_ mut R0
+where
+    Source: Copy,
+    Mut<R0>: MarkerGet<Source>,
+    <Mut<R0> as MarkerGet<Source>>::Fetched: DerefMut<Target = R0>,
+{
+    type Fetched = <Mut<R0> as MarkerGet<Source>>::Fetched;
+
+    fn fetch(source: Source) -> Self::Fetched {
+        <Mut<R0> as MarkerGet<Source>>::fetch(source)
+    }
+
+    fn deref(fetched: &mut Self::Fetched) -> Self {
+        unsafe { std::mem::transmute(&mut **fetched) }
+    }
+}
+
+impl<'closure, Closure, A, Queries, Source> System<'closure, (A,), Queries, Source, (Source,)>
+    for Closure
+where
+    Source: Copy,
+    Closure: FnMut(SystemContext, (A,), Queries) + 'closure,
+    Closure: System<'closure, (A,), Queries, (A,), ()>,
+    A: Fetchable<Source>,
+    Queries: QueryBundle,
+{
+    fn run(&mut self, world: &World, resources: Source) {
+        let mut a = A::fetch(resources);
+        self.run(world, (A::deref(&mut a),));
+    }
+}
+
+macro_rules! impl_system {
+    ($($letter:ident),*) => {
+        impl<'closure, Closure, $($letter),*, Queries, Source>
+            System<'closure, ($($letter),*), Queries, Source, (Source, )> for Closure
+        where
+            Source: Copy,
+            Closure: FnMut(SystemContext, ($($letter),*), Queries) + 'closure,
+            Closure: System<'closure, ($($letter),*), Queries, ($($letter),*), ()>,
+            $($letter: Fetchable<Source>,)*
+            Queries: QueryBundle,
+        {
+            #[allow(non_snake_case)]
+            fn run(&mut self, world: &World, resources: Source) {
+                let ($(mut $letter,)*) = ($($letter::fetch(resources),)*);
+                self.run(world, ($($letter::deref(&mut $letter),)*));
+            }
+        }
+    }
+}
+
+impl_for_tuples!(impl_system);
 
 #[test]
 fn smoke_test() {

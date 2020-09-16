@@ -1,7 +1,7 @@
 use hecs::World;
 use std::collections::HashMap;
 
-use crate::{RefExtractor, ResourceTuple, SystemContext};
+use crate::{ResourceTuple, SystemContext, Wrap};
 
 mod builder;
 
@@ -194,8 +194,8 @@ where
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
     pub fn run<RefSource, Marker>(&mut self, world: &World, resources: RefSource)
     where
-        Resources: RefExtractor<RefSource, Marker>,
+        Resources: Wrap<RefSource, Marker>,
     {
-        Resources::extract_and_run(self, world, resources);
+        Resources::wrap_and_run(self, world, resources);
     }
 }

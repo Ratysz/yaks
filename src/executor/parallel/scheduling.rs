@@ -194,7 +194,7 @@ where
 mod tests {
     use super::super::ExecutorParallel;
     use crate::{
-        resource::{AtomicBorrow, Wrappable},
+        resource::{AtomicBorrow, WrappableSingle},
         Executor, Mut, QueryMarker, Ref, SystemContext,
     };
     use hecs::World;
@@ -355,8 +355,8 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
-        let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = (&mut a).wrap(&mut borrows);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(mut a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -383,8 +383,8 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
-        let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = (&mut a).wrap(&mut borrows);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(mut a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -416,8 +416,8 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let a = A(1);
-        let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = (&a).wrap(&mut borrows);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -455,8 +455,8 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let a = A(1);
-        let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = (&a).wrap(&mut borrows);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -495,8 +495,8 @@ mod tests {
         )
         .unwrap_to_scheduler();
         let a = A(2);
-        let mut borrows = (AtomicBorrow::new(),);
-        let wrapped = (&a).wrap(&mut borrows);
+        let mut borrow = AtomicBorrow::new();
+        let wrapped = (wrap_helper!(a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);
@@ -509,13 +509,14 @@ mod tests {
         for (_, b) in world.query::<&B>().iter() {
             assert_eq!(b.0, 2);
         }
+        drop(wrapped);
 
         /*let mut entities: Vec<_> = world
         .spawn_batch((0..10).map(|_| (A(0), B(1), C(0))))
         .collect();*/
         world.spawn_batch((0..10).map(|_| (A(0), B(1), C(0))));
         let a = A(1);
-        let wrapped = (&a).wrap(&mut borrows);
+        let wrapped = (wrap_helper!(a, A, borrow),);
         local_pool_scope_fifo(|scope| {
             executor.prepare(&world);
             executor.start_all_currently_runnable(scope, &world, &wrapped);

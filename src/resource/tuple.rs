@@ -81,20 +81,6 @@ where
     }
 }
 
-/*impl<R0, R1> ResourceTuple for (R0, R1)
-where
-    R0: ResourceSingle,
-    R1: ResourceSingle,
-{
-    type Wrapped = (R0::Wrapped, R1::Wrapped);
-    type BorrowTuple = (AtomicBorrow, AtomicBorrow);
-    const LENGTH: usize = 2;
-
-    fn instantiate_borrows() -> Self::BorrowTuple {
-        (AtomicBorrow::new(), AtomicBorrow::new())
-    }
-}*/
-
 macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
