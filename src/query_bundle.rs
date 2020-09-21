@@ -1,21 +1,17 @@
-use hecs::{Component, Query, With, Without};
-
-#[cfg(feature = "parallel")]
-use hecs::World;
 #[cfg(feature = "parallel")]
 use std::any::TypeId;
 
-use crate::QueryMarker;
+use crate::Query;
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowTypeSet};
 
-pub trait QueryExt: Query {
+pub trait QueryExt: hecs::Query {
     #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet);
 
     #[cfg(feature = "parallel")]
-    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet)
+    fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet)
     where
         Self: Sized,
     {
@@ -23,14 +19,14 @@ pub trait QueryExt: Query {
     }
 }
 
-pub trait QueryBundle {
-    fn markers() -> Self;
+pub trait QueryBundle<'a> {
+    fn queries(world: &'a hecs::World) -> Self;
 
     #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet);
 
     #[cfg(feature = "parallel")]
-    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet);
+    fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet);
 }
 
 impl QueryExt for () {
@@ -38,19 +34,19 @@ impl QueryExt for () {
     fn insert_component_types(_: &mut BorrowTypeSet) {}
 }
 
-impl QueryBundle for () {
-    fn markers() -> Self {}
+impl QueryBundle<'_> for () {
+    fn queries(_: &hecs::World) -> Self {}
 
     #[cfg(feature = "parallel")]
     fn insert_component_types(_: &mut BorrowTypeSet) {}
 
     #[cfg(feature = "parallel")]
-    fn set_archetype_bits(_: &World, _: &mut ArchetypeSet) {}
+    fn set_archetype_bits(_: &hecs::World, _: &mut ArchetypeSet) {}
 }
 
 impl<C0> QueryExt for &'_ C0
 where
-    C0: Component,
+    C0: hecs::Component,
 {
     #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
@@ -60,7 +56,7 @@ where
 
 impl<C0> QueryExt for &'_ mut C0
 where
-    C0: Component,
+    C0: hecs::Component,
 {
     #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
@@ -78,9 +74,9 @@ where
     }
 }
 
-impl<C0, Q0> QueryExt for With<C0, Q0>
+impl<C0, Q0> QueryExt for hecs::With<C0, Q0>
 where
-    C0: Component,
+    C0: hecs::Component,
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
@@ -89,9 +85,9 @@ where
     }
 }
 
-impl<C0, Q0> QueryExt for Without<C0, Q0>
+impl<C0, Q0> QueryExt for hecs::Without<C0, Q0>
 where
-    C0: Component,
+    C0: hecs::Component,
     Q0: QueryExt,
 {
     #[cfg(feature = "parallel")]
@@ -100,12 +96,12 @@ where
     }
 }
 
-impl<Q0> QueryBundle for QueryMarker<Q0>
+impl<'a, Q0> QueryBundle<'a> for Query<'a, Q0>
 where
     Q0: QueryExt,
 {
-    fn markers() -> Self {
-        QueryMarker::new()
+    fn queries(world: &'a hecs::World) -> Self {
+        Query::new(world)
     }
 
     #[cfg(feature = "parallel")]
@@ -114,7 +110,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+    fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet) {
         Q0::set_archetype_bits(world, archetype_set);
     }
 }
@@ -129,12 +125,12 @@ where
     }
 }
 
-impl<Q0> QueryBundle for (QueryMarker<Q0>,)
+impl<'a, Q0> QueryBundle<'a> for (Query<'a, Q0>,)
 where
-    Q0: Query + QueryExt,
+    Q0: hecs::Query + QueryExt,
 {
-    fn markers() -> Self {
-        (QueryMarker::new(),)
+    fn queries(world: &'a hecs::World) -> Self {
+        (Query::new(world),)
     }
 
     #[cfg(feature = "parallel")]
@@ -143,7 +139,7 @@ where
     }
 
     #[cfg(feature = "parallel")]
-    fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+    fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet) {
         Q0::set_archetype_bits(world, archetype_set);
     }
 }
@@ -166,12 +162,12 @@ impl_for_tuples!(impl_query_ext);
 
 macro_rules! impl_query_bundle {
     ($($letter:ident),*) => {
-        impl<$($letter),*> QueryBundle for ($(QueryMarker<$letter>,)*)
+        impl<'a, $($letter),*> QueryBundle<'a> for ($(Query<'a, $letter>,)*)
         where
-            $($letter: Query + QueryExt,)*
+            $($letter: hecs::Query + QueryExt,)*
         {
-            fn markers() -> Self {
-                ($(QueryMarker::<$letter>::new(),)*)
+            fn queries(world: &'a hecs::World) -> Self {
+                ($(Query::<$letter>::new(world),)*)
             }
 
             #[cfg(feature = "parallel")]
@@ -180,7 +176,7 @@ macro_rules! impl_query_bundle {
             }
 
             #[cfg(feature = "parallel")]
-            fn set_archetype_bits(world: &World, archetype_set: &mut ArchetypeSet) {
+            fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet) {
                 $($letter::set_archetype_bits(world, archetype_set);)*
             }
         }

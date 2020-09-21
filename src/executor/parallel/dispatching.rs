@@ -1,10 +1,9 @@
-use hecs::World;
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
 use super::SystemClosure;
-use crate::{ResourceTuple, SystemContext, SystemId};
+use crate::{ResourceTuple, SystemId};
 
 /// Parallel executor variant, used when all systems are proven to be statically disjoint,
 /// and have no dependencies.
@@ -19,19 +18,13 @@ impl<'closures, Resources> Dispatcher<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+    pub fn run(&mut self, world: &hecs::World, wrapped: Resources::Wrapped) {
         // All systems are statically disjoint, so they can all be running together at all times.
-        self.systems.par_iter().for_each(|(id, system)| {
+        self.systems.par_iter().for_each(|(_, system)| {
             let system = &mut *system
                 .try_lock() // TODO should this be .lock() instead?
                 .expect("systems should only be ran once per execution");
-            system(
-                SystemContext {
-                    system_id: Some(*id),
-                    world,
-                },
-                &wrapped,
-            );
+            system(world, &wrapped);
         });
     }
 }
@@ -41,7 +34,7 @@ mod tests {
     use super::super::ExecutorParallel;
     use crate::{
         resource::{AtomicBorrow, WrappableSingle},
-        Executor, Mut, QueryMarker, Ref,
+        Executor, Mut, Query, Ref,
     };
     use hecs::World;
 
@@ -53,8 +46,8 @@ mod tests {
     fn trivial() {
         ExecutorParallel::<()>::build(
             Executor::builder()
-                .system(|_, _: (), _: ()| {})
-                .system(|_, _: (), _: ()| {}),
+                .system(|_: (), _: ()| {})
+                .system(|_: (), _: ()| {}),
         )
         .unwrap_to_dispatcher();
     }
@@ -63,8 +56,8 @@ mod tests {
     fn trivial_with_resources() {
         ExecutorParallel::<(Ref<A>, Ref<B>, Ref<C>)>::build(
             Executor::builder()
-                .system(|_, _: (), _: ()| {})
-                .system(|_, _: (), _: ()| {}),
+                .system(|_: (), _: ()| {})
+                .system(|_: (), _: ()| {}),
         )
         .unwrap_to_dispatcher();
     }
@@ -77,10 +70,10 @@ mod tests {
         let c = C(2);
         let mut executor = ExecutorParallel::<(Mut<A>, Mut<B>, Ref<C>)>::build(
             Executor::builder()
-                .system(|_, (a, c): (&mut A, &C), _: ()| {
+                .system(|(a, c): (&mut A, &C), _: ()| {
                     a.0 += c.0;
                 })
-                .system(|_, (b, c): (&mut B, &C), _: ()| {
+                .system(|(b, c): (&mut B, &C), _: ()| {
                     b.0 += c.0;
                 }),
         )
@@ -107,13 +100,13 @@ mod tests {
         let a = A(1);
         let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
-                .system(|ctx, a: &A, q: QueryMarker<(&A, &mut B)>| {
-                    for (_, (_, b)) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<(&A, &mut B)>| {
+                    for (_, (_, b)) in q.query().iter() {
                         b.0 += a.0;
                     }
                 })
-                .system(|ctx, a: &A, q: QueryMarker<(&A, &mut C)>| {
-                    for (_, (_, c)) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<(&A, &mut C)>| {
+                    for (_, (_, c)) in q.query().iter() {
                         c.0 += a.0;
                     }
                 }),

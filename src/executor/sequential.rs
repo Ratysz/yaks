@@ -1,5 +1,3 @@
-use hecs::World;
-
 use super::SystemClosure;
 use crate::{ExecutorBuilder, ResourceTuple, SystemContext, SystemId};
 
@@ -26,7 +24,7 @@ where
 
     pub fn force_archetype_recalculation(&mut self) {}
 
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+    pub fn run(&mut self, world: &hecs::World, wrapped: Resources::Wrapped) {
         for (id, closure) in &mut self.systems {
             closure(
                 SystemContext {

@@ -1,10 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-#[cfg(feature = "parallel")]
-use hecs::World;
-
 use super::SystemClosure;
-use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemContext, SystemId};
+use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemId};
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
@@ -22,7 +19,7 @@ where
     #[cfg(feature = "parallel")]
     pub component_type_set: BorrowTypeSet,
     #[cfg(feature = "parallel")]
-    pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    pub archetype_writer: Box<dyn Fn(&hecs::World, &mut ArchetypeSet) + Send>,
 }
 
 /// A builder for [`Executor`](struct.Executor.html) (and the only way of creating one).
@@ -46,21 +43,21 @@ where
     ) -> System<'closures, Resources>
     where
         Resources::Wrapped: 'a,
-        Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
+        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
         ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle,
+        Queries: QueryBundle<'a>,
     {
         let closure = Box::new(
-            move |context: SystemContext<'a>, resources: &'a Resources::Wrapped| {
+            move |world: &'a hecs::World, resources: &'a Resources::Wrapped| {
                 let fetched = ResourceRefs::fetch(resources);
-                closure(context, fetched, Queries::markers());
+                closure(fetched, Queries::queries(world));
                 unsafe { ResourceRefs::release(resources) };
             },
         );
         let closure = unsafe {
             std::mem::transmute::<
-                Box<dyn FnMut(_, &'a _) + Send + Sync + 'closures>,
-                Box<dyn FnMut(SystemContext, &Resources::Wrapped) + Send + Sync + 'closures>,
+                Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closures>,
+                Box<dyn FnMut(&hecs::World, &Resources::Wrapped) + Send + Sync + 'closures>,
             >(closure)
         };
         #[cfg(feature = "parallel")]
@@ -69,9 +66,10 @@ where
             ResourceRefs::set_resource_bits(&mut resource_set);
             let mut component_type_set = BorrowTypeSet::new();
             Queries::insert_component_types(&mut component_type_set);
-            let archetype_writer = Box::new(|world: &World, archetype_set: &mut ArchetypeSet| {
-                Queries::set_archetype_bits(world, archetype_set)
-            });
+            let archetype_writer =
+                Box::new(|world: &hecs::World, archetype_set: &mut ArchetypeSet| {
+                    Queries::set_archetype_bits(world, archetype_set)
+                });
             System {
                 closure,
                 dependencies: vec![],
@@ -110,14 +108,13 @@ where
     /// # struct A;
     /// # struct B;
     /// # struct C;
-    /// use yaks::{QueryMarker, SystemContext, Executor, Ref, Mut};
+    /// use yaks::{Query, Executor, Ref, Mut};
     ///
     /// fn system_0(
-    ///     context: SystemContext,
     ///     res_a: &A,
     ///     (query_0, query_1): (
-    ///         QueryMarker<(&B, &mut C)>,
-    ///         QueryMarker<hecs::Without<B, &C>>
+    ///         Query<(&B, &mut C)>,
+    ///         Query<hecs::Without<B, &C>>
     ///     ),
     /// ) {
     ///     // This system may read resource of type `A`, and may prepare & execute queries
@@ -125,9 +122,8 @@ where
     /// }
     ///
     /// fn system_1(
-    ///     context: SystemContext,
     ///     (res_a, res_b): (&mut A, &B),
-    ///     query_0: QueryMarker<(&mut B, &mut C)>,
+    ///     query_0: Query<(&mut B, &mut C)>,
     /// ) {
     ///     // This system may read or write resource of type `A`, may read resource of type `B`,
     ///     // and may prepare & execute queries of `(&mut B, &mut C)`.
@@ -138,7 +134,7 @@ where
     /// let mut executor = Executor::<(Mut<A>, Ref<B>, Mut<C>)>::builder()
     ///     .system(system_0)
     ///     .system(system_1)
-    ///     .system(|context, res_c: &C, _queries: ()| {
+    ///     .system(|res_c: &C, _queries: ()| {
     ///         // This system may read resource of type `C` and will not perform any queries.
     ///         increment += 1; // `increment` will be borrowed by the executor.
     ///     })
@@ -153,9 +149,9 @@ where
     pub fn system<'a, Closure, ResourceRefs, Queries, Markers>(mut self, closure: Closure) -> Self
     where
         Resources::Wrapped: 'a,
-        Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
+        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
         ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle,
+        Queries: QueryBundle<'a>,
     {
         let id = SystemId(self.systems.len());
         let system = Self::box_system::<'a, Closure, ResourceRefs, Queries, Markers>(closure);
@@ -193,13 +189,13 @@ where
     /// # Examples
     /// These two executors are identical.
     /// ```rust
-    /// # use yaks::{QueryMarker, SystemContext, Executor};
+    /// # use yaks::{Query, Executor};
     /// # let world = hecs::World::new();
-    /// # fn system_0(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_1(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_2(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_3(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_4(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_0(_: (), _: ()) {}
+    /// # fn system_1(_: (), _: ()) {}
+    /// # fn system_2(_: (), _: ()) {}
+    /// # fn system_3(_: (), _: ()) {}
+    /// # fn system_4(_: (), _: ()) {}
     /// let _ = Executor::<()>::builder()
     ///     .system_with_handle(system_0, 0)
     ///     .system_with_handle(system_1, 1)
@@ -228,13 +224,13 @@ where
     /// that won't matter as long as the given dependencies truthfully reflect any
     /// relationships the systems may have.
     /// ```rust
-    /// # use yaks::{QueryMarker, SystemContext, Executor};
+    /// # use yaks::{Query, Executor};
     /// # let world = hecs::World::new();
-    /// # fn system_0(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_1(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_2(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_3(_: SystemContext, _: (), _: ()) {}
-    /// # fn system_4(_: SystemContext, _: (), _: ()) {}
+    /// # fn system_0(_: (), _: ()) {}
+    /// # fn system_1(_: (), _: ()) {}
+    /// # fn system_2(_: (), _: ()) {}
+    /// # fn system_3(_: (), _: ()) {}
+    /// # fn system_4(_: (), _: ()) {}
     /// let _ = Executor::<()>::builder()
     ///     .system_with_handle(system_1, 1)
     ///     .system_with_handle(system_0, 0)
@@ -254,9 +250,9 @@ where
     ) -> ExecutorBuilder<'closures, Resources, NewHandle>
     where
         Resources::Wrapped: 'a,
-        Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
+        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
         ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle,
+        Queries: QueryBundle<'a>,
         NewHandle: HandleConversion<Handle> + Debug,
     {
         let mut handles = NewHandle::convert_hash_map(self.handles);
@@ -303,9 +299,9 @@ where
     ) -> Self
     where
         Resources::Wrapped: 'a,
-        Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
+        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
         ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle,
+        Queries: QueryBundle<'a>,
         Handle: Eq + Hash + Debug,
     {
         let id = SystemId(self.systems.len());
@@ -355,9 +351,9 @@ where
     ) -> Self
     where
         Resources::Wrapped: 'a,
-        Closure: FnMut(SystemContext<'a>, ResourceRefs, Queries) + Send + Sync + 'closures,
+        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
         ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle,
+        Queries: QueryBundle<'a>,
         Handle: Eq + Hash + Debug,
     {
         if self.handles.contains_key(&handle) {

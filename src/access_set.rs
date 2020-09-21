@@ -1,5 +1,4 @@
 use fixedbitset::FixedBitSet;
-use hecs::{Access, Query, World};
 use std::{any::TypeId, collections::HashSet};
 
 pub type TypeSet = HashSet<TypeId>;
@@ -66,9 +65,9 @@ impl ArchetypeSet {
             && self.immutable.is_disjoint(&other.mutable)
     }
 
-    pub fn set_bits_for_query<Q>(&mut self, world: &World)
+    pub fn set_bits_for_query<Q>(&mut self, world: &hecs::World)
     where
-        Q: Query,
+        Q: hecs::Query,
     {
         self.immutable.clear();
         self.mutable.clear();
@@ -80,9 +79,9 @@ impl ArchetypeSet {
             .enumerate()
             .filter_map(|(index, archetype)| archetype.access::<Q>().map(|access| (index, access)))
             .for_each(|(archetype, access)| match access {
-                Access::Read => self.immutable.set(archetype, true),
-                Access::Write => self.mutable.set(archetype, true),
-                Access::Iterate => (),
+                hecs::Access::Read => self.immutable.set(archetype, true),
+                hecs::Access::Write => self.mutable.set(archetype, true),
+                hecs::Access::Iterate => (),
             });
     }
 }

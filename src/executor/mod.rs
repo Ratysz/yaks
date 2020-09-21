@@ -1,7 +1,6 @@
-use hecs::World;
 use std::collections::HashMap;
 
-use crate::{ResourceTuple, SystemContext, Wrap};
+use crate::{ResourceTuple, Wrap};
 
 mod builder;
 
@@ -23,7 +22,7 @@ use crate::TypeSet;
 #[cfg(feature = "parallel")]
 use parallel::ExecutorParallel;
 
-type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
+type SystemClosure<'closure, Cells> = dyn FnMut(&hecs::World, &Cells) + Send + Sync + 'closure;
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(pub(crate) usize);
@@ -192,7 +191,7 @@ where
     /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than
     /// in a previous call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<RefSource, Marker>(&mut self, world: &World, resources: RefSource)
+    pub fn run<RefSource, Marker>(&mut self, world: &hecs::World, resources: RefSource)
     where
         Resources: Wrap<RefSource, Marker>,
     {

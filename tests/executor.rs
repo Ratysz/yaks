@@ -1,5 +1,5 @@
 use hecs::World;
-use yaks::{Executor, Mut, QueryMarker, Ref};
+use yaks::{Executor, Mut, Query, Ref};
 
 struct A(usize);
 
@@ -14,7 +14,7 @@ fn systems_single() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, (a, b, c): (&mut A, &B, &C), _: ()| {
+        .system(|(a, b, c): (&mut A, &B, &C), _: ()| {
             a.0 = b.0 + c.0;
         })
         .build();
@@ -29,10 +29,10 @@ fn systems_two() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, (a, b): (&mut A, &B), _: ()| {
+        .system(|(a, b): (&mut A, &B), _: ()| {
             a.0 += b.0;
         })
-        .system(|_, (a, c): (&mut A, &C), _: ()| {
+        .system(|(a, c): (&mut A, &C), _: ()| {
             a.0 += c.0;
         })
         .build();
@@ -47,7 +47,7 @@ fn resources_decoding_single() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, a: &mut A, _: ()| {
+        .system(|a: &mut A, _: ()| {
             a.0 = 1;
         })
         .build();
@@ -60,28 +60,28 @@ fn resources_wrap_single() {
     let world = World::new();
     let mut a = A(0);
     let mut executor = Executor::<Mut<A>>::builder()
-        .system(|_, a: &mut A, _: ()| {
+        .system(|a: &mut A, _: ()| {
             a.0 = 1;
         })
         .build();
     executor.run(&world, &mut a);
     assert_eq!(a.0, 1);
     let mut executor = Executor::<(Mut<A>,)>::builder()
-        .system(|_, a: &mut A, _: ()| {
+        .system(|a: &mut A, _: ()| {
             a.0 = 2;
         })
         .build();
     executor.run(&world, (&mut a,));
     assert_eq!(a.0, 2);
     let mut executor = Executor::<Mut<A>>::builder()
-        .system(|_, a: &mut A, _: ()| {
+        .system(|a: &mut A, _: ()| {
             a.0 = 3;
         })
         .build();
     executor.run(&world, (&mut a,));
     assert_eq!(a.0, 3);
     let mut executor = Executor::<(Mut<A>,)>::builder()
-        .system(|_, a: &mut A, _: ()| {
+        .system(|a: &mut A, _: ()| {
             a.0 = 4;
         })
         .build();
@@ -96,8 +96,8 @@ fn queries_decoding_single() {
     world.spawn((B(2),));
     let mut a = A(0);
     let mut executor = Executor::<Mut<A>>::builder()
-        .system(|context, a: &mut A, query: QueryMarker<&B>| {
-            for (_, b) in context.query(query).iter() {
+        .system(|a: &mut A, query: Query<&B>| {
+            for (_, b) in query.query().iter() {
                 a.0 += b.0;
             }
         })
@@ -119,30 +119,29 @@ fn queries_decoding_four() {
     let mut a = A(0);
     let mut executor = Executor::<Mut<A>>::builder()
         .system(
-            |context,
-             a: &mut A,
+            |a: &mut A,
              (q0, q1, q2, q3): (
-                QueryMarker<&B>,
-                QueryMarker<(&A, &B)>,
-                QueryMarker<&C>,
-                QueryMarker<(&B, &C)>,
+                 Query<&B>,
+                 Query<(&A, &B)>,
+                 Query<&C>,
+                 Query<(&B, &C)>,
             )| {
-                for (_, b) in context.query(q0).iter() {
+                for (_, b) in q0.query().iter() {
                     a.0 += b.0;
                 }
                 assert_eq!(a.0, 4);
                 a.0 = 0;
-                for (_, (_, b)) in context.query(q1).iter() {
+                for (_, (_, b)) in q1.query().iter() {
                     a.0 += b.0;
                 }
                 assert_eq!(a.0, 1);
                 a.0 = 0;
-                for (_, c) in context.query(q2).iter() {
+                for (_, c) in q2.query().iter() {
                     a.0 += c.0;
                 }
                 assert_eq!(a.0, 4);
                 a.0 = 0;
-                for (_, (b, c)) in context.query(q3).iter() {
+                for (_, (b, c)) in q3.query().iter() {
                     a.0 += b.0 + c.0;
                 }
                 assert_eq!(a.0, 3);
@@ -160,7 +159,7 @@ fn invalid_resources_mutable_immutable() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, _: (&mut A, &A), _: ()| {})
+        .system(|_: (&mut A, &A), _: ()| {})
         .build();
     executor.run(&world, (&mut a, &b, &c));
 }
@@ -173,7 +172,7 @@ fn invalid_resources_immutable_mutable() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, _: (&A, &mut A), _: ()| {})
+        .system(|_: (&A, &mut A), _: ()| {})
         .build();
     executor.run(&world, (&mut a, &b, &c));
 }
@@ -186,7 +185,7 @@ fn invalid_resources_mutable_mutable() {
     let b = B(1);
     let c = C(2);
     let mut executor = Executor::<(Mut<A>, Ref<B>, Ref<C>)>::builder()
-        .system(|_, _: (&mut A, &mut A), _: ()| {})
+        .system(|_: (&mut A, &mut A), _: ()| {})
         .build();
     executor.run(&world, (&mut a, &b, &c));
 }

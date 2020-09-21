@@ -1,7 +1,7 @@
 //! Copy of the crate level documentation & readme example.
 
 use hecs::{With, Without, World};
-use yaks::{Executor, Mut, QueryMarker, Ref};
+use yaks::{Executor, Mut, Query, Ref};
 
 fn main() {
     let mut world = World::new();
@@ -18,9 +18,9 @@ fn main() {
     let mut average = 0f32;
     let mut executor = Executor::<(Ref<u32>, Ref<usize>, Mut<f32>)>::builder()
         .system_with_handle(
-            |context, (entities, average): (&u32, &mut f32), query: QueryMarker<&f32>| {
+            |(entities, average): (&u32, &mut f32), floats: Query<&f32>| {
                 *average = 0.0;
-                for (_entity, float) in context.query(query).iter() {
+                for (_entity, float) in floats.query().iter() {
                     *average += *float;
                 }
                 *average /= *entities as f32;
@@ -28,8 +28,8 @@ fn main() {
             "average",
         )
         .system_with_handle(
-            |context, increment: &usize, query: QueryMarker<&mut u32>| {
-                for (_entity, unsigned) in context.query(query).iter() {
+            |increment: &usize, unsigned: Query<&mut u32>| {
+                for (_entity, unsigned) in unsigned.query().iter() {
                     *unsigned += *increment as u32
                 }
             },
@@ -42,22 +42,14 @@ fn main() {
 
 #[allow(clippy::type_complexity)]
 fn system_with_two_queries(
-    context: yaks::SystemContext,
     (entities, average): (&u32, &f32),
-    (with_f32, without_f32): (
-        QueryMarker<With<f32, &mut u32>>,
-        QueryMarker<Without<f32, &mut u32>>,
-    ),
+    (with_f32, without_f32): (Query<With<f32, &mut u32>>, Query<Without<f32, &mut u32>>),
 ) {
+    yaks::batch(&mut with_f32.query(), entities / 8, |_entity, unsigned| {
+        *unsigned += average.round() as u32;
+    });
     yaks::batch(
-        &mut context.query(with_f32),
-        entities / 8,
-        |_entity, unsigned| {
-            *unsigned += average.round() as u32;
-        },
-    );
-    yaks::batch(
-        &mut context.query(without_f32),
+        &mut without_f32.query(),
         entities / 8,
         |_entity, unsigned| {
             *unsigned *= average.round() as u32;

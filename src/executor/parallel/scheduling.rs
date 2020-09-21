@@ -1,10 +1,9 @@
 use crossbeam_channel::{Receiver, Sender};
-use hecs::{ArchetypesGeneration, World};
 use rayon::ScopeFifo;
 use std::collections::{HashMap, HashSet};
 
 use super::{System, DISCONNECTED, INVALID_ID};
-use crate::{ResourceTuple, SystemContext, SystemId};
+use crate::{ResourceTuple, SystemId};
 
 /// Typed `usize` used to cache the amount of dependants the system associated
 /// with a `SystemId` has; avoids hashmap lookups while sorting.
@@ -18,7 +17,7 @@ where
     Resources: ResourceTuple,
 {
     pub systems: HashMap<SystemId, System<'closures, Resources>>,
-    pub archetypes_generation: Option<ArchetypesGeneration>,
+    pub archetypes_generation: Option<hecs::ArchetypesGeneration>,
     pub systems_without_dependencies: Vec<(SystemId, DependantsLength)>,
     pub systems_to_run_now: Vec<(SystemId, DependantsLength)>,
     pub systems_running: HashSet<SystemId>,
@@ -32,7 +31,7 @@ impl<'closures, Resources> Scheduler<'closures, Resources>
 where
     Resources: ResourceTuple,
 {
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+    pub fn run(&mut self, world: &hecs::World, wrapped: Resources::Wrapped) {
         rayon::scope_fifo(|scope| {
             self.prepare(world);
             // All systems have been ran if there are no queued or currently running systems.
@@ -47,7 +46,7 @@ where
         debug_assert!(self.systems_to_decrement_dependencies.is_empty());
     }
 
-    fn prepare(&mut self, world: &World) {
+    fn prepare(&mut self, world: &hecs::World) {
         debug_assert!(self.systems_to_run_now.is_empty());
         debug_assert!(self.systems_running.is_empty());
         debug_assert!(self.systems_just_finished.is_empty());
@@ -76,7 +75,7 @@ where
     fn start_all_currently_runnable<'run>(
         &mut self,
         scope: &ScopeFifo<'run>,
-        world: &'run World,
+        world: &'run hecs::World,
         wrapped: &'run Resources::Wrapped,
     ) where
         'closures: 'run,
@@ -97,13 +96,7 @@ where
                     let system = &mut *system
                         .try_lock() // TODO should this be .lock() instead?
                         .expect("systems should only be ran once per execution");
-                    system(
-                        SystemContext {
-                            system_id: Some(id),
-                            world,
-                        },
-                        wrapped,
-                    );
+                    system(world, wrapped);
                     // Notify dispatching thread than this system has finished running.
                     sender.send(id).expect(DISCONNECTED);
                 });
@@ -195,7 +188,7 @@ mod tests {
     use super::super::ExecutorParallel;
     use crate::{
         resource::{AtomicBorrow, WrappableSingle},
-        Executor, Mut, QueryMarker, Ref, SystemContext,
+        Executor, Mut, Query, Ref,
     };
     use hecs::World;
     use rayon::{ScopeFifo, ThreadPoolBuilder};
@@ -204,7 +197,7 @@ mod tests {
     struct B(usize);
     struct C(usize);
 
-    fn dummy_system(_: SystemContext, _: (), _: ()) {}
+    fn dummy_system(_: (), _: ()) {}
 
     fn local_pool_scope_fifo<'scope, F>(closure: F)
     where
@@ -350,8 +343,8 @@ mod tests {
         let world = World::new();
         let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
-                .system(|_, _: &A, _: ()| {})
-                .system(|_, a: &mut A, _: ()| a.0 += 1),
+                .system(|_: &A, _: ()| {})
+                .system(|a: &mut A, _: ()| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
@@ -378,8 +371,8 @@ mod tests {
         let world = World::new();
         let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
-                .system(|_, a: &mut A, _: ()| a.0 += 1)
-                .system(|_, a: &mut A, _: ()| a.0 += 1),
+                .system(|a: &mut A, _: ()| a.0 += 1)
+                .system(|a: &mut A, _: ()| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
@@ -407,9 +400,9 @@ mod tests {
         world.spawn_batch((0..10).map(|_| (B(0),)));
         let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
-                .system(|ctx, _: (), q: QueryMarker<&B>| for (_, _) in ctx.query(q).iter() {})
-                .system(|ctx, a: &A, q: QueryMarker<&mut B>| {
-                    for (_, b) in ctx.query(q).iter() {
+                .system(|_: (), q: Query<&B>| for (_, _) in q.query().iter() {})
+                .system(|a: &A, q: Query<&mut B>| {
+                    for (_, b) in q.query().iter() {
                         b.0 += a.0;
                     }
                 }),
@@ -442,13 +435,13 @@ mod tests {
         world.spawn_batch((0..10).map(|_| (B(0),)));
         let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
-                .system(|ctx, a: &A, q: QueryMarker<&mut B>| {
-                    for (_, b) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<&mut B>| {
+                    for (_, b) in q.query().iter() {
                         b.0 += a.0;
                     }
                 })
-                .system(|ctx, a: &A, q: QueryMarker<&mut B>| {
-                    for (_, b) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<&mut B>| {
+                    for (_, b) in q.query().iter() {
                         b.0 += a.0;
                     }
                 }),
@@ -482,13 +475,13 @@ mod tests {
         world.spawn_batch((0..10).map(|_| (B(0), C(0))));
         let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
-                .system(|ctx, a: &A, q: QueryMarker<(&A, &mut B)>| {
-                    for (_, (_, b)) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<(&A, &mut B)>| {
+                    for (_, (_, b)) in q.query().iter() {
                         b.0 += a.0;
                     }
                 })
-                .system(|ctx, a: &A, q: QueryMarker<(&mut B, &C)>| {
-                    for (_, (b, _)) in ctx.query(q).iter() {
+                .system(|a: &A, q: Query<(&mut B, &C)>| {
+                    for (_, (b, _)) in q.query().iter() {
                         b.0 += a.0;
                     }
                 }),

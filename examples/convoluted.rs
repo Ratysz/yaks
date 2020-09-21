@@ -3,7 +3,7 @@
 use hecs::World;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::time::{Duration, Instant};
-use yaks::{Executor, Mut, QueryMarker, Ref, SystemContext};
+use yaks::{Executor, Mut, Query, Ref};
 
 // Each of the tests will be ran this many times.
 const ITERATIONS: u32 = 100;
@@ -42,22 +42,20 @@ struct Color(f32, f32, f32, f32);
 // A system that simulates 2D kinematic motion.
 #[allow(clippy::type_complexity)]
 fn motion(
-    // Thin wrapper over `&hecs::World`.
-    context: SystemContext,
     // A resource this system requires. Can be a single one, or any tuple up to 16.
     spawned: &SpawnedEntities,
     // Queries this system will execute. Can be a single one, or any tuple up to 16.
     (no_acceleration, with_acceleration): (
         // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
-        QueryMarker<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
-        QueryMarker<(&mut Position, &mut Velocity, &Acceleration)>,
+        Query<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
+        Query<(&mut Position, &mut Velocity, &Acceleration)>,
     ),
 ) {
     // A helper function that automatically spreads the batches across threads of a
     // `rayon::ThreadPool` - either the global one if called standalone, or a specific one
     // when used with a `rayon::ThreadPool::install()`.
     yaks::batch(
-        &mut context.query(no_acceleration),
+        &mut no_acceleration.query(),
         spawned.batch_size_no_acceleration(),
         |_entity, (mut pos, vel)| {
             pos.0 += vel.0;
@@ -66,7 +64,7 @@ fn motion(
     );
     // If the default `parallel` feature is disabled this simply iterates in a single thread.
     yaks::batch(
-        &mut context.query(with_acceleration),
+        &mut with_acceleration.query(),
         spawned.batch_size_with_acceleration(),
         |_entity, (mut pos, mut vel, acc)| {
             vel.0 += acc.0;
@@ -78,14 +76,10 @@ fn motion(
 }
 
 // A system that tracks the highest velocity among all entities.
-fn find_highest_velocity(
-    context: SystemContext,
-    highest: &mut Velocity,
-    query: QueryMarker<&Velocity>,
-) {
+fn find_highest_velocity(highest: &mut Velocity, velocities: Query<&Velocity>) {
     // This cannot be batched as is because it needs mutable access to `highest`;
     // however, it's possible to work around that by using channels and/or `RwLock`.
-    for (_entity, vel) in context.query(query).iter() {
+    for (_entity, vel) in velocities.query().iter() {
         if vel.0 * vel.0 + vel.1 * vel.1 > highest.0 * highest.0 + highest.1 * highest.1 {
             highest.0 = vel.0;
             highest.1 = vel.1;
@@ -95,15 +89,14 @@ fn find_highest_velocity(
 
 // A system that recolors entities based on their kinematic properties.
 fn color(
-    context: SystemContext,
     (spawned, rng): (&SpawnedEntities, &mut StdRng),
-    query: QueryMarker<(&Position, &Velocity, &mut Color)>,
+    all_the_comps: Query<(&Position, &Velocity, &mut Color)>,
 ) {
     // Of course, it's possible to use resources mutably and still batch queries if
     // mutation happens outside batching.
     let blue = rng.gen_range(0.0, 1.0);
     yaks::batch(
-        &mut context.query(query),
+        &mut all_the_comps.query(),
         spawned.batch_size_all(),
         |_entity, (pos, vel, mut col)| {
             col.0 = pos.0.abs() / 1000.0;
@@ -115,12 +108,11 @@ fn color(
 
 // A system that tracks the average color of entities.
 fn find_average_color(
-    context: SystemContext,
     (average_color, spawned): (&mut Color, &SpawnedEntities),
-    query: QueryMarker<&Color>,
+    colors: Query<&Color>,
 ) {
     *average_color = Color(0.0, 0.0, 0.0, 0.0);
-    for (_entity, color) in context.query(query).iter() {
+    for (_entity, color) in colors.query().iter() {
         average_color.0 += color.0;
         average_color.1 += color.1;
         average_color.2 += color.2;
@@ -194,7 +186,7 @@ fn main() {
             // for the lifetime of the executor.
             // (Note, systems with no resources or queries have
             // no business being in an executor, this is for demonstration only.)
-            .system(|_context, _resources: (), _queries: ()| iterations += 1)
+            .system(|_resources: (), _queries: ()| iterations += 1)
             // The builder will panic if given a system with a handle it already contains,
             // a list of dependencies with a system it doesn't contain yet,
             // or a system that depends on itself.
