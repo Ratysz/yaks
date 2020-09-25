@@ -5,17 +5,31 @@ use std::marker::PhantomData;
 ///
 /// It cannot be instantiated directly. See [`System`](trait.System.html) for instructions
 /// on how to call systems outside of an executor, as plain functions.
-pub struct Query<'a, Q0>
+pub struct Query<'a, Q>
 where
-    Q0: hecs::Query,
+    Q: hecs::Query,
 {
-    phantom_data: PhantomData<Q0>,
+    phantom_data: PhantomData<Q>,
     world: &'a hecs::World,
 }
 
-impl<'a, Q0> Query<'a, Q0>
+impl<Q> Clone for Query<'_, Q>
 where
-    Q0: hecs::Query,
+    Q: hecs::Query,
+{
+    fn clone(&self) -> Self {
+        Query {
+            phantom_data: PhantomData,
+            world: self.world,
+        }
+    }
+}
+
+impl<Q> Copy for Query<'_, Q> where Q: hecs::Query {}
+
+impl<'a, Q> Query<'a, Q>
+where
+    Q: hecs::Query,
 {
     pub(crate) fn new(world: &'a hecs::World) -> Self {
         Self {
@@ -28,7 +42,7 @@ where
     ///
     /// # Example
     /// ```rust
-    /// # use yaks::{Query};
+    /// # use yaks::Query;
     /// # struct Pos;
     /// # #[derive(Clone, Copy)]
     /// # struct Vel;
@@ -36,16 +50,13 @@ where
     /// #     fn add_assign(&mut self, _: Vel) {}
     /// # }
     /// # let world = hecs::World::new();
-    /// fn some_system(
-    ///     _resources: (),
-    ///     pos_vel: Query<(&mut Pos, &Vel)>
-    /// ) {
+    /// fn some_system(pos_vel: Query<(&mut Pos, &Vel)>) {
     ///     for (_entity, (pos, vel)) in pos_vel.query().iter() {
     ///         *pos += *vel;
     ///     }
     /// };
     /// ```
-    pub fn query(&self) -> hecs::QueryBorrow<Q0> {
+    pub fn query(&self) -> hecs::QueryBorrow<Q> {
         self.world.query()
     }
 
@@ -54,7 +65,7 @@ where
     ///
     /// # Example
     /// ```rust
-    /// # use yaks::{Query};
+    /// # use yaks::Query;
     /// # #[derive(Default)]
     /// # struct Pos;
     /// # #[derive(Clone, Copy, Default, Ord, PartialOrd, Eq, PartialEq)]
@@ -63,10 +74,7 @@ where
     /// #     fn add_assign(&mut self, _: Vel) {}
     /// # }
     /// # let world = hecs::World::new();
-    /// fn some_system(
-    ///     _resources: (),
-    ///     pos_vel: Query<(&mut Pos, &Vel)>
-    /// ) {
+    /// fn some_system(pos_vel: Query<(&mut Pos, &Vel)>) {
     ///     let mut max_velocity = Vel::default();
     ///     let mut max_velocity_entity = None;
     ///     for (entity, (pos, vel)) in pos_vel.query().iter() {
@@ -87,24 +95,7 @@ where
     ///     }
     /// };
     /// ```
-    pub fn query_one(
-        &self,
-        entity: hecs::Entity,
-    ) -> Result<hecs::QueryOne<Q0>, hecs::NoSuchEntity> {
+    pub fn query_one(&self, entity: hecs::Entity) -> Result<hecs::QueryOne<Q>, hecs::NoSuchEntity> {
         self.world.query_one(entity)
     }
 }
-
-impl<Q0> Clone for Query<'_, Q0>
-where
-    Q0: hecs::Query,
-{
-    fn clone(&self) -> Self {
-        Query {
-            phantom_data: PhantomData,
-            world: self.world,
-        }
-    }
-}
-
-impl<Q0> Copy for Query<'_, Q0> where Q0: hecs::Query {}

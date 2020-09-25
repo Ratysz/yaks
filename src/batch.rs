@@ -1,3 +1,4 @@
+#[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
 /// Distributes over a `rayon` thread pool the work of applying a function to items in a query.
 /// See [`hecs::QueryBorrow::iter_batched()`](../hecs/struct.QueryBorrow.html#method.iter_batched).
 ///

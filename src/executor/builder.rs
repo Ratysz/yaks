@@ -1,26 +1,9 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use super::SystemClosure;
-use crate::{Executor, Fetch, QueryBundle, ResourceTuple, SystemId};
+use crate::{Executor, IntoSystem, ResourceTuple, System, SystemId};
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
-
-/// Container for parsed systems and their metadata;
-/// destructured in concrete executors' build functions.
-pub struct System<'closure, Resources>
-where
-    Resources: ResourceTuple + 'closure,
-{
-    pub closure: Box<SystemClosure<'closure, Resources::Wrapped>>,
-    pub dependencies: Vec<SystemId>,
-    #[cfg(feature = "parallel")]
-    pub resource_set: BorrowSet,
-    #[cfg(feature = "parallel")]
-    pub component_type_set: BorrowTypeSet,
-    #[cfg(feature = "parallel")]
-    pub archetype_writer: Box<dyn Fn(&hecs::World, &mut ArchetypeSet) + Send>,
-}
+use crate::TypeSet;
 
 /// A builder for [`Executor`](struct.Executor.html) (and the only way of creating one).
 pub struct ExecutorBuilder<'closures, Resources, Handle = DummyHandle>
@@ -38,53 +21,6 @@ where
     Resources: ResourceTuple,
     Handle: Eq + Hash,
 {
-    fn box_system<'a, Closure, ResourceRefs, Queries, Markers>(
-        mut closure: Closure,
-    ) -> System<'closures, Resources>
-    where
-        Resources::Wrapped: 'a,
-        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle<'a>,
-    {
-        let closure = Box::new(
-            move |world: &'a hecs::World, resources: &'a Resources::Wrapped| {
-                let fetched = ResourceRefs::fetch(resources);
-                closure(fetched, Queries::queries(world));
-                unsafe { ResourceRefs::release(resources) };
-            },
-        );
-        let closure = unsafe {
-            std::mem::transmute::<
-                Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closures>,
-                Box<dyn FnMut(&hecs::World, &Resources::Wrapped) + Send + Sync + 'closures>,
-            >(closure)
-        };
-        #[cfg(feature = "parallel")]
-        {
-            let mut resource_set = BorrowSet::with_capacity(Resources::LENGTH);
-            ResourceRefs::set_resource_bits(&mut resource_set);
-            let mut component_type_set = BorrowTypeSet::new();
-            Queries::insert_component_types(&mut component_type_set);
-            let archetype_writer =
-                Box::new(|world: &hecs::World, archetype_set: &mut ArchetypeSet| {
-                    Queries::set_archetype_bits(world, archetype_set)
-                });
-            System {
-                closure,
-                dependencies: vec![],
-                resource_set,
-                component_type_set,
-                archetype_writer,
-            }
-        }
-        #[cfg(not(feature = "parallel"))]
-        System {
-            closure,
-            dependencies: vec![],
-        }
-    }
-
     /// Creates a new system from a closure or a function, and inserts it into the builder.
     ///
     /// The system-to-be must return nothing and have these 3 arguments:
@@ -112,17 +48,16 @@ where
     ///
     /// fn system_0(
     ///     res_a: &A,
-    ///     (query_0, query_1): (
-    ///         Query<(&B, &mut C)>,
-    ///         Query<hecs::Without<B, &C>>
-    ///     ),
+    ///     query_0: Query<(&B, &mut C)>,
+    ///     query_1: Query<hecs::Without<B, &C>>,
     /// ) {
     ///     // This system may read resource of type `A`, and may prepare & execute queries
     ///     // of `(&B, &mut C)` and `hecs::Without<B, &C>`.
     /// }
     ///
     /// fn system_1(
-    ///     (res_a, res_b): (&mut A, &B),
+    ///     res_a: &mut A,
+    ///     res_b: &B,
     ///     query_0: Query<(&mut B, &mut C)>,
     /// ) {
     ///     // This system may read or write resource of type `A`, may read resource of type `B`,
@@ -134,7 +69,7 @@ where
     /// let mut executor = Executor::<(Mut<A>, Ref<B>, Mut<C>)>::builder()
     ///     .system(system_0)
     ///     .system(system_1)
-    ///     .system(|res_c: &C, _queries: ()| {
+    ///     .system(|res_c: &C| {
     ///         // This system may read resource of type `C` and will not perform any queries.
     ///         increment += 1; // `increment` will be borrowed by the executor.
     ///     })
@@ -146,15 +81,12 @@ where
     /// drop(executor); // This releases the borrow of `increment`.
     /// assert_eq!(increment, 3);
     /// ```
-    pub fn system<'a, Closure, ResourceRefs, Queries, Markers>(mut self, closure: Closure) -> Self
+    pub fn system<Closure, Markers, SystemResources, Queries>(mut self, closure: Closure) -> Self
     where
-        Resources::Wrapped: 'a,
-        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle<'a>,
+        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
     {
         let id = SystemId(self.systems.len());
-        let system = Self::box_system::<'a, Closure, ResourceRefs, Queries, Markers>(closure);
+        let system = closure.into_system();
         #[cfg(feature = "parallel")]
         {
             self.all_component_types
@@ -191,11 +123,11 @@ where
     /// ```rust
     /// # use yaks::{Query, Executor};
     /// # let world = hecs::World::new();
-    /// # fn system_0(_: (), _: ()) {}
-    /// # fn system_1(_: (), _: ()) {}
-    /// # fn system_2(_: (), _: ()) {}
-    /// # fn system_3(_: (), _: ()) {}
-    /// # fn system_4(_: (), _: ()) {}
+    /// # fn system_0() {}
+    /// # fn system_1() {}
+    /// # fn system_2() {}
+    /// # fn system_3() {}
+    /// # fn system_4() {}
     /// let _ = Executor::<()>::builder()
     ///     .system_with_handle(system_0, 0)
     ///     .system_with_handle(system_1, 1)
@@ -226,11 +158,11 @@ where
     /// ```rust
     /// # use yaks::{Query, Executor};
     /// # let world = hecs::World::new();
-    /// # fn system_0(_: (), _: ()) {}
-    /// # fn system_1(_: (), _: ()) {}
-    /// # fn system_2(_: (), _: ()) {}
-    /// # fn system_3(_: (), _: ()) {}
-    /// # fn system_4(_: (), _: ()) {}
+    /// # fn system_0() {}
+    /// # fn system_1() {}
+    /// # fn system_2() {}
+    /// # fn system_3() {}
+    /// # fn system_4() {}
     /// let _ = Executor::<()>::builder()
     ///     .system_with_handle(system_1, 1)
     ///     .system_with_handle(system_0, 0)
@@ -243,16 +175,13 @@ where
     /// # Panics
     /// This function will panic if:
     /// - a system with given handle is already present in the builder.
-    pub fn system_with_handle<'a, Closure, ResourceRefs, Queries, Markers, NewHandle>(
+    pub fn system_with_handle<Closure, Markers, SystemResources, Queries, NewHandle>(
         mut self,
         closure: Closure,
         handle: NewHandle,
     ) -> ExecutorBuilder<'closures, Resources, NewHandle>
     where
-        Resources::Wrapped: 'a,
-        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle<'a>,
+        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
         NewHandle: HandleConversion<Handle> + Debug,
     {
         let mut handles = NewHandle::convert_hash_map(self.handles);
@@ -260,7 +189,7 @@ where
             panic!("system {:?} already exists", handle);
         }
         let id = SystemId(self.systems.len());
-        let system = Self::box_system::<'a, Closure, ResourceRefs, Queries, Markers>(closure);
+        let system = closure.into_system();
         #[cfg(feature = "parallel")]
         {
             self.all_component_types
@@ -292,20 +221,17 @@ where
     /// This function will panic if:
     /// - given list of dependencies contains a handle that
     /// doesn't correspond to any system in the builder.
-    pub fn system_with_deps<'a, Closure, ResourceRefs, Queries, Markers>(
+    pub fn system_with_deps<Closure, Markers, SystemResources, Queries>(
         mut self,
         closure: Closure,
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Resources::Wrapped: 'a,
-        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle<'a>,
+        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
         Handle: Eq + Hash + Debug,
     {
         let id = SystemId(self.systems.len());
-        let mut system = Self::box_system::<'a, Closure, ResourceRefs, Queries, Markers>(closure);
+        let mut system = closure.into_system();
         #[cfg(feature = "parallel")]
         {
             self.all_component_types
@@ -343,17 +269,14 @@ where
     /// - given list of dependencies contains a handle that
     /// doesn't correspond to any system in the builder,
     /// - given handle appears in given list of dependencies.
-    pub fn system_with_handle_and_deps<'a, Closure, ResourceRefs, Queries, Markers>(
+    pub fn system_with_handle_and_deps<Closure, Markers, SystemResources, Queries>(
         mut self,
         closure: Closure,
         handle: Handle,
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Resources::Wrapped: 'a,
-        Closure: FnMut(ResourceRefs, Queries) + Send + Sync + 'closures,
-        ResourceRefs: Fetch<'a, Resources::Wrapped, Markers> + 'a,
-        Queries: QueryBundle<'a>,
+        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
         Handle: Eq + Hash + Debug,
     {
         if self.handles.contains_key(&handle) {
@@ -363,7 +286,7 @@ where
             panic!("system {:?} depends on itself", handle);
         }
         let id = SystemId(self.systems.len());
-        let mut system = Self::box_system::<'a, Closure, ResourceRefs, Queries, Markers>(closure);
+        let mut system = closure.into_system();
         #[cfg(feature = "parallel")]
         {
             self.all_component_types

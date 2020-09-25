@@ -4,94 +4,77 @@ use super::{ContainsMut, ContainsRef};
 use crate::BorrowSet;
 
 /// Specifies how a tuple of types may be borrowed from a tuple of cells.
-pub trait Fetch<'a, T, M0>: Sized {
-    fn fetch(resources: &'a T) -> Self;
+pub trait Fetch<Resources, Markers>: Sized {
+    fn fetch(resources: Resources) -> Self;
 
-    unsafe fn release(resources: &'a T);
+    unsafe fn release(resources: Resources);
 
     #[cfg(feature = "parallel")]
     fn set_resource_bits(resource_set: &mut BorrowSet);
 }
 
-impl<'a, T, M0, R0> Fetch<'a, T, M0> for &'a R0
-where
-    T: ContainsRef<R0, M0>,
-    R0: 'a,
-{
-    fn fetch(resources: &'a T) -> Self {
-        T::borrow_ref(resources)
-    }
+impl<'a, Resources> Fetch<&'a Resources, ()> for () {
+    fn fetch(_: &'a Resources) -> Self {}
 
-    unsafe fn release(resources: &'a T) {
-        T::release_ref(resources);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut BorrowSet) {
-        T::set_resource_bit(&mut resource_set.immutable);
-    }
-}
-
-impl<'a, T, M0, R0> Fetch<'a, T, M0> for &'a mut R0
-where
-    T: ContainsMut<R0, M0>,
-    R0: 'a,
-{
-    fn fetch(resources: &'a T) -> Self {
-        T::borrow_mut(resources)
-    }
-
-    unsafe fn release(resources: &'a T) {
-        T::release_mut(resources);
-    }
-
-    #[cfg(feature = "parallel")]
-    fn set_resource_bits(resource_set: &mut BorrowSet) {
-        T::set_resource_bit(&mut resource_set.mutable);
-    }
-}
-
-impl<'a, T> Fetch<'a, T, ()> for () {
-    fn fetch(_: &'a T) -> Self {}
-
-    unsafe fn release(_: &'a T) {}
+    unsafe fn release(_: &'a Resources) {}
 
     #[cfg(feature = "parallel")]
     fn set_resource_bits(_: &mut BorrowSet) {}
 }
 
-impl<'a, T, M0, F0> Fetch<'a, T, (M0,)> for (F0,)
+impl<'a, Resources, M, R> Fetch<&'a Resources, M> for &'a R
 where
-    F0: Fetch<'a, T, M0>,
+    Resources: ContainsRef<R, M>,
+    R: 'a,
 {
-    fn fetch(resources: &'a T) -> Self {
-        (F0::fetch(resources),)
+    fn fetch(resources: &'a Resources) -> Self {
+        Resources::borrow_ref(resources)
     }
 
-    unsafe fn release(resources: &'a T) {
-        F0::release(resources);
+    unsafe fn release(resources: &'a Resources) {
+        Resources::release_ref(resources);
     }
 
     #[cfg(feature = "parallel")]
     fn set_resource_bits(resource_set: &mut BorrowSet) {
-        F0::set_resource_bits(resource_set);
+        Resources::set_resource_bit(&mut resource_set.immutable);
+    }
+}
+
+impl<'a, Resources, M, R> Fetch<&'a Resources, M> for &'a mut R
+where
+    Resources: ContainsMut<R, M>,
+    R: 'a,
+{
+    fn fetch(resources: &'a Resources) -> Self {
+        Resources::borrow_mut(resources)
+    }
+
+    unsafe fn release(resources: &'a Resources) {
+        Resources::release_mut(resources);
+    }
+
+    #[cfg(feature = "parallel")]
+    fn set_resource_bits(resource_set: &mut BorrowSet) {
+        Resources::set_resource_bit(&mut resource_set.mutable);
     }
 }
 
 macro_rules! impl_fetch {
     ($($letter:ident),*) => {
         paste::item! {
-            impl<'a, T, $([<M $letter>],)* $([<F $letter>],)*> Fetch<'a, T, ($([<M $letter>],)*)>
-                for ($([<F $letter>]),*)
+            impl<'a, Resources, $([<M $letter>],)* $([<F $letter>],)*>
+                Fetch<&'a Resources, ($([<M $letter>],)*)> for ($([<F $letter>],)*)
             where
-                $([<F $letter>]: Fetch<'a, T, [<M $letter>]>,)*
+                Resources: 'a,
+                $([<F $letter>]: Fetch<&'a Resources, [<M $letter>]>,)*
             {
-                fn fetch(resources: &'a T) -> Self {
-                    ($([<F $letter>]::fetch(resources)),*)
+                fn fetch(resources: &'a Resources) -> Self {
+                    ($([<F $letter>]::fetch(resources),)*)
                 }
 
                 #[allow(non_snake_case)]
-                unsafe fn release(resources: &'a T) {
+                unsafe fn release(resources: &'a Resources) {
                     $([<F $letter>]::release(resources);)*
                 }
 
@@ -104,4 +87,4 @@ macro_rules! impl_fetch {
     }
 }
 
-impl_for_tuples!(impl_fetch);
+impl_for_tuples!(impl_fetch, all);

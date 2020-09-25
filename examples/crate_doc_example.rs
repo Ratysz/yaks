@@ -18,7 +18,7 @@ fn main() {
     let mut average = 0f32;
     let mut executor = Executor::<(Ref<u32>, Ref<usize>, Mut<f32>)>::builder()
         .system_with_handle(
-            |(entities, average): (&u32, &mut f32), floats: Query<&f32>| {
+            |entities: &u32, average: &mut f32, floats: Query<&f32>| {
                 *average = 0.0;
                 for (_entity, float) in floats.query().iter() {
                     *average += *float;
@@ -40,10 +40,11 @@ fn main() {
     executor.run(&world, (&entities, &increment, &mut average));
 }
 
-#[allow(clippy::type_complexity)]
 fn system_with_two_queries(
-    (entities, average): (&u32, &f32),
-    (with_f32, without_f32): (Query<With<f32, &mut u32>>, Query<Without<f32, &mut u32>>),
+    entities: &u32,
+    average: &f32,
+    with_f32: Query<With<f32, &mut u32>>,
+    without_f32: Query<Without<f32, &mut u32>>,
 ) {
     yaks::batch(&mut with_f32.query(), entities / 8, |_entity, unsigned| {
         *unsigned += average.round() as u32;

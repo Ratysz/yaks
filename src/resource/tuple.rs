@@ -107,4 +107,4 @@ macro_rules! impl_resource_tuple {
     }
 }
 
-impl_for_tuples!(impl_resource_tuple);
+impl_for_tuples!(impl_resource_tuple, no_single);

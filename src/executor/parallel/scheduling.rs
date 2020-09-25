@@ -197,7 +197,7 @@ mod tests {
     struct B(usize);
     struct C(usize);
 
-    fn dummy_system(_: (), _: ()) {}
+    fn dummy_system() {}
 
     fn local_pool_scope_fifo<'scope, F>(closure: F)
     where
@@ -343,8 +343,8 @@ mod tests {
         let world = World::new();
         let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
-                .system(|_: &A, _: ()| {})
-                .system(|a: &mut A, _: ()| a.0 += 1),
+                .system(|_: &A| {})
+                .system(|a: &mut A| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
@@ -371,8 +371,8 @@ mod tests {
         let world = World::new();
         let mut executor = ExecutorParallel::<Mut<A>>::build(
             Executor::builder()
-                .system(|a: &mut A, _: ()| a.0 += 1)
-                .system(|a: &mut A, _: ()| a.0 += 1),
+                .system(|a: &mut A| a.0 += 1)
+                .system(|a: &mut A| a.0 += 1),
         )
         .unwrap_to_scheduler();
         let mut a = A(0);
@@ -400,7 +400,7 @@ mod tests {
         world.spawn_batch((0..10).map(|_| (B(0),)));
         let mut executor = ExecutorParallel::<Ref<A>>::build(
             Executor::builder()
-                .system(|_: (), q: Query<&B>| for (_, _) in q.query().iter() {})
+                .system(|q: Query<&B>| for (_, _) in q.query().iter() {})
                 .system(|a: &A, q: Query<&mut B>| {
                     for (_, b) in q.query().iter() {
                         b.0 += a.0;

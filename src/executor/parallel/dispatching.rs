@@ -2,8 +2,7 @@ use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{collections::HashMap, sync::Arc};
 
-use super::SystemClosure;
-use crate::{ResourceTuple, SystemId};
+use crate::{ResourceTuple, SystemClosure, SystemId};
 
 /// Parallel executor variant, used when all systems are proven to be statically disjoint,
 /// and have no dependencies.
@@ -44,20 +43,14 @@ mod tests {
 
     #[test]
     fn trivial() {
-        ExecutorParallel::<()>::build(
-            Executor::builder()
-                .system(|_: (), _: ()| {})
-                .system(|_: (), _: ()| {}),
-        )
-        .unwrap_to_dispatcher();
+        ExecutorParallel::<()>::build(Executor::builder().system(|| {}).system(|| {}))
+            .unwrap_to_dispatcher();
     }
 
     #[test]
     fn trivial_with_resources() {
         ExecutorParallel::<(Ref<A>, Ref<B>, Ref<C>)>::build(
-            Executor::builder()
-                .system(|_: (), _: ()| {})
-                .system(|_: (), _: ()| {}),
+            Executor::builder().system(|| {}).system(|| {}),
         )
         .unwrap_to_dispatcher();
     }
@@ -70,10 +63,10 @@ mod tests {
         let c = C(2);
         let mut executor = ExecutorParallel::<(Mut<A>, Mut<B>, Ref<C>)>::build(
             Executor::builder()
-                .system(|(a, c): (&mut A, &C), _: ()| {
+                .system(|a: &mut A, c: &C| {
                     a.0 += c.0;
                 })
-                .system(|(b, c): (&mut B, &C), _: ()| {
+                .system(|b: &mut B, c: &C| {
                     b.0 += c.0;
                 }),
         )

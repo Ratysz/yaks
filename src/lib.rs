@@ -59,7 +59,7 @@
 //! let mut average = 0f32;
 //! let mut executor = Executor::<(Ref<u32>, Ref<usize>, Mut<f32>)>::builder()
 //!     .system_with_handle(
-//!         |(entities, average): (&u32, &mut f32), floats: Query<&f32>| {
+//!         |entities: &u32, average: &mut f32, floats: Query<&f32>| {
 //!             *average = 0.0;
 //!             for (_entity, float) in floats.query().iter() {
 //!                 *average += *float;
@@ -81,11 +81,10 @@
 //! executor.run(&world, (&entities, &increment, &mut average));
 //!
 //! fn system_with_two_queries(
-//!     (entities, average): (&u32, &f32),
-//!     (with_f32, without_f32): (
-//!         Query<With<f32, &mut u32>>,
-//!         Query<Without<f32, &mut u32>>,
-//!     ),
+//!     entities: &u32,
+//!     average: &f32,
+//!     with_f32: Query<With<f32, &mut u32>>,
+//!     without_f32: Query<Without<f32, &mut u32>>,
 //! ) {
 //!     yaks::batch(
 //!         &mut with_f32.query(),
@@ -115,19 +114,22 @@ mod r#macro;
 mod access_set;
 mod batch;
 mod executor;
-mod query_bundle;
 mod query;
+mod query_bundle;
 mod resource;
 mod run;
+mod system;
+mod trash_system;
 
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
-use query_bundle::QueryBundle;
+use query_bundle::QueryExt;
 use resource::{Fetch, ResourceTuple, Wrap};
+use system::{IntoSystem, System, SystemClosure};
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};
 pub use query::Query;
 pub use resource::{MarkerGet, Mut, Ref};
-pub use run::System;
+pub use run::Run;

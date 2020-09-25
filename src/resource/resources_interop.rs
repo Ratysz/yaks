@@ -27,11 +27,11 @@ where
 
 #[test]
 fn smoke_test() {
-    use crate::{Executor, System};
+    use crate::{Executor, Run};
     let mut executor = Executor::<(Mut<f32>, Ref<u32>, Ref<u64>)>::builder()
-        .system(|_: (&mut f32, &u32), _: ()| {})
-        .system(|_: (&mut f32, &u64), _: ()| {})
-        .system(|_: (), _: ()| {})
+        .system(|_: &mut f32, _: &u32| {})
+        .system(|_: &mut f32, _: &u64| {})
+        .system(|| {})
         .build();
     let world = hecs::World::new();
 
@@ -44,7 +44,7 @@ fn smoke_test() {
     resources.insert(3u64);
     executor.run(&world, &resources);
 
-    fn sum_system((a, b): (&mut i32, &usize), _: ()) {
+    fn sum_system(a: &mut i32, b: &usize) {
         *a += *b as i32;
     }
     resources.insert(3usize);

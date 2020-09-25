@@ -26,15 +26,15 @@ pub trait WrappableSingle<Source, Marker> {
     fn wrap(fetched: &mut Self::Fetched, borrow: &mut AtomicBorrow) -> Self::Wrapped;
 }
 
-impl<'a, Source, R0> WrappableSingle<Source, Source> for Ref<R0>
+impl<'a, Source, R> WrappableSingle<Source, Source> for Ref<R>
 where
     Self: MarkerGet<Source>,
-    <Self as MarkerGet<Source>>::Fetched: Deref<Target = R0>,
+    <Self as MarkerGet<Source>>::Fetched: Deref<Target = R>,
     Source: Copy,
-    R0: Send + Sync,
+    R: Send + Sync,
 {
     type Fetched = <Self as MarkerGet<Source>>::Fetched;
-    type Wrapped = ResourceRefCell<R0>;
+    type Wrapped = ResourceRefCell<R>;
 
     fn fetch(source: Source) -> Self::Fetched {
         <Self as MarkerGet<Source>>::fetch(source)
@@ -45,15 +45,15 @@ where
     }
 }
 
-impl<'a, Source, R0> WrappableSingle<Source, Source> for Mut<R0>
+impl<'a, Source, R> WrappableSingle<Source, Source> for Mut<R>
 where
     Self: MarkerGet<Source>,
-    <Self as MarkerGet<Source>>::Fetched: DerefMut<Target = R0>,
+    <Self as MarkerGet<Source>>::Fetched: DerefMut<Target = R>,
     Source: Copy,
-    R0: Send + Sync,
+    R: Send + Sync,
 {
     type Fetched = <Self as MarkerGet<Source>>::Fetched;
-    type Wrapped = ResourceMutCell<R0>;
+    type Wrapped = ResourceMutCell<R>;
 
     fn fetch(source: Source) -> Self::Fetched {
         <Self as MarkerGet<Source>>::fetch(source)
@@ -64,14 +64,14 @@ where
     }
 }
 
-impl<'a, R0> WrappableSingle<&'a R0, ()> for Ref<R0>
+impl<'a, R> WrappableSingle<&'a R, ()> for Ref<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    type Fetched = &'a R0;
-    type Wrapped = ResourceRefCell<R0>;
+    type Fetched = &'a R;
+    type Wrapped = ResourceRefCell<R>;
 
-    fn fetch(source: &'a R0) -> Self::Fetched {
+    fn fetch(source: &'a R) -> Self::Fetched {
         source
     }
 
@@ -80,14 +80,14 @@ where
     }
 }
 
-impl<'a, R0> WrappableSingle<&'a mut R0, ()> for Mut<R0>
+impl<'a, R> WrappableSingle<&'a mut R, ()> for Mut<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    type Fetched = &'a mut R0;
-    type Wrapped = ResourceMutCell<R0>;
+    type Fetched = &'a mut R;
+    type Wrapped = ResourceMutCell<R>;
 
-    fn fetch(source: &'a mut R0) -> Self::Fetched {
+    fn fetch(source: &'a mut R) -> Self::Fetched {
         source
     }
 
@@ -96,14 +96,14 @@ where
     }
 }
 
-impl<'a, R0> WrappableSingle<(&'a R0,), ()> for Ref<R0>
+impl<'a, R> WrappableSingle<(&'a R,), ()> for Ref<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    type Fetched = &'a R0;
-    type Wrapped = ResourceRefCell<R0>;
+    type Fetched = &'a R;
+    type Wrapped = ResourceRefCell<R>;
 
-    fn fetch(source: (&'a R0,)) -> Self::Fetched {
+    fn fetch(source: (&'a R,)) -> Self::Fetched {
         source.0
     }
 
@@ -112,14 +112,14 @@ where
     }
 }
 
-impl<'a, R0> WrappableSingle<(&'a mut R0,), ()> for Mut<R0>
+impl<'a, R> WrappableSingle<(&'a mut R,), ()> for Mut<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    type Fetched = &'a mut R0;
-    type Wrapped = ResourceMutCell<R0>;
+    type Fetched = &'a mut R;
+    type Wrapped = ResourceMutCell<R>;
 
-    fn fetch(source: (&'a mut R0,)) -> Self::Fetched {
+    fn fetch(source: (&'a mut R,)) -> Self::Fetched {
         source.0
     }
 
@@ -138,10 +138,10 @@ pub trait WrappableTuple<Source, Marker> {
     fn wrap(fetched: &mut Self::Fetched, borrows: &mut Self::BorrowTuple) -> Self::Wrapped;
 }
 
-impl<'a, Source, Marker, R0> WrappableTuple<Source, Marker> for Ref<R0>
+impl<'a, Source, Marker, R> WrappableTuple<Source, Marker> for Ref<R>
 where
     Self: WrappableSingle<Source, Marker>,
-    R0: Send + Sync,
+    R: Send + Sync,
 {
     type Fetched = <Self as WrappableSingle<Source, Marker>>::Fetched;
     type Wrapped = (<Self as WrappableSingle<Source, Marker>>::Wrapped,);
@@ -159,10 +159,10 @@ where
     }
 }
 
-impl<'a, Source, Marker, R0> WrappableTuple<Source, Marker> for Mut<R0>
+impl<'a, Source, Marker, R> WrappableTuple<Source, Marker> for Mut<R>
 where
     Self: WrappableSingle<Source, Marker>,
-    R0: Send + Sync,
+    R: Send + Sync,
 {
     type Fetched = <Self as WrappableSingle<Source, Marker>>::Fetched;
     type Wrapped = (<Self as WrappableSingle<Source, Marker>>::Wrapped,);
@@ -190,23 +190,6 @@ impl<Source> WrappableTuple<Source, ()> for () {
     fn wrap(_: &mut Self::Fetched, _: &mut Self::BorrowTuple) -> Self::Wrapped {}
 }
 
-impl<Source, Marker, R0> WrappableTuple<Source, Marker> for (R0,)
-where
-    R0: WrappableSingle<Source, Marker>,
-{
-    type Fetched = (R0::Fetched,);
-    type Wrapped = (R0::Wrapped,);
-    type BorrowTuple = (AtomicBorrow,);
-
-    fn fetch(source: Source) -> Self::Fetched {
-        (R0::fetch(source),)
-    }
-
-    fn wrap(fetched: &mut Self::Fetched, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
-        (R0::wrap(&mut fetched.0, &mut borrows.0),)
-    }
-}
-
 macro_rules! swap_to_atomic_borrow {
     ($anything:tt) => {
         AtomicBorrow
@@ -217,6 +200,24 @@ macro_rules! swap_to_atomic_borrow {
 }
 
 macro_rules! impl_wrappable {
+    ($letter:ident) => {
+        impl<Source, Marker, $letter> WrappableTuple<Source, Marker> for ($letter,)
+        where
+            $letter: WrappableSingle<Source, Marker>,
+        {
+            type Fetched = ($letter::Fetched,);
+            type Wrapped = ($letter::Wrapped,);
+            type BorrowTuple = (AtomicBorrow,);
+
+            fn fetch(source: Source) -> Self::Fetched {
+                ($letter::fetch(source),)
+            }
+
+            fn wrap(fetched: &mut Self::Fetched, borrows: &mut Self::BorrowTuple) -> Self::Wrapped {
+                ($letter::wrap(&mut fetched.0, &mut borrows.0),)
+            }
+        }
+    };
     ($($letter:ident),*) => {
         paste::item! {
             impl<Source, $($letter),*> WrappableTuple<Source, Source> for ($($letter,)*)
@@ -272,4 +273,4 @@ macro_rules! impl_wrappable {
     }
 }
 
-impl_for_tuples!(impl_wrappable);
+impl_for_tuples!(impl_wrappable, all);

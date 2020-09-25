@@ -45,11 +45,9 @@ fn motion(
     // A resource this system requires. Can be a single one, or any tuple up to 16.
     spawned: &SpawnedEntities,
     // Queries this system will execute. Can be a single one, or any tuple up to 16.
-    (no_acceleration, with_acceleration): (
-        // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
-        Query<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
-        Query<(&mut Position, &mut Velocity, &Acceleration)>,
-    ),
+    // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
+    no_acceleration: Query<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
+    with_acceleration: Query<(&mut Position, &mut Velocity, &Acceleration)>,
 ) {
     // A helper function that automatically spreads the batches across threads of a
     // `rayon::ThreadPool` - either the global one if called standalone, or a specific one
@@ -89,7 +87,8 @@ fn find_highest_velocity(highest: &mut Velocity, velocities: Query<&Velocity>) {
 
 // A system that recolors entities based on their kinematic properties.
 fn color(
-    (spawned, rng): (&SpawnedEntities, &mut StdRng),
+    spawned: &SpawnedEntities,
+    rng: &mut StdRng,
     all_the_comps: Query<(&Position, &Velocity, &mut Color)>,
 ) {
     // Of course, it's possible to use resources mutably and still batch queries if
@@ -107,10 +106,7 @@ fn color(
 }
 
 // A system that tracks the average color of entities.
-fn find_average_color(
-    (average_color, spawned): (&mut Color, &SpawnedEntities),
-    colors: Query<&Color>,
-) {
+fn find_average_color(average_color: &mut Color, spawned: &SpawnedEntities, colors: Query<&Color>) {
     *average_color = Color(0.0, 0.0, 0.0, 0.0);
     for (_entity, color) in colors.query().iter() {
         average_color.0 += color.0;
@@ -186,7 +182,7 @@ fn main() {
             // for the lifetime of the executor.
             // (Note, systems with no resources or queries have
             // no business being in an executor, this is for demonstration only.)
-            .system(|_resources: (), _queries: ()| iterations += 1)
+            .system(|| iterations += 1)
             // The builder will panic if given a system with a handle it already contains,
             // a list of dependencies with a system it doesn't contain yet,
             // or a system that depends on itself.
@@ -224,7 +220,7 @@ fn main() {
 
     // The automatically implemented trait `System` allows easily calling systems
     // as plain functions with `::run()`.
-    use yaks::System;
+    use yaks::Run;
     print!("running {} iterations of functions... ", ITERATIONS);
     let mut elapsed = Duration::from_millis(0);
     for _ in 0..ITERATIONS {

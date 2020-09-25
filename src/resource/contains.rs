@@ -230,4 +230,4 @@ macro_rules! impl_contains {
     }
 }
 
-impl_for_tuples!(impl_contains);
+impl_for_tuples!(impl_contains, no_single);

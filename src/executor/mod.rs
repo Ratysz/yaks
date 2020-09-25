@@ -22,8 +22,6 @@ use crate::TypeSet;
 #[cfg(feature = "parallel")]
 use parallel::ExecutorParallel;
 
-type SystemClosure<'closure, Cells> = dyn FnMut(&hecs::World, &Cells) + Send + Sync + 'closure;
-
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(pub(crate) usize);
 
@@ -144,6 +142,7 @@ where
     ///
     /// let mut executor = Executor::<Ref<f32>>::builder().build();
     /// executor.run(&world, &some_f32);
+    /// executor.run(&world, (&some_f32, ));
     ///
     /// let mut executor = Executor::<(Ref<f32>, Mut<u32>)>::builder().build();
     /// executor.run(&world, (&some_f32, &mut some_u32));
@@ -191,9 +190,9 @@ where
     /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than
     /// in a previous call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<RefSource, Marker>(&mut self, world: &hecs::World, resources: RefSource)
+    pub fn run<Source, Marker>(&mut self, world: &hecs::World, resources: Source)
     where
-        Resources: Wrap<RefSource, Marker>,
+        Resources: Wrap<Source, Marker>,
     {
         Resources::wrap_and_run(self, world, resources);
     }
