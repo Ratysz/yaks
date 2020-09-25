@@ -16,7 +16,6 @@ mod atomic_borrow;
 mod cell;
 mod contains;
 mod fetch;
-mod ref_extractor;
 #[cfg(feature = "resources-interop")]
 mod resources_interop;
 mod tuple;
@@ -27,6 +26,5 @@ use contains::{ContainsMut, ContainsRef};
 
 pub use atomic_borrow::AtomicBorrow;
 pub use fetch::Fetch;
-pub use ref_extractor::Wrap;
 pub use tuple::{Mut, Ref, ResourceTuple};
 pub use wrap::{MarkerGet, WrappableSingle, WrappableTuple};

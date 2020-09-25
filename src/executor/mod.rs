@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ResourceTuple, Wrap};
+use crate::{ResourceTuple, WrappableTuple};
 
 mod builder;
 
@@ -192,8 +192,15 @@ where
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
     pub fn run<Source, Marker>(&mut self, world: &hecs::World, resources: Source)
     where
-        Resources: Wrap<Source, Marker>,
+        Resources: WrappableTuple<
+            Source,
+            Marker,
+            Wrapped = <Resources as ResourceTuple>::Wrapped,
+            BorrowTuple = <Resources as ResourceTuple>::BorrowTuple,
+        >,
     {
-        Resources::wrap_and_run(self, world, resources);
+        let mut fetched = Resources::fetch(resources);
+        let wrapped = Resources::wrap(&mut fetched, &mut self.borrows);
+        self.inner.run(world, wrapped);
     }
 }

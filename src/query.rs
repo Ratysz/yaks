@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
 
-/// A zero-sized `Copy` type used to describe queries of a system, and prepare them
-/// via methods of [`SystemContext`](struct.SystemContext.html).
+/// A thin wrapper over [`&hecs::World`](../hecs/struct.World.html),
+/// used to describe and prepare queries of a system.
 ///
-/// It cannot be instantiated directly. See [`System`](trait.System.html) for instructions
-/// on how to call systems outside of an executor, as plain functions.
+/// It can be copied, but cannot be instantiated directly.
+/// Use [`Run`](trait.Run.html) to call systems as plain functions.
 pub struct Query<'a, Q>
 where
     Q: hecs::Query,

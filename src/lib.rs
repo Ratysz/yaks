@@ -126,7 +126,7 @@ use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
 #[cfg(feature = "parallel")]
 use query_ext::QueryExt;
-use resource::{Fetch, ResourceTuple, Wrap};
+use resource::{Fetch, ResourceTuple, WrappableTuple};
 use system::{IntoSystem, System, SystemClosure};
 
 pub use batch::batch;

@@ -44,11 +44,11 @@ where
     }
 }
 
-// TODO improve doc
+// TODO add examples
 /// Automatically implemented on all closures and functions that can be used
-/// as systems in an executor. It shouldn't be implemented manually.
+/// as systems in an executor. It's never required to be implemented manually.
 pub trait Run<Source, Marker, Resources, Queries> {
-    /// Zero-cost wrapping function that executes the system.
+    /// Zero-cost convenience function that calls the implementing function or closure.
     fn run(&mut self, world: &hecs::World, resources: Source);
 }
 
