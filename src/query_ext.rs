@@ -1,14 +1,10 @@
-#[cfg(feature = "parallel")]
 use std::any::TypeId;
 
-#[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowTypeSet};
 
 pub trait QueryExt: hecs::Query {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet);
 
-    #[cfg(feature = "parallel")]
     fn set_archetype_bits(world: &hecs::World, archetype_set: &mut ArchetypeSet)
     where
         Self: Sized,
@@ -18,59 +14,53 @@ pub trait QueryExt: hecs::Query {
 }
 
 impl QueryExt for () {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(_: &mut BorrowTypeSet) {}
 }
 
-impl<C0> QueryExt for &'_ C0
+impl<C> QueryExt for &'_ C
 where
-    C0: hecs::Component,
+    C: hecs::Component,
 {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
-        component_type_set.immutable.insert(TypeId::of::<C0>());
+        component_type_set.immutable.insert(TypeId::of::<C>());
     }
 }
 
-impl<C0> QueryExt for &'_ mut C0
+impl<C> QueryExt for &'_ mut C
 where
-    C0: hecs::Component,
+    C: hecs::Component,
 {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
-        component_type_set.mutable.insert(TypeId::of::<C0>());
+        component_type_set.mutable.insert(TypeId::of::<C>());
     }
 }
 
-impl<Q0> QueryExt for Option<Q0>
+impl<Q> QueryExt for Option<Q>
 where
-    Q0: QueryExt,
+    Q: QueryExt,
 {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
-        Q0::insert_component_types(component_type_set);
+        Q::insert_component_types(component_type_set);
     }
 }
 
-impl<C0, Q0> QueryExt for hecs::With<C0, Q0>
+impl<C, Q> QueryExt for hecs::With<C, Q>
 where
-    C0: hecs::Component,
-    Q0: QueryExt,
+    C: hecs::Component,
+    Q: QueryExt,
 {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
-        Q0::insert_component_types(component_type_set);
+        Q::insert_component_types(component_type_set);
     }
 }
 
-impl<C0, Q0> QueryExt for hecs::Without<C0, Q0>
+impl<C, Q> QueryExt for hecs::Without<C, Q>
 where
-    C0: hecs::Component,
-    Q0: QueryExt,
+    C: hecs::Component,
+    Q: QueryExt,
 {
-    #[cfg(feature = "parallel")]
     fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
-        Q0::insert_component_types(component_type_set);
+        Q::insert_component_types(component_type_set);
     }
 }
 
@@ -80,7 +70,6 @@ macro_rules! impl_query_ext {
         where
             $($letter: QueryExt,)*
         {
-            #[cfg(feature = "parallel")]
             fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
                 $($letter::insert_component_types(component_type_set);)*
             }

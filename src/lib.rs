@@ -115,7 +115,8 @@ mod access_set;
 mod batch;
 mod executor;
 mod query;
-mod query_bundle;
+#[cfg(feature = "parallel")]
+mod query_ext;
 mod resource;
 mod run;
 mod system;
@@ -123,7 +124,8 @@ mod system;
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
-use query_bundle::QueryExt;
+#[cfg(feature = "parallel")]
+use query_ext::QueryExt;
 use resource::{Fetch, ResourceTuple, Wrap};
 use system::{IntoSystem, System, SystemClosure};
 

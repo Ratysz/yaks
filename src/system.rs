@@ -1,12 +1,14 @@
-use crate::{Fetch, Query, QueryExt, ResourceTuple, SystemId};
+use crate::{Fetch, Query, ResourceTuple, SystemId};
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet};
+use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, QueryExt};
+
+#[cfg(not(feature = "parallel"))]
+use hecs::Query as QueryExt;
 
 pub type SystemClosure<'closure, Cells> = dyn FnMut(&hecs::World, &Cells) + Send + Sync + 'closure;
 
-/// Container for parsed systems and their metadata;
-/// destructured in concrete executors' build functions.
+/// Container for system and metadata, parsed for use in a specific executor.
 pub struct System<'closure, ExecutorResources>
 where
     ExecutorResources: ResourceTuple + 'closure,
