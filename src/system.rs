@@ -1,4 +1,4 @@
-use crate::{Fetch, Query, QueryExt, ResourceTuple, Run, SystemId};
+use crate::{Fetch, Query, QueryExt, ResourceTuple, SystemId};
 
 #[cfg(feature = "parallel")]
 use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet};
@@ -28,32 +28,24 @@ where
     fn into_system(self) -> System<'closure, ExecutorResources>;
 }
 
-use crate::run::TupleMarker;
-
 macro_rules! impl_into_system {
     ($resource:ident, ($($query:ident,)*)) => {};
     ((), ($($query:ident,)*)) => {
         impl<'a, 'closure, Closure, ExecutorResources, $($query,)*>
-            IntoSystem<
-                'closure,
-                ExecutorResources,
-                (),
-                (),
-                ($($query,)*)
-            >
-            for Closure
+            IntoSystem<'closure, ExecutorResources, (), (), ($($query,)*)> for Closure
         where
             Closure: FnMut($(Query<$query>,)*) + Send + Sync + 'closure,
-            Closure: Run<(), (), (), ($($query,)*)>,
             ExecutorResources: ResourceTuple + 'closure,
             ExecutorResources::Wrapped: 'a,
             $($query: QueryExt,)*
         {
             #[allow(non_snake_case, unused_variables, unused_mut)]
             fn into_system(mut self) -> System<'closure, ExecutorResources> {
-                let closure = Box::new(move |world, _: &'a ExecutorResources::Wrapped| {
-                        self.run(world, ());
-                });
+                let closure = Box::new(
+                    move |world: &'a hecs::World, _: &'a ExecutorResources::Wrapped| {
+                        self($(Query::<$query>::new(world),)*);
+                    }
+                );
                 let closure = unsafe {
                     std::mem::transmute::<
                         Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closure>,
@@ -87,17 +79,10 @@ macro_rules! impl_into_system {
     };
     (($($resource:ident,)*), ($($query:ident,)*)) => {
         impl<'a, 'closure, Closure, ExecutorResources, Markers, $($resource,)* $($query,)*>
-            IntoSystem<
-                'closure,
-                ExecutorResources,
-                Markers,
-                ($($resource,)*),
-                ($($query,)*)
-            >
+            IntoSystem<'closure, ExecutorResources, Markers, ($($resource,)*), ($($query,)*)>
             for Closure
         where
             Closure: FnMut($($resource,)* $(Query<$query>,)*) + Send + Sync + 'closure,
-            Closure: Run<($($resource,)*), TupleMarker, ($($resource,)*), ($($query,)*)>,
             ExecutorResources: ResourceTuple + 'closure,
             ExecutorResources::Wrapped: 'a,
             ($($resource,)*): Fetch<&'a ExecutorResources::Wrapped, Markers> + 'a,
@@ -106,9 +91,9 @@ macro_rules! impl_into_system {
             #[allow(non_snake_case, unused_variables, unused_mut)]
             fn into_system(mut self) -> System<'closure, ExecutorResources> {
                 let closure = Box::new(
-                    move |world, resources| {
+                    move |world: &'a hecs::World, resources: &'a ExecutorResources::Wrapped| {
                         let ($($resource,)*) = <($($resource,)*)>::fetch(resources);
-                        self.run(world, ($($resource,)*));
+                        self($($resource,)* $(Query::<$query>::new(world),)*);
                         unsafe { <($($resource,)*)>::release(resources) };
                     }
                 );
