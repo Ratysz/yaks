@@ -119,7 +119,6 @@ mod query_bundle;
 mod resource;
 mod run;
 mod system;
-mod trash_system;
 
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
