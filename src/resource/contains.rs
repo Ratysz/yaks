@@ -1,10 +1,10 @@
 #[cfg(feature = "parallel")]
 use fixedbitset::FixedBitSet;
 
-use super::{ResourceCell, ResourceMutCell, ResourceRefCell};
+use super::{ResourceMutCell, ResourceRefCell};
 
-pub trait ContainsRef<R0, M0> {
-    fn borrow_ref(&self) -> &R0;
+pub trait ContainsRef<R, M> {
+    fn borrow_ref(&self) -> &R;
 
     unsafe fn release_ref(&self);
 
@@ -12,9 +12,9 @@ pub trait ContainsRef<R0, M0> {
     fn set_resource_bit(bitset: &mut FixedBitSet);
 }
 
-pub trait ContainsMut<R0, M0> {
+pub trait ContainsMut<R, M> {
     #[allow(clippy::mut_from_ref)]
-    fn borrow_mut(&self) -> &mut R0;
+    fn borrow_mut(&self) -> &mut R;
 
     unsafe fn release_mut(&self);
 
@@ -22,16 +22,16 @@ pub trait ContainsMut<R0, M0> {
     fn set_resource_bit(bitset: &mut FixedBitSet);
 }
 
-impl<R0> ContainsRef<R0, ()> for ResourceRefCell<R0>
+impl<R> ContainsRef<R, ()> for ResourceRefCell<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    fn borrow_ref(&self) -> &R0 {
-        ResourceCell::borrow_ref(self)
+    fn borrow_ref(&self) -> &R {
+        self.cell_borrow_ref()
     }
 
     unsafe fn release_ref(&self) {
-        ResourceCell::release_ref(self);
+        self.cell_release_ref()
     }
 
     #[cfg(feature = "parallel")]
@@ -40,16 +40,16 @@ where
     }
 }
 
-impl<R0> ContainsRef<R0, ()> for ResourceMutCell<R0>
+impl<R> ContainsRef<R, ()> for ResourceMutCell<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    fn borrow_ref(&self) -> &R0 {
-        ResourceCell::borrow_ref(self)
+    fn borrow_ref(&self) -> &R {
+        self.cell_borrow_ref()
     }
 
     unsafe fn release_ref(&self) {
-        ResourceCell::release_ref(self);
+        self.cell_release_ref()
     }
 
     #[cfg(feature = "parallel")]
@@ -58,57 +58,21 @@ where
     }
 }
 
-impl<R0> ContainsMut<R0, ()> for ResourceMutCell<R0>
+impl<R> ContainsMut<R, ()> for ResourceMutCell<R>
 where
-    R0: Send + Sync,
+    R: Send + Sync,
 {
-    fn borrow_mut(&self) -> &mut R0 {
-        ResourceCell::borrow_mut(self)
+    fn borrow_mut(&self) -> &mut R {
+        self.cell_borrow_mut()
     }
 
     unsafe fn release_mut(&self) {
-        ResourceCell::release_mut(self);
+        self.cell_release_mut()
     }
 
     #[cfg(feature = "parallel")]
     fn set_resource_bit(_: &mut FixedBitSet) {
         unreachable!()
-    }
-}
-
-impl<R0, C0> ContainsRef<R0, (R0,)> for (C0,)
-where
-    C0: ContainsRef<R0, ()>,
-{
-    fn borrow_ref(&self) -> &R0 {
-        self.0.borrow_ref()
-    }
-
-    unsafe fn release_ref(&self) {
-        self.0.release_ref();
-    }
-
-    #[cfg(feature = "parallel")]
-    fn set_resource_bit(bitset: &mut FixedBitSet) {
-        bitset.insert(0);
-    }
-}
-
-impl<R0, C0> ContainsMut<R0, (R0,)> for (C0,)
-where
-    C0: ContainsMut<R0, ()>,
-{
-    fn borrow_mut(&self) -> &mut R0 {
-        self.0.borrow_mut()
-    }
-
-    unsafe fn release_mut(&self) {
-        self.0.release_mut();
-    }
-
-    #[cfg(feature = "parallel")]
-    fn set_resource_bit(bitset: &mut FixedBitSet) {
-        bitset.insert(0);
     }
 }
 
@@ -230,4 +194,4 @@ macro_rules! impl_contains {
     }
 }
 
-impl_for_tuples!(impl_contains, no_single);
+impl_for_tuples!(impl_contains, all);

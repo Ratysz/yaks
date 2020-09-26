@@ -21,7 +21,7 @@ mod resources_interop;
 mod tuple;
 mod wrap;
 
-pub use cell::{ResourceCell, ResourceMutCell, ResourceRefCell};
+use cell::{ResourceMutCell, ResourceRefCell};
 use contains::{ContainsMut, ContainsRef};
 
 pub use atomic_borrow::AtomicBorrow;
