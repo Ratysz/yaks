@@ -1,12 +1,12 @@
 //! Resource flow:
-//! - resources argument is passed to `Executor::<Tuple: ResourceTuple>::run()`,
-//! - tuple of references to types in `Tuple` is extracted
-//! from the argument (`RefExtractor`),
+//! - `Source` argument is passed to `Executor::<Resources: ResourceTuple + WrappableTuple>::run()`,
+//! - tuple of intermediates (`WrappableTuple::Intermediates`) is extracted from the argument
+//! (`WrappableTuple::get()`; `MarkerGet` for remote-implementing that on `Copy` sources),
 //! - the references, together with `AtomicBorrow`s from the executor,
-//! are wrapped into `ResourceCell`s (`ResourceWrap`),
+//! are wrapped into `ResourceCell`s (`WrappableTuple::wrap()`),
 //! - when each system in the executor is ran, a subset tuple of references matching
 //! that of the system's resources argument is fetched from the cells, setting runtime
-//! borrow checking (`Fetch` for the whole tuple, `Contains` for each of it's elements),
+//! borrow checking (`Fetch` for the whole tuple, `Contains` for each of its elements),
 //! - the subset tuple of references is passed into the system's boxed closure,
 //! - after closure returns, the borrows are "released", resetting runtime
 //! borrow checking (`Fetch` and `Contains` again),

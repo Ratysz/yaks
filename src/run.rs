@@ -2,45 +2,45 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{MarkerGet, Mut, Query, Ref};
 
-pub trait Fetchable<Source> {
-    type Fetched;
+pub trait MarkerGettable<Source> {
+    type Intermediate;
 
-    fn fetch(source: Source) -> Self::Fetched;
+    fn get(source: Source) -> Self::Intermediate;
 
-    fn deref(fetched: &mut Self::Fetched) -> Self;
+    unsafe fn deref_to_self(fetched: &mut Self::Intermediate) -> Self;
 }
 
-impl<Source, R> Fetchable<Source> for &'_ R
+impl<Source, R> MarkerGettable<Source> for &'_ R
 where
     Source: Copy,
     Ref<R>: MarkerGet<Source>,
-    <Ref<R> as MarkerGet<Source>>::Fetched: Deref<Target = R>,
+    <Ref<R> as MarkerGet<Source>>::Intermediate: Deref<Target = R>,
 {
-    type Fetched = <Ref<R> as MarkerGet<Source>>::Fetched;
+    type Intermediate = <Ref<R> as MarkerGet<Source>>::Intermediate;
 
-    fn fetch(source: Source) -> Self::Fetched {
-        <Ref<R> as MarkerGet<Source>>::fetch(source)
+    fn get(source: Source) -> Self::Intermediate {
+        <Ref<R> as MarkerGet<Source>>::get(source)
     }
 
-    fn deref(fetched: &mut Self::Fetched) -> Self {
-        unsafe { std::mem::transmute(&**fetched) }
+    unsafe fn deref_to_self(fetched: &mut Self::Intermediate) -> Self {
+        std::mem::transmute(&**fetched)
     }
 }
 
-impl<Source, R> Fetchable<Source> for &'_ mut R
+impl<Source, R> MarkerGettable<Source> for &'_ mut R
 where
     Source: Copy,
     Mut<R>: MarkerGet<Source>,
-    <Mut<R> as MarkerGet<Source>>::Fetched: DerefMut<Target = R>,
+    <Mut<R> as MarkerGet<Source>>::Intermediate: DerefMut<Target = R>,
 {
-    type Fetched = <Mut<R> as MarkerGet<Source>>::Fetched;
+    type Intermediate = <Mut<R> as MarkerGet<Source>>::Intermediate;
 
-    fn fetch(source: Source) -> Self::Fetched {
-        <Mut<R> as MarkerGet<Source>>::fetch(source)
+    fn get(source: Source) -> Self::Intermediate {
+        <Mut<R> as MarkerGet<Source>>::get(source)
     }
 
-    fn deref(fetched: &mut Self::Fetched) -> Self {
-        unsafe { std::mem::transmute(&mut **fetched) }
+    unsafe fn deref_to_self(fetched: &mut Self::Intermediate) -> Self {
+        std::mem::transmute(&mut **fetched)
     }
 }
 
@@ -99,13 +99,18 @@ macro_rules! impl_system {
             Run<Source, (Source, SingleMarker), $resource, ($($query,)*)> for Closure
         where
             Closure: FnMut($resource, $(Query<$query>,)*) + Send + Sync + 'closure,
-            $resource: Fetchable<Source>,
+            $resource: MarkerGettable<Source>,
             $($query: hecs::Query,)*
         {
             #[allow(non_snake_case, unused_variables)]
             fn run(&mut self, world: &hecs::World, resources: Source) {
-                let mut $resource = $resource::fetch(resources);
-                self($resource::deref(&mut $resource), $(Query::<$query>::new(world),)*);
+                let mut $resource = $resource::get(resources);
+                unsafe {
+                    self(
+                        $resource::deref_to_self(&mut $resource),
+                        $(Query::<$query>::new(world),)*
+                    );
+                }
             }
         }
     };
@@ -126,13 +131,18 @@ macro_rules! impl_system {
         where
             Closure: FnMut($($resource,)* $(Query<$query>,)*) + Send + Sync + 'closure,
             Source: Copy,
-            $($resource: Fetchable<Source>,)*
+            $($resource: MarkerGettable<Source>,)*
             $($query: hecs::Query,)*
         {
             #[allow(non_snake_case, unused_variables)]
             fn run(&mut self, world: &hecs::World, resources: Source) {
-                let ($(mut $resource,)*) = ($($resource::fetch(resources),)*);
-                self($($resource::deref(&mut $resource),)* $(Query::<$query>::new(world),)*);
+                let ($(mut $resource,)*) = ($($resource::get(resources),)*);
+                unsafe {
+                    self(
+                        $($resource::deref_to_self(&mut $resource),)*
+                        $(Query::<$query>::new(world),)*
+                    );
+                }
             }
         }
     };

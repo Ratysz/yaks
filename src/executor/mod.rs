@@ -199,7 +199,7 @@ where
             BorrowTuple = <Resources as ResourceTuple>::BorrowTuple,
         >,
     {
-        let mut fetched = Resources::fetch(resources);
+        let mut fetched = Resources::get(resources);
         let wrapped = Resources::wrap(&mut fetched, &mut self.borrows);
         self.inner.run(world, wrapped);
     }

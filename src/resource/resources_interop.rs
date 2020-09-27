@@ -7,9 +7,9 @@ impl<'a, T> MarkerGet<&'a Resources> for Ref<T>
 where
     T: Resource,
 {
-    type Fetched = resources::Ref<'a, T>;
+    type Intermediate = resources::Ref<'a, T>;
 
-    fn fetch(source: &'a Resources) -> Self::Fetched {
+    fn get(source: &'a Resources) -> Self::Intermediate {
         source.get().unwrap_or_else(|error| panic!("{}", error))
     }
 }
@@ -18,9 +18,9 @@ impl<'a, T> MarkerGet<&'a Resources> for Mut<T>
 where
     T: Resource,
 {
-    type Fetched = resources::RefMut<'a, T>;
+    type Intermediate = resources::RefMut<'a, T>;
 
-    fn fetch(source: &'a Resources) -> Self::Fetched {
+    fn get(source: &'a Resources) -> Self::Intermediate {
         source.get_mut().unwrap_or_else(|error| panic!("{}", error))
     }
 }
