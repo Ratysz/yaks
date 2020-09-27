@@ -1,7 +1,6 @@
-use hecs::World;
 use std::collections::HashMap;
 
-use crate::{RefExtractor, ResourceTuple, SystemContext};
+use crate::{ResourceTuple, WrappableTuple};
 
 mod builder;
 
@@ -22,8 +21,6 @@ mod parallel;
 use crate::TypeSet;
 #[cfg(feature = "parallel")]
 use parallel::ExecutorParallel;
-
-type SystemClosure<'closure, Cells> = dyn FnMut(SystemContext, &Cells) + Send + Sync + 'closure;
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SystemId(pub(crate) usize);
@@ -138,19 +135,17 @@ where
     /// The `resources` argument when calling this function must be a tuple of exclusive references
     /// to values of types specified by the generic parameter `Resources` of the executor:
     /// ```rust
-    /// # use yaks::Executor;
     /// # let world = hecs::World::new();
-    /// let mut executor = Executor::<(f32, u32)>::builder().build();
-    /// let mut some_f32 = 0f32;
+    /// use yaks::{Executor, Ref, Mut};
+    /// let some_f32 = 0f32;
     /// let mut some_u32 = 0u32;
-    /// executor.run(&world, (&mut some_f32, &mut some_u32));
     ///
-    /// let mut executor = Executor::<(f32, )>::builder().build();
-    /// executor.run(&world, (&mut some_f32, ));
+    /// let mut executor = Executor::<Ref<f32>>::builder().build();
+    /// executor.run(&world, &some_f32);
+    /// executor.run(&world, (&some_f32, ));
     ///
-    /// // Single resource type is also special-cased for convenience.
-    /// let mut executor = Executor::<(f32, )>::builder().build();
-    /// executor.run(&world, &mut some_f32);
+    /// let mut executor = Executor::<(Ref<f32>, Mut<u32>)>::builder().build();
+    /// executor.run(&world, (&some_f32, &mut some_u32));
     ///
     /// let mut executor = Executor::<()>::builder().build();
     /// executor.run(&world, ());
@@ -195,10 +190,17 @@ where
     /// - a different [`hecs::World`](../hecs/struct.World.html) is supplied than
     /// in a previous call, without first calling
     /// [`::force_archetype_recalculation()`](#method.force_archetype_recalculation).
-    pub fn run<RefSource>(&mut self, world: &World, resources: RefSource)
+    pub fn run<Source, Marker>(&mut self, world: &hecs::World, resources: Source)
     where
-        Resources: RefExtractor<RefSource>,
+        Resources: WrappableTuple<
+            Source,
+            Marker,
+            Wrapped = <Resources as ResourceTuple>::Wrapped,
+            BorrowTuple = <Resources as ResourceTuple>::BorrowTuple,
+        >,
     {
-        Resources::extract_and_run(self, world, resources);
+        let mut fetched = Resources::get(resources);
+        let wrapped = Resources::wrap(&mut fetched, &mut self.borrows);
+        self.inner.run(world, wrapped);
     }
 }

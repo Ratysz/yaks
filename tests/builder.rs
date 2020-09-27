@@ -1,6 +1,6 @@
-use yaks::{Executor, SystemContext};
+use yaks::Executor;
 
-fn dummy_system(_: SystemContext, _: (), _: ()) {}
+fn dummy_system(_: (), _: ()) {}
 
 #[test]
 #[should_panic(expected = "system 0 already exists")]

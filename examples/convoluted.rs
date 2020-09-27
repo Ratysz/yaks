@@ -3,7 +3,7 @@
 use hecs::World;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::time::{Duration, Instant};
-use yaks::{Executor, QueryMarker, SystemContext};
+use yaks::{Executor, Mut, Query, Ref};
 
 // Each of the tests will be ran this many times.
 const ITERATIONS: u32 = 100;
@@ -42,22 +42,18 @@ struct Color(f32, f32, f32, f32);
 // A system that simulates 2D kinematic motion.
 #[allow(clippy::type_complexity)]
 fn motion(
-    // Thin wrapper over `&hecs::World`.
-    context: SystemContext,
     // A resource this system requires. Can be a single one, or any tuple up to 16.
     spawned: &SpawnedEntities,
     // Queries this system will execute. Can be a single one, or any tuple up to 16.
-    (no_acceleration, with_acceleration): (
-        // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
-        QueryMarker<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
-        QueryMarker<(&mut Position, &mut Velocity, &Acceleration)>,
-    ),
+    // `QueryMarker` is a zero-sized type that can be fed into methods of `SystemContext`.
+    no_acceleration: Query<hecs::Without<Acceleration, (&mut Position, &Velocity)>>,
+    with_acceleration: Query<(&mut Position, &mut Velocity, &Acceleration)>,
 ) {
     // A helper function that automatically spreads the batches across threads of a
     // `rayon::ThreadPool` - either the global one if called standalone, or a specific one
     // when used with a `rayon::ThreadPool::install()`.
     yaks::batch(
-        &mut context.query(no_acceleration),
+        &mut no_acceleration.query(),
         spawned.batch_size_no_acceleration(),
         |_entity, (mut pos, vel)| {
             pos.0 += vel.0;
@@ -66,7 +62,7 @@ fn motion(
     );
     // If the default `parallel` feature is disabled this simply iterates in a single thread.
     yaks::batch(
-        &mut context.query(with_acceleration),
+        &mut with_acceleration.query(),
         spawned.batch_size_with_acceleration(),
         |_entity, (mut pos, mut vel, acc)| {
             vel.0 += acc.0;
@@ -78,14 +74,10 @@ fn motion(
 }
 
 // A system that tracks the highest velocity among all entities.
-fn find_highest_velocity(
-    context: SystemContext,
-    highest: &mut Velocity,
-    query: QueryMarker<&Velocity>,
-) {
+fn find_highest_velocity(highest: &mut Velocity, velocities: Query<&Velocity>) {
     // This cannot be batched as is because it needs mutable access to `highest`;
     // however, it's possible to work around that by using channels and/or `RwLock`.
-    for (_entity, vel) in context.query(query).iter() {
+    for (_entity, vel) in velocities.query().iter() {
         if vel.0 * vel.0 + vel.1 * vel.1 > highest.0 * highest.0 + highest.1 * highest.1 {
             highest.0 = vel.0;
             highest.1 = vel.1;
@@ -95,15 +87,15 @@ fn find_highest_velocity(
 
 // A system that recolors entities based on their kinematic properties.
 fn color(
-    context: SystemContext,
-    (spawned, rng): (&SpawnedEntities, &mut StdRng),
-    query: QueryMarker<(&Position, &Velocity, &mut Color)>,
+    spawned: &SpawnedEntities,
+    rng: &mut StdRng,
+    all_the_comps: Query<(&Position, &Velocity, &mut Color)>,
 ) {
     // Of course, it's possible to use resources mutably and still batch queries if
     // mutation happens outside batching.
     let blue = rng.gen_range(0.0, 1.0);
     yaks::batch(
-        &mut context.query(query),
+        &mut all_the_comps.query(),
         spawned.batch_size_all(),
         |_entity, (pos, vel, mut col)| {
             col.0 = pos.0.abs() / 1000.0;
@@ -114,13 +106,9 @@ fn color(
 }
 
 // A system that tracks the average color of entities.
-fn find_average_color(
-    context: SystemContext,
-    (average_color, spawned): (&mut Color, &SpawnedEntities),
-    query: QueryMarker<&Color>,
-) {
+fn find_average_color(average_color: &mut Color, spawned: &SpawnedEntities, colors: Query<&Color>) {
     *average_color = Color(0.0, 0.0, 0.0, 0.0);
-    for (_entity, color) in context.query(query).iter() {
+    for (_entity, color) in colors.query().iter() {
         average_color.0 += color.0;
         average_color.1 += color.1;
         average_color.2 += color.2;
@@ -182,28 +170,29 @@ fn main() {
     // as much of it's systems at the same time as their borrows allow, while preserving
     // given order of execution, if any.
     // The generic parameter is the superset of resource sets of all of it's systems.
-    let mut executor = Executor::<'_, (SpawnedEntities, StdRng, Color, Velocity)>::builder()
-        // Handles and dependencies are optional,
-        // can be of any type that is `Eq + Hash + Debug`,
-        // and are discarded on `build()`.
-        .system_with_handle(motion, "motion")
-        // Systems can be defined by either a function or a closure
-        // with a specific signature; see `ExecutorBuilder::system()` documentation.
-        // The closures can also mutably borrow from their environment,
-        // for the lifetime of the executor.
-        // (Note, systems with no resources or queries have
-        // no business being in an executor, this is for demonstration only.)
-        .system(|_context, _resources: (), _queries: ()| iterations += 1)
-        // The builder will panic if given a system with a handle it already contains,
-        // a list of dependencies with a system it doesn't contain yet,
-        // or a system that depends on itself.
-        .system_with_deps(find_highest_velocity, vec!["motion"])
-        // Relative order of execution is guaranteed only for systems with explicit dependencies.
-        // If the default `parallel` feature is disabled, systems are ran in order of insertion.
-        .system_with_handle_and_deps(color, "color", vec!["motion"])
-        .system_with_deps(find_average_color, vec!["color"])
-        // Building is allocating, so executors should be cached whenever possible.
-        .build();
+    let mut executor =
+        Executor::<'_, (Ref<SpawnedEntities>, Mut<StdRng>, Mut<Color>, Mut<Velocity>)>::builder()
+            // Handles and dependencies are optional,
+            // can be of any type that is `Eq + Hash + Debug`,
+            // and are discarded on `build()`.
+            .system_with_handle(motion, "motion")
+            // Systems can be defined by either a function or a closure
+            // with a specific signature; see `ExecutorBuilder::system()` documentation.
+            // The closures can also mutably borrow from their environment,
+            // for the lifetime of the executor.
+            // (Note, systems with no resources or queries have
+            // no business being in an executor, this is for demonstration only.)
+            .system(|| iterations += 1)
+            // The builder will panic if given a system with a handle it already contains,
+            // a list of dependencies with a system it doesn't contain yet,
+            // or a system that depends on itself.
+            .system_with_deps(find_highest_velocity, vec!["motion"])
+            // Relative order of execution is guaranteed only for systems with explicit dependencies.
+            // If the default `parallel` feature is disabled, systems are ran in order of insertion.
+            .system_with_handle_and_deps(color, "color", vec!["motion"])
+            .system_with_deps(find_average_color, vec!["color"])
+            // Building is allocating, so executors should be cached whenever possible.
+            .build();
 
     print!("running {} iterations of executor...  ", ITERATIONS);
     let mut elapsed = Duration::from_millis(0);
@@ -217,7 +206,7 @@ fn main() {
         executor.run(
             world,
             (
-                &mut spawned,
+                &spawned,
                 &mut rng,
                 &mut average_color,
                 &mut highest_velocity,
@@ -231,7 +220,7 @@ fn main() {
 
     // The automatically implemented trait `System` allows easily calling systems
     // as plain functions with `::run()`.
-    use yaks::System;
+    use yaks::Run;
     print!("running {} iterations of functions... ", ITERATIONS);
     let mut elapsed = Duration::from_millis(0);
     for _ in 0..ITERATIONS {

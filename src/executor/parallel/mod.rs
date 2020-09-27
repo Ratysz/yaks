@@ -1,12 +1,10 @@
-use hecs::World;
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-use super::SystemClosure;
-use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemId};
+use crate::{ArchetypeSet, BorrowSet, ExecutorBuilder, ResourceTuple, SystemClosure, SystemId};
 
 mod dispatching;
 mod scheduling;
@@ -26,7 +24,7 @@ where
     pub resource_set: BorrowSet,
     pub component_set: BorrowSet,
     pub archetype_set: ArchetypeSet,
-    pub archetype_writer: Box<dyn Fn(&World, &mut ArchetypeSet) + Send>,
+    pub archetype_writer: Box<dyn Fn(&hecs::World, &mut ArchetypeSet) + Send>,
     pub dependants: Vec<SystemId>,
     pub dependencies: usize,
     pub unsatisfied_dependencies: usize,
@@ -156,7 +154,7 @@ where
         }
     }
 
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
+    pub fn run(&mut self, world: &hecs::World, wrapped: Resources::Wrapped) {
         match self {
             ExecutorParallel::Dispatching(dispatcher) => dispatcher.run(world, wrapped),
             ExecutorParallel::Scheduling(scheduler) => scheduler.run(world, wrapped),

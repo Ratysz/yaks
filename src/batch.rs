@@ -1,5 +1,3 @@
-use hecs::{Entity, Fetch, Query, QueryBorrow};
-
 #[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
 /// Distributes over a `rayon` thread pool the work of applying a function to items in a query.
 /// See [`hecs::QueryBorrow::iter_batched()`](../hecs/struct.QueryBorrow.html#method.iter_batched).
@@ -63,7 +61,6 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// `batch()` can be called in systems, where it will use whichever thread pool is used by
 /// the system or the executor it's in:
 /// ```rust
-/// # use yaks::{QueryMarker, Executor};
 /// # struct Pos;
 /// # struct Vel;
 /// # impl std::ops::AddAssign<&Vel> for Pos {
@@ -87,10 +84,12 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 /// #     }
 /// #     DummyPool
 /// # };
-/// let mut executor = Executor::<(u32, )>::builder()
-///     .system(|context, num_entities: &u32, query: QueryMarker<(&mut Pos, &Vel)>| {
+/// use yaks::{Query, Executor, Ref};
+///
+/// let mut executor = Executor::<Ref<u32>>::builder()
+///     .system(|num_entities: &u32, pos_vel: Query<(&mut Pos, &Vel)>| {
 ///         yaks::batch(
-///             &mut context.query(query),
+///             &mut pos_vel.query(),
 ///             num_entities / 16,
 ///             |_entity, (pos, vel)| {
 ///                 *pos += vel;
@@ -99,19 +98,19 @@ use hecs::{Entity, Fetch, Query, QueryBorrow};
 ///     })
 ///     .build();
 ///
-/// executor.run(&world, &mut num_entities);
+/// executor.run(&world, &num_entities);
 ///
 /// thread_pool.install(|| {
-///     executor.run(&world, &mut num_entities);
+///     executor.run(&world, &num_entities);
 /// });
 /// ```
 pub fn batch<'query, 'world, Q, F>(
-    query_borrow: &'query mut QueryBorrow<'world, Q>,
+    query_borrow: &'query mut hecs::QueryBorrow<'world, Q>,
     batch_size: u32,
     for_each: F,
 ) where
-    Q: Query + Send + Sync + 'query,
-    F: Fn(Entity, <<Q as Query>::Fetch as Fetch<'query>>::Item) + Send + Sync,
+    Q: hecs::Query + Send + Sync + 'query,
+    F: Fn(hecs::Entity, <<Q as hecs::Query>::Fetch as hecs::Fetch<'query>>::Item) + Send + Sync,
 {
     #[cfg(feature = "parallel")]
     {

@@ -1,7 +1,4 @@
-use hecs::World;
-
-use super::SystemClosure;
-use crate::{ExecutorBuilder, ResourceTuple, SystemContext, SystemId};
+use crate::{ExecutorBuilder, ResourceTuple, SystemClosure, SystemId};
 
 pub struct ExecutorSequential<'closures, Resources>
 where
@@ -26,15 +23,9 @@ where
 
     pub fn force_archetype_recalculation(&mut self) {}
 
-    pub fn run(&mut self, world: &World, wrapped: Resources::Wrapped) {
-        for (id, closure) in &mut self.systems {
-            closure(
-                SystemContext {
-                    system_id: Some(*id),
-                    world,
-                },
-                &wrapped,
-            );
+    pub fn run(&mut self, world: &hecs::World, wrapped: Resources::Wrapped) {
+        for (_, closure) in &mut self.systems {
+            closure(world, &wrapped);
         }
     }
 }
