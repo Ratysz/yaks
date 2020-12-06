@@ -1,6 +1,6 @@
 use yaks::Executor;
 
-fn dummy_system(_: (), _: ()) {}
+fn dummy_system() {}
 
 #[test]
 #[should_panic(expected = "system 0 already exists")]

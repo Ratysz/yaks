@@ -1,7 +1,7 @@
-use crate::{Fetch, Query, ResourceTuple, SystemId};
+use crate::{ResourceTuple, SystemArgument, SystemId};
 
 #[cfg(feature = "parallel")]
-use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet, QueryExt};
+use crate::{ArchetypeSet, BorrowSet, BorrowTypeSet};
 
 #[cfg(not(feature = "parallel"))]
 use hecs::Query as QueryExt;
@@ -23,7 +23,7 @@ where
     pub archetype_writer: Box<dyn Fn(&hecs::World, &mut ArchetypeSet) + Send>,
 }
 
-pub trait IntoSystem<'closure, ExecutorResources, Markers, Resources, Queries>
+pub trait IntoSystem<'closure, ExecutorResources, Markers, Arguments>
 where
     ExecutorResources: ResourceTuple + 'closure,
 {
@@ -31,115 +31,71 @@ where
 }
 
 macro_rules! impl_into_system {
-    ($resource:ident, ($($query:ident,)*)) => {};
-    ((), ($($query:ident,)*)) => {
-        impl<'a, 'closure, Closure, ExecutorResources, $($query,)*>
-            IntoSystem<'closure, ExecutorResources, (), (), ($($query,)*)> for Closure
-        where
-            Closure: FnMut($(Query<$query>,)*) + Send + Sync + 'closure,
-            ExecutorResources: ResourceTuple + 'closure,
-            ExecutorResources::Wrapped: 'a,
-            $($query: QueryExt,)*
-        {
-            #[allow(non_snake_case, unused_variables, unused_mut)]
-            fn into_system(mut self) -> System<'closure, ExecutorResources> {
-                let closure = Box::new(
-                    move |world: &'a hecs::World, _: &'a ExecutorResources::Wrapped| {
-                        self($(Query::<$query>::new(world),)*);
-                    }
-                );
-                let closure = unsafe {
-                    std::mem::transmute::<
-                        Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closure>,
-                        Box<dyn FnMut(&_, &_) + Send + Sync + 'closure>,
-                    >(closure)
-                };
-                #[cfg(feature = "parallel")]
-                {
-                    let resource_set = BorrowSet::with_capacity(ExecutorResources::LENGTH);
-                    let mut component_type_set = BorrowTypeSet::new();
-                    $($query::insert_component_types(&mut component_type_set);)*
-                    let archetype_writer =
-                        Box::new(|world: &hecs::World, archetype_set: &mut ArchetypeSet| {
-                            $($query::set_archetype_bits(world, archetype_set);)*
-                        });
-                    System {
-                        closure,
-                        dependencies: vec![],
-                        resource_set,
-                        component_type_set,
-                        archetype_writer,
-                    }
-                }
-                #[cfg(not(feature = "parallel"))]
-                System {
-                    closure,
-                    dependencies: vec![],
+    ($($letter:ident),*) => {
+        paste::item! {
+impl<'a, 'closure, Closure, ExecutorResources, $([<Marker $letter>],)* $([<Argument $letter>],)*>
+    IntoSystem<'closure, ExecutorResources, ($([<Marker $letter>],)*), ($([<Argument $letter>],)*)>
+    for Closure
+where
+    Closure: FnMut($([<Argument $letter>],)*) + Send + Sync + 'closure,
+    ExecutorResources: ResourceTuple + 'closure,
+    ExecutorResources::Wrapped: 'a,
+    $([<Argument $letter>]: SystemArgument<'a, ExecutorResources, [<Marker $letter>]>,)*
+{
+    #[allow(unused_variables, unused_mut, unused_unsafe)]
+    fn into_system(mut self) -> System<'closure, ExecutorResources> {
+        let closure = Box::new(
+            move |world: &'a hecs::World, resources: &'a ExecutorResources::Wrapped| {
+                let ($([<arg_ $letter:lower>],)*)
+                    = ($([<Argument $letter>]::fetch(world, resources),)*);
+                self($([<arg_ $letter:lower>],)*);
+                unsafe {
+                    $([<Argument $letter>]::release(world, resources);)*
                 }
             }
-        }
-    };
-    (($($resource:ident,)*), ($($query:ident,)*)) => {
-        impl<'a, 'closure, Closure, ExecutorResources, Markers, $($resource,)* $($query,)*>
-            IntoSystem<'closure, ExecutorResources, Markers, ($($resource,)*), ($($query,)*)>
-            for Closure
-        where
-            Closure: FnMut($($resource,)* $(Query<$query>,)*) + Send + Sync + 'closure,
-            ExecutorResources: ResourceTuple + 'closure,
-            ExecutorResources::Wrapped: 'a,
-            ($($resource,)*): Fetch<&'a ExecutorResources::Wrapped, Markers> + 'a,
-            $($query: QueryExt,)*
+        );
+        let closure = unsafe {
+            std::mem::transmute::<
+                Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closure>,
+                Box<dyn FnMut(&_, &_) + Send + Sync + 'closure>,
+            >(closure)
+        };
+        #[cfg(feature = "parallel")]
         {
-            #[allow(non_snake_case, unused_variables, unused_mut)]
-            fn into_system(mut self) -> System<'closure, ExecutorResources> {
-                let closure = Box::new(
-                    move |world: &'a hecs::World, resources: &'a ExecutorResources::Wrapped| {
-                        let ($($resource,)*) = <($($resource,)*)>::fetch(resources);
-                        self($($resource,)* $(Query::<$query>::new(world),)*);
-                        unsafe { <($($resource,)*)>::release(resources) };
-                    }
-                );
-                let closure = unsafe {
-                    std::mem::transmute::<
-                        Box<dyn FnMut(&'a _, &'a _) + Send + Sync + 'closure>,
-                        Box<dyn FnMut(&_, &_) + Send + Sync + 'closure>,
-                    >(closure)
-                };
-                #[cfg(feature = "parallel")]
-                {
-                    let mut resource_set = BorrowSet::with_capacity(ExecutorResources::LENGTH);
-                    <($($resource,)*)>::set_resource_bits(&mut resource_set);
-                    let mut component_type_set = BorrowTypeSet::new();
-                    $($query::insert_component_types(&mut component_type_set);)*
-                    let archetype_writer =
-                        Box::new(|world: &hecs::World, archetype_set: &mut ArchetypeSet| {
-                            $($query::set_archetype_bits(world, archetype_set);)*
-                        });
-                    System {
-                        closure,
-                        dependencies: vec![],
-                        resource_set,
-                        component_type_set,
-                        archetype_writer,
-                    }
-                }
-                #[cfg(not(feature = "parallel"))]
-                System {
-                    closure,
-                    dependencies: vec![],
-                }
+            let mut resource_set = BorrowSet::with_capacity(ExecutorResources::LENGTH);
+            $([<Argument $letter>]::set_resource_bits(&mut resource_set);)*
+            let mut component_type_set = BorrowTypeSet::new();
+            $([<Argument $letter>]::insert_component_types(&mut component_type_set);)*
+            let archetype_writer =
+                Box::new(|world: &hecs::World, archetype_set: &mut ArchetypeSet| {
+                    $([<Argument $letter>]::set_archetype_bits(world, archetype_set);)*
+                });
+            System {
+                closure,
+                dependencies: vec![],
+                resource_set,
+                component_type_set,
+                archetype_writer,
             }
         }
-    };
+        #[cfg(not(feature = "parallel"))]
+        System {
+            closure,
+            dependencies: vec![],
+        }
+    }
+}
+        }
+    }
 }
 
-impl_for_res_and_query_tuples!(impl_into_system);
+impl_for_tuples!(impl_into_system);
 
 #[test]
 fn smoke_test() {
     use crate::{
         resource::{AtomicBorrow, WrappableSingle},
-        Mut, Ref,
+        Mut, Query, Ref,
     };
     let world = hecs::World::new();
     let mut counter = 0i32;
@@ -157,7 +113,7 @@ fn smoke_test() {
     (boxed.closure)(&world, &wrapped);
     assert_eq!(counter, 1);
 
-    fn sum_system(a: &mut i32, b: &usize) {
+    fn sum_system(a: &mut i32, _: Query<&f32>, b: &usize) {
         *a += *b as i32;
     }
     let mut boxed: System<(Mut<i32>, Ref<usize>)> = sum_system.into_system();

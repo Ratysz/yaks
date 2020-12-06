@@ -13,10 +13,6 @@ pub trait QueryExt: hecs::Query {
     }
 }
 
-impl QueryExt for () {
-    fn insert_component_types(_: &mut BorrowTypeSet) {}
-}
-
 impl<C> QueryExt for &'_ C
 where
     C: hecs::Component,
@@ -70,6 +66,7 @@ macro_rules! impl_query_ext {
         where
             $($letter: QueryExt,)*
         {
+            #[allow(unused_variables)]
             fn insert_component_types(component_type_set: &mut BorrowTypeSet) {
                 $($letter::insert_component_types(component_type_set);)*
             }
@@ -77,4 +74,4 @@ macro_rules! impl_query_ext {
     }
 }
 
-impl_for_tuples!(impl_query_ext, all);
+impl_for_tuples!(impl_query_ext);

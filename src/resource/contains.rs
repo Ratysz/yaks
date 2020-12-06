@@ -89,109 +89,68 @@ macro_rules! swap_to_markers {
 }
 
 macro_rules! impl_contains {
+    () => {};
     ($($letter:ident),*) => {
         impl_contains!($($letter),* ; $($letter),*);
     };
+    ($($all:ident),* ; $letter:ident ) => {
+        impl_contains!($($all),* ; $letter ; );
+    };
     ($($all:ident),* ; $letter:ident, $($tail:ident),*) => {
-        paste::item! {
-            #[allow(non_snake_case)]
-            #[allow(unused_variables)]
-            impl<$letter, $([<C $all>],)*>
-                ContainsRef<$letter, ($letter, swap_to_markers!($($tail),*))>
-                for ($([<C $all>],)*)
-            where [<C $letter>]: ContainsRef<$letter, ()>
-            {
-                fn borrow_ref(&self) -> &$letter {
-                    let ($($all,)*) = self;
-                    $letter.borrow_ref()
-                }
-
-                unsafe fn release_ref(&self) {
-                    let ($($all,)*) = self;
-                    $letter.release_ref();
-                }
-
-                #[cfg(feature = "parallel")]
-                fn set_resource_bit(bitset: &mut FixedBitSet) {
-                    bitset.insert(count!($($all)*) - (1usize + count!($($tail)*)));
-                }
-            }
-
-            #[allow(non_snake_case)]
-            #[allow(unused_variables)]
-            impl<$letter, $([<C $all>],)*>
-                ContainsMut<$letter, ($letter, swap_to_markers!($($tail),*))>
-                for ($([<C $all>],)*)
-            where [<C $letter>]: ContainsMut<$letter, ()>
-            {
-                fn borrow_mut(&self) -> &mut $letter {
-                    let ($($all,)*) = self;
-                    $letter.borrow_mut()
-                }
-
-                unsafe fn release_mut(&self) {
-                    let ($($all,)*) = self;
-                    $letter.release_mut();
-                }
-
-                #[cfg(feature = "parallel")]
-                fn set_resource_bit(bitset: &mut FixedBitSet) {
-                    bitset.insert(count!($($all)*) - (1usize + count!($($tail)*)));
-                }
-            }
-        }
-
+        impl_contains!($($all),* ; $letter ; $($tail),*);
         impl_contains!($($all),* ; $($tail),*);
     };
-    ($($all:ident),* ; $letter:ident ) => {
+    ($($all:ident),* ; $letter:ident ; $($tail:ident),*) => {
         paste::item! {
-            #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            impl<$letter, $([<C $all>],)*>
-                ContainsRef<$letter, ($letter, )>
-                for ($([<C $all>],)*)
-            where [<C $letter>]: ContainsRef<$letter, ()>
+            impl<[<Resource $letter>], $([<Cell $all>],)*>
+                ContainsRef<
+                    [<Resource $letter>],
+                    ([<Resource $letter>], swap_to_markers!($($tail),*))
+                > for ($([<Cell $all>],)*)
+            where [<Cell $letter>]: ContainsRef<[<Resource $letter>], ()>
             {
-                fn borrow_ref(&self) -> &$letter {
-                    let ($($all,)*) = self;
-                    $letter.borrow_ref()
+                fn borrow_ref(&self) -> &[<Resource $letter>] {
+                    let ($([<cell_$all:lower>],)*) = self;
+                    [<cell_$letter:lower>].borrow_ref()
                 }
 
                 unsafe fn release_ref(&self) {
-                    let ($($all,)*) = self;
-                    $letter.release_ref();
+                    let ($([<cell_$all:lower>],)*) = self;
+                    [<cell_$letter:lower>].release_ref()
                 }
 
                 #[cfg(feature = "parallel")]
                 fn set_resource_bit(bitset: &mut FixedBitSet) {
-                    bitset.insert(count!($($all)*) - 1usize);
+                    bitset.insert(count!($($all)*) - (1usize + count!($($tail)*)));
                 }
             }
 
-            #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            impl<$letter, $([<C $all>],)*>
-                ContainsMut<$letter, ($letter, )>
-                for ($([<C $all>],)*)
-            where [<C $letter>]: ContainsMut<$letter, ()>
+            impl<[<Resource $letter>], $([<Cell $all>],)*>
+                ContainsMut<
+                    [<Resource $letter>],
+                    ([<Resource $letter>], swap_to_markers!($($tail),*))
+                > for ($([<Cell $all>],)*)
+            where [<Cell $letter>]: ContainsMut<[<Resource $letter>], ()>
             {
-                fn borrow_mut(&self) -> &mut $letter {
-                    let ($($all,)*) = self;
-                    $letter.borrow_mut()
+                fn borrow_mut(&self) -> &mut [<Resource $letter>] {
+                    let ($([<cell_$all:lower>],)*) = self;
+                    [<cell_$letter:lower>].borrow_mut()
                 }
 
                 unsafe fn release_mut(&self) {
-                    let ($($all,)*) = self;
-                    $letter.release_mut();
+                    let ($([<cell_$all:lower>],)*) = self;
+                    [<cell_$letter:lower>].release_mut()
                 }
 
                 #[cfg(feature = "parallel")]
                 fn set_resource_bit(bitset: &mut FixedBitSet) {
-                    bitset.insert(count!($($all)*) - 1usize);
+                    bitset.insert(count!($($all)*) - (1usize + count!($($tail)*)));
                 }
             }
         }
-    }
+    };
 }
 
-impl_for_tuples!(impl_contains, all);
+impl_for_tuples!(impl_contains);

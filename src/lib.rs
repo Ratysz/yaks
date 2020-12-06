@@ -120,14 +120,16 @@ mod query_ext;
 mod resource;
 mod run;
 mod system;
+mod system_argument;
 
 #[cfg(feature = "parallel")]
 use access_set::{ArchetypeSet, BorrowSet, BorrowTypeSet, TypeSet};
 use executor::SystemId;
 #[cfg(feature = "parallel")]
 use query_ext::QueryExt;
-use resource::{Fetch, ResourceTuple, WrappableTuple};
+use resource::{ContainsMut, ContainsRef, ResourceTuple, WrappableTuple};
 use system::{IntoSystem, System, SystemClosure};
+use system_argument::SystemArgument;
 
 pub use batch::batch;
 pub use executor::{Executor, ExecutorBuilder};

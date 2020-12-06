@@ -55,10 +55,11 @@ where
     ///     // of `(&B, &mut C)` and `hecs::Without<B, &C>`.
     /// }
     ///
+    /// // Order of arguments doesn't matter.
     /// fn system_1(
     ///     res_a: &mut A,
-    ///     res_b: &B,
     ///     query_0: Query<(&mut B, &mut C)>,
+    ///     res_b: &B,
     /// ) {
     ///     // This system may read or write resource of type `A`, may read resource of type `B`,
     ///     // and may prepare & execute queries of `(&mut B, &mut C)`.
@@ -81,9 +82,9 @@ where
     /// drop(executor); // This releases the borrow of `increment`.
     /// assert_eq!(increment, 3);
     /// ```
-    pub fn system<Closure, Markers, SystemResources, Queries>(mut self, closure: Closure) -> Self
+    pub fn system<Closure, Markers, Arguments>(mut self, closure: Closure) -> Self
     where
-        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
+        Closure: IntoSystem<'closures, Resources, Markers, Arguments>,
     {
         let id = SystemId(self.systems.len());
         let system = closure.into_system();
@@ -175,13 +176,13 @@ where
     /// # Panics
     /// This function will panic if:
     /// - a system with given handle is already present in the builder.
-    pub fn system_with_handle<Closure, Markers, SystemResources, Queries, NewHandle>(
+    pub fn system_with_handle<Closure, Markers, Arguments, NewHandle>(
         mut self,
         closure: Closure,
         handle: NewHandle,
     ) -> ExecutorBuilder<'closures, Resources, NewHandle>
     where
-        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
+        Closure: IntoSystem<'closures, Resources, Markers, Arguments>,
         NewHandle: HandleConversion<Handle> + Debug,
     {
         let mut handles = NewHandle::convert_hash_map(self.handles);
@@ -221,13 +222,13 @@ where
     /// This function will panic if:
     /// - given list of dependencies contains a handle that
     /// doesn't correspond to any system in the builder.
-    pub fn system_with_deps<Closure, Markers, SystemResources, Queries>(
+    pub fn system_with_deps<Closure, Markers, Arguments>(
         mut self,
         closure: Closure,
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
+        Closure: IntoSystem<'closures, Resources, Markers, Arguments>,
         Handle: Eq + Hash + Debug,
     {
         let id = SystemId(self.systems.len());
@@ -269,14 +270,14 @@ where
     /// - given list of dependencies contains a handle that
     /// doesn't correspond to any system in the builder,
     /// - given handle appears in given list of dependencies.
-    pub fn system_with_handle_and_deps<Closure, Markers, SystemResources, Queries>(
+    pub fn system_with_handle_and_deps<Closure, Markers, Arguments>(
         mut self,
         closure: Closure,
         handle: Handle,
         dependencies: Vec<Handle>,
     ) -> Self
     where
-        Closure: IntoSystem<'closures, Resources, Markers, SystemResources, Queries>,
+        Closure: IntoSystem<'closures, Resources, Markers, Arguments>,
         Handle: Eq + Hash + Debug,
     {
         if self.handles.contains_key(&handle) {

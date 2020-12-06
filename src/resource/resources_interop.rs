@@ -27,9 +27,9 @@ where
 
 #[test]
 fn smoke_test() {
-    use crate::{Executor, Run};
+    use crate::{Executor, Query, Run};
     let mut executor = Executor::<(Mut<f32>, Ref<u32>, Ref<u64>)>::builder()
-        .system(|_: &mut f32, _: &u32| {})
+        .system(|_: &mut f32, _: Query<&f32>, _: &u32| {})
         .system(|_: &mut f32, _: &u64| {})
         .system(|| {})
         .build();

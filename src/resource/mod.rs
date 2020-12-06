@@ -15,16 +15,14 @@
 mod atomic_borrow;
 mod cell;
 mod contains;
-mod fetch;
 #[cfg(feature = "resources-interop")]
 mod resources_interop;
 mod tuple;
 mod wrap;
 
 use cell::{ResourceMutCell, ResourceRefCell};
-use contains::{ContainsMut, ContainsRef};
 
 pub use atomic_borrow::AtomicBorrow;
-pub use fetch::Fetch;
+pub use contains::{ContainsMut, ContainsRef};
 pub use tuple::{Mut, Ref, ResourceTuple};
 pub use wrap::{MarkerGet, WrappableSingle, WrappableTuple};

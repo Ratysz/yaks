@@ -1,26 +1,18 @@
 macro_rules! expand {
-    (all $macro:ident, $letter:ident) => {
+    ($macro:ident, $letter:ident) => {
         $macro!($letter);
+        $macro!();
     };
-    (all $macro:ident, $letter:ident, $($tail:ident),*) => {
+    ($macro:ident, $letter:ident, $($tail:ident),*) => {
         $macro!($letter, $($tail),*);
-        expand!(all $macro, $($tail),*);
-    };
-    (no_single $macro:ident, $letter:ident) => {
-        //$macro!($letter);
-    };
-    (no_single $macro:ident, $letter:ident, $($tail:ident),*) => {
-        $macro!($letter, $($tail),*);
-        expand!(no_single $macro, $($tail),*);
+        expand!($macro, $($tail),*);
     };
 }
 
 macro_rules! impl_for_tuples {
-    ($macro:ident, all) => {
-        expand!(all $macro, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);
-    };
-    ($macro:ident, no_single) => {
-        expand!(no_single $macro, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);
+    ($macro:ident) => {
+        expand!($macro, O, N, M, L, K, J, I, H, G, F, E, D, C, B, A);
+        //expand!($macro, C, B, A);
     };
 }
 

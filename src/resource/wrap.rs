@@ -5,8 +5,8 @@ use super::{AtomicBorrow, Mut, Ref, ResourceMutCell, ResourceRefCell};
 /// Describes which (and how) intermediate type can be obtained from `Source`.
 /// Implementing this trait is required **only** to enable using custom `Source` struct;
 ///
-/// it is, effectively, already implemented for all tuples up to 8 and, with `resources-interop`
-/// feature, `resources::Resources`.
+/// it is, effectively, already implemented for single types, all tuples up to 16, and,
+/// with `resources-interop` feature, `resources::Resources`.
 ///
 /// Implement on [`Ref<T>`](struct.Ref.html) and [`Mut<T>`](struct.Mut.html) to enable using
 /// `Source` as the resources argument in [`Executor::run()`](struct.Executor.html#method.run)
@@ -254,80 +254,89 @@ macro_rules! swap_to_atomic_borrow {
 }
 
 macro_rules! impl_wrappable {
+    () => {};
     ($letter:ident) => {
-        impl<Source, Marker, $letter> WrappableTuple<Source, Marker> for ($letter,)
-        where
-            $letter: WrappableSingle<Source, Marker>,
-        {
-            type Intermediates = ($letter::Intermediate,);
-            type Wrapped = ($letter::Wrapped,);
-            type BorrowTuple = (AtomicBorrow,);
+        paste::item! {
+            impl<Source, Marker, [<Wrappable $letter>]> WrappableTuple<Source, Marker>
+                for ([<Wrappable $letter>],)
+            where
+                [<Wrappable $letter>]: WrappableSingle<Source, Marker>,
+            {
+                type Intermediates = ([<Wrappable $letter>]::Intermediate,);
+                type Wrapped = ([<Wrappable $letter>]::Wrapped,);
+                type BorrowTuple = (AtomicBorrow,);
 
-            fn get(source: Source) -> Self::Intermediates {
-                ($letter::get(source),)
-            }
+                fn get(source: Source) -> Self::Intermediates {
+                    ([<Wrappable $letter>]::get(source),)
+                }
 
-            fn wrap(
-                fetched: &mut Self::Intermediates,
-                borrows: &mut Self::BorrowTuple
-            ) -> Self::Wrapped {
-                ($letter::wrap(&mut fetched.0, &mut borrows.0),)
+                fn wrap(
+                    ([<intermediate_ $letter:lower>], ): &mut Self::Intermediates,
+                    ([<borrow_ $letter:lower>], ): &mut Self::BorrowTuple,
+                ) -> Self::Wrapped {
+                    ([<Wrappable $letter>]::wrap(
+                        [<intermediate_ $letter:lower>],
+                        [<borrow_ $letter:lower>],
+                    ),)
+                }
             }
         }
     };
     ($($letter:ident),*) => {
         paste::item! {
-            impl<Source, $($letter),*> WrappableTuple<Source, Source> for ($($letter,)*)
+            impl<Source, $([<Wrappable $letter>],)*> WrappableTuple<Source, Source>
+                for ($([<Wrappable $letter>],)*)
             where
                 Source: Copy,
-                $($letter: WrappableSingle<Source, Source>,)*
+                $([<Wrappable $letter>]: WrappableSingle<Source, Source>,)*
             {
-                type Intermediates = ($($letter::Intermediate,)*);
-                type Wrapped = ($($letter::Wrapped,)*);
+                type Intermediates = ($([<Wrappable $letter>]::Intermediate,)*);
+                type Wrapped = ($([<Wrappable $letter>]::Wrapped,)*);
                 type BorrowTuple = ($(swap_to_atomic_borrow!($letter),)*);
 
                 fn get(source: Source) -> Self::Intermediates {
-                    ($($letter::get(source),)*)
+                    ($([<Wrappable $letter>]::get(source),)*)
                 }
 
-                #[allow(non_snake_case)]
                 fn wrap(
-                    fetched: &mut Self::Intermediates,
-                    borrows: &mut Self::BorrowTuple
+                    ($([<intermediate_ $letter:lower>],)*): &mut Self::Intermediates,
+                    ($([<borrow_ $letter:lower>],)*): &mut Self::BorrowTuple
                 ) -> Self::Wrapped {
-                    let ($([<s_ $letter>],)*) = fetched;
-                    let ($([<b_ $letter>],)*) = borrows;
-                    ($($letter::wrap([<s_ $letter>], [<b_ $letter>]),)*)
+                    ($([<Wrappable $letter>]::wrap(
+                        [<intermediate_ $letter:lower>],
+                        [<borrow_ $letter:lower>],
+                    ),)*)
                 }
             }
 
-            impl<$($letter,)* $([<W $letter>],)*> WrappableTuple<($($letter,)*), ()>
-                for ($([<W $letter>],)*)
+            impl<$([<Source $letter>],)* $([<Wrappable $letter>],)*>
+                WrappableTuple<($([<Source $letter>],)*), ()>
+                for ($([<Wrappable $letter>],)*)
             where
-                $([<W $letter>]: WrappableSingle<$letter, ()>,)*
+                $([<Wrappable $letter>]: WrappableSingle<[<Source $letter>], ()>,)*
             {
-                type Intermediates = ($([<W $letter>]::Intermediate,)*);
-                type Wrapped = ($([<W $letter>]::Wrapped,)*);
+                type Intermediates = ($([<Wrappable $letter>]::Intermediate,)*);
+                type Wrapped = ($([<Wrappable $letter>]::Wrapped,)*);
                 type BorrowTuple = ($(swap_to_atomic_borrow!($letter),)*);
 
-                #[allow(non_snake_case)]
-                fn get(source: ($($letter,)*)) -> Self::Intermediates {
-                    let ($([<s_ $letter>],)*) = source;
-                    ($([<W $letter>]::get([<s_ $letter>]),)*)
+                fn get(
+                    ($([<source_ $letter:lower>],)*): ($([<Source $letter>],)*)
+                ) -> Self::Intermediates {
+                    ($([<Wrappable $letter>]::get([<source_ $letter:lower>]),)*)
                 }
 
-                #[allow(non_snake_case)]
                 fn wrap(
-                    fetched: &mut Self::Intermediates,
-                    borrows: &mut Self::BorrowTuple
+                    ($([<intermediate_ $letter:lower>],)*): &mut Self::Intermediates,
+                    ($([<borrow_ $letter:lower>],)*): &mut Self::BorrowTuple
                 ) -> Self::Wrapped {
-                    let ($([<s_ $letter>],)*) = fetched;
-                    let ($([<b_ $letter>],)*) = borrows;
-                    ($([<W $letter>]::wrap([<s_ $letter>], [<b_ $letter>]),)*)
+                    ($([<Wrappable $letter>]::wrap(
+                        [<intermediate_ $letter:lower>],
+                        [<borrow_ $letter:lower>],
+                    ),)*)
                 }
             }
         }
     }
 }
 
-impl_for_tuples!(impl_wrappable, all);
+impl_for_tuples!(impl_wrappable);
